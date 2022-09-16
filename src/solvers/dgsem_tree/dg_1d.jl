@@ -26,37 +26,85 @@ function create_cache(mesh::TreeMesh{1}, equations,
 
   # Add specialized parts of the cache required to compute the volume integral etc.
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)
-  cache = (;cache..., create_cache(mesh, equations, dg.mortar, uEltype)...)
 
-  # Approach for cell-dependent time integration: Add datastructures to cache
+  # Current approach for cell-dependent time integration: Add datastructures to cache
+  # TODO: This is not possible for amr, since named tuples (thus, 'cache') are immutable
   n_elements = length(elements.cell_ids)
   n_interfaces = length(interfaces.orientations)
-
-  # Initialize storage for level-wise information
-  level_info_elements = Vector{Vector{Int}}()
-  level_info_elements_acc = Vector{Vector{Int}}()
-  level_info_interfaces_acc = Vector{Vector{Int}}()
 
   # Set current ids
   current_element_ids = 1:n_elements
   current_interface_ids = 1:n_interfaces
+
+  min_level = minimum_level(mesh.tree)
+  max_level = maximum_level(mesh.tree)
+  n_levels = max_level - min_level + 1
+  println("Current number of levels: ", n_levels)
+
+  # Initialize storage for level-wise information
+  level_info_elements = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+
+  # TODO: For the accumulated values, we should not store the min_level since
+  # it contains all cell ids by definition. It is left for the moment to
+  # simplify the implementation.
+
+  # Determine level for each element
+  for element_id in 1:n_elements
+    # Determine level
+    level = mesh.tree.levels[elements.cell_ids[element_id]]
+    # Convert to level id
+    level_id = max_level + 1 - level
+    push!(level_info_elements[level_id], element_id)
+
+    # Add to accumulated container
+    for l in level_id:n_levels
+      push!(level_info_elements_acc[l], element_id)
+    end
+  end
+  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
+
+  # Reset level info for interfaces
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+
+  # Determine level for each interface
+  # Note: Since interfaces are by definition between same-sized elements, i.e.,
+  # elements at the same refinement level, we need to consider only one of the
+  # neighbor elements (here: the left one) in determining to which level this
+  # interface belongs.
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left = interfaces.neighbor_ids[1, interface_id]
+
+    # Determine level
+    level_left = mesh.tree.levels[elements.cell_ids[element_id_left]]
+
+    # Convert to level id
+    level_id_left = max_level + 1 - level_left
+
+    # Add to accumulated container
+    for l in level_id_left:n_levels
+      push!(level_info_interfaces_acc[l], interface_id)
+    end
+  end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+
 
   # Append / add variables for adapted ODE integration to cache
   cache = (;cache..., n_elements, n_interfaces, 
                       level_info_elements, level_info_elements_acc, level_info_interfaces_acc,
                       current_element_ids, current_interface_ids)
 
-  update_level_info!(mesh, cache)
-
+  println("n_elements: ", n_elements)
+  println("n_interfaces: ", n_interfaces)
+  println("level_info_elements:")
+  display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
+  
   return cache
-end
-
-
-# The methods below are specialized on the volume integral type
-# and called from the basic `create_cache` method at the top.
-function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}}, equations,
-                      volume_integral::VolumeIntegralFluxDifferencing, dg::DG, uEltype)
-  NamedTuple()
 end
 
 
@@ -92,70 +140,6 @@ end
 # and called from the basic `create_cache` method at the top.
 function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}}, equations, mortar_l2::LobattoLegendreMortarL2, uEltype)
   NamedTuple()
-end
-
-function update_level_info!(mesh::TreeMesh{1}, cache)
-  # Get minimum and maximum level
-  min_level = minimum_level(mesh.tree)
-  max_level = maximum_level(mesh.tree)
-  n_levels = max_level - min_level + 1
-
-  # level_id counts the existing refinement levels in decreasing order:
-  # level = max_level:   level_id = 1
-  # level = max_level-1: level_id = 2
-  # level = max_level-2: level_id = 3
-  # ...
-  # level = min_level:   level_id = n_levels
-
-  # Reset level info for elements
-  println(ismutable(cache))
-  cache.level_info_elements = [Vector{Int}() for _ in 1:n_levels]
-  cache.level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
-
-  # TODO: For the accumulated values, we should not store the min_level since
-  # it contains all cell ids by definition. It is left for the moment to
-  # simplify the implementation.
-
-  # Determine level for each element
-  tmp = BitArray(undef, n_levels, cache.n_elements)
-  for element_id in 1:cache.n_elements
-    # Determine level
-    level = mesh.tree.levels[cache.elements.cell_ids[element_id]]
-    # Convert to level id
-    level_id = max_level + 1 - level
-    push!(cache.level_info_elements[level_id], element_id)
-
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(cache.level_info_elements_acc[l], element_id)
-    end
-  end
-  @assert length(cache.level_info_elements_acc[end]) == cache.n_elements "highest level should contain all elements"
-
-  # Reset level info for interfaces
-  cache.level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
-
-  # Determine level for each interface
-  # Note: Since interfaces are by definition between same-sized elements, i.e.,
-  # elements at the same refinement level, we need to consider only one of the
-  # neighbor elements (here: the left one) in determining to which level this
-  # interface belongs.
-  for interface_id in 1:cache.n_interfaces
-    # Get element ids
-    element_id_left = cache.interfaces.neighbor_ids[1, interface_id]
-
-    # Determine level
-    level_left = mesh.tree.levels[cache.elements.cell_ids[element_id_left]]
-
-    # Convert to level id
-    level_id_left = max_level + 1 - level_left
-
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(cache.level_info_interfaces_acc[l], interface_id)
-    end
-  end
-  @assert length(cache.level_info_interfaces_acc[end]) == cache.n_interfaces "highest level should contain all interfaces"
 end
 
 
