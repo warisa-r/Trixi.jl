@@ -18,7 +18,7 @@ function create_cache(mesh::P4estMesh, equations::AbstractEquations, dg::DG, ::A
   boundaries = init_boundaries(mesh, equations, dg.basis, elements)
   mortars    = init_mortars(mesh, equations, dg.basis, elements)
 
-  cache = (; elements, interfaces, boundaries, mortars)
+  cache = (; elements, interfaces, boundaries, mortars) # "Leading semicolon" makes this a named tuple
 
   # Add specialized parts of the cache required to compute the volume integral etc.
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)

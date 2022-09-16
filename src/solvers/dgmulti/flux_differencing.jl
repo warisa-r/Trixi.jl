@@ -573,7 +573,7 @@ end
 # an entropy conservative/stable discretization. For modal DG schemes, an extra `entropy_projection!`
 # is required (see https://doi.org/10.1016/j.jcp.2018.02.033, Section 4.3).
 function rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions::BC,
-              source_terms::Source, dg::DGMultiFluxDiff{<:Union{Polynomial, GaussSBP}}, cache) where {Source, BC}
+              source_terms::Source, #= solver =# dg::DGMultiFluxDiff{<:Union{Polynomial, GaussSBP}}, cache) where {Source, BC}
 
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 

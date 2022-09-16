@@ -58,7 +58,8 @@ function SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver
                                       RealT=real(solver), uEltype=RealT,
                                       initial_cache=NamedTuple())
 
-  cache = (; create_cache(mesh, equations, solver, RealT, uEltype)..., initial_cache...)
+  # Create cache fitted to mesh-equation-solver combination                                      
+  cache = (; create_cache(mesh, equations, solver, RealT, uEltype)..., initial_cache...) # "Leading semicolon" makes this a named tuple
   _boundary_conditions = digest_boundary_conditions(boundary_conditions, mesh, solver, cache)
 
   SemidiscretizationHyperbolic{typeof(mesh), typeof(equations), typeof(initial_condition), typeof(_boundary_conditions), typeof(source_terms), typeof(solver), typeof(cache)}(
@@ -294,7 +295,9 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t)
 
   # TODO: Taal decide, do we need to pass the mesh?
   time_start = time_ns()
-  @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache)
+  # Call "rhs!" of the corresponding solver
+  @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, 
+                                    source_terms, solver, cache)
   runtime = time_ns() - time_start
   put!(semi.performance_counter, runtime)
 

@@ -198,6 +198,7 @@ end
 
 
 # Efficiently perform uniform refinement up to a given level (works only on mesh with a single cell)
+# E.g. as in "initialize!" of TreeMesh
 function refine_uniformly!(t::AbstractTree, max_level)
   @assert length(t) == 1 "efficient uniform refinement only works for a newly created tree"
   @assert max_level >= 0 "the uniform refinement level must be non-zero"

@@ -252,7 +252,7 @@ function create_cache(mesh::ParallelTreeMesh{2}, equations,
                              nvariables(equations), nnodes(dg))
 
   cache = (; elements, interfaces, mpi_interfaces, boundaries, mortars, mpi_mortars,
-             mpi_cache)
+             mpi_cache) # "Leading semicolon" makes this a named tuple
 
   # Add specialized parts of the cache required to compute the volume integral etc.
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)
@@ -445,7 +445,7 @@ end
 function rhs!(du, u, t,
               mesh::Union{ParallelTreeMesh{2}, ParallelP4estMesh{2}}, equations,
               initial_condition, boundary_conditions, source_terms,
-              dg::DG, cache)
+              #= solver =# dg::DG, cache)
   # Start to receive MPI data
   @trixi_timeit timer() "start MPI receive" start_mpi_receive!(cache.mpi_cache)
 
@@ -470,7 +470,7 @@ function rhs!(du, u, t,
     have_nonconservative_terms(equations), equations,
     dg.volume_integral, dg, cache)
 
-  # Prolong solution to interfaces
+  # Prolong solution to interfaces, i.e., reconstruct interface/trace values
   # TODO: Taal decide order of arguments, consistent vs. modified cache first?
   @trixi_timeit timer() "prolong2interfaces" prolong2interfaces!(
     cache, u, mesh, equations, dg.surface_integral, dg)

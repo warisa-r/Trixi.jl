@@ -9,7 +9,7 @@
 # It constructs the basic `cache` used throughout the simulation to compute
 # the RHS etc.
 function create_cache(mesh::UnstructuredMesh2D, equations,
-                      dg::DG, RealT, uEltype)
+                      #= solver =# dg::DG, RealT, uEltype)
 
   elements = init_elements(mesh, equations, dg.basis, RealT, uEltype)
 
@@ -17,7 +17,7 @@ function create_cache(mesh::UnstructuredMesh2D, equations,
 
   boundaries = init_boundaries(mesh, elements)
 
-  cache = (; elements, interfaces, boundaries)
+  cache = (; elements, interfaces, boundaries) # "Leading semicolon" makes this a named tuple
 
   # perform a check on the sufficient metric identities condition for free-stream preservation
   # and halt computation if it fails
@@ -35,7 +35,7 @@ end
 function rhs!(du, u, t,
               mesh::UnstructuredMesh2D, equations,
               initial_condition, boundary_conditions, source_terms,
-              dg::DG, cache)
+              #= solver =# dg::DG, cache)
   # Reset du
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 
@@ -45,7 +45,7 @@ function rhs!(du, u, t,
     have_nonconservative_terms(equations), equations,
     dg.volume_integral, dg, cache)
 
-  # Prolong solution to interfaces
+  # Prolong solution to interfaces, i.e., reconstruct interface/trace values
   @trixi_timeit timer() "prolong2interfaces" prolong2interfaces!(
     cache, u, mesh, equations, dg.surface_integral, dg)
 

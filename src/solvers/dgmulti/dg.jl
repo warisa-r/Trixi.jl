@@ -412,7 +412,7 @@ end
 
 function rhs!(du, u, t, mesh, equations,
               initial_condition, boundary_conditions::BC, source_terms::Source,
-              dg::DGMulti, cache) where {BC, Source}
+              #= solver =# dg::DGMulti, cache) where {BC, Source}
 
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 

@@ -8,10 +8,11 @@
 # This method is called when a SemidiscretizationHyperbolic is constructed.
 # It constructs the basic `cache` used throughout the simulation to compute
 # the RHS etc.
-function create_cache(mesh::StructuredMesh, equations::AbstractEquations, dg::DG, ::Any, ::Type{uEltype}) where {uEltype<:Real}
+function create_cache(mesh::StructuredMesh, equations::AbstractEquations, #= solver =# dg::DG, 
+                      ::Any, ::Type{uEltype}) where {uEltype<:Real}
   elements = init_elements(mesh, equations, dg.basis, uEltype)
 
-  cache = (; elements)
+  cache = (; elements) # "Leading semicolon" makes this a named tuple
 
   # Add specialized parts of the cache required to compute the volume integral etc.
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)

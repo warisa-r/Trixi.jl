@@ -12,7 +12,7 @@
 # It constructs the basic `cache` used throughout the simulation to compute
 # the RHS etc.
 function create_cache(mesh::TreeMesh{2}, equations,
-                      dg::DG, RealT, uEltype)
+                      #= solver =# dg::DG, RealT, uEltype)
   # Get cells for which an element needs to be created (i.e. all leaf cells)
   leaf_cell_ids = local_leaf_cells(mesh.tree)
 
@@ -24,7 +24,7 @@ function create_cache(mesh::TreeMesh{2}, equations,
 
   mortars = init_mortars(leaf_cell_ids, mesh, elements, dg.mortar)
 
-  cache = (; elements, interfaces, boundaries, mortars)
+  cache = (; elements, interfaces, boundaries, mortars) # "Leading semicolon" makes this a named tuple
 
   # Add specialized parts of the cache required to compute the volume integral etc.
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)
@@ -100,7 +100,7 @@ end
 function rhs!(du, u, t,
               mesh::Union{TreeMesh{2}, P4estMesh{2}}, equations,
               initial_condition, boundary_conditions, source_terms,
-              dg::DG, cache)
+              #= solver =# dg::DG, cache)
   # Reset du
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 
@@ -110,7 +110,7 @@ function rhs!(du, u, t,
     have_nonconservative_terms(equations), equations,
     dg.volume_integral, dg, cache)
 
-  # Prolong solution to interfaces
+  # Prolong solution to interfaces, i.e., reconstruct interface/trace values
   @trixi_timeit timer() "prolong2interfaces" prolong2interfaces!(
     cache, u, mesh, equations, dg.surface_integral, dg)
 

@@ -129,7 +129,8 @@ export AcousticPerturbationEquations2D,
        LinearScalarAdvectionEquation1D, LinearScalarAdvectionEquation2D, LinearScalarAdvectionEquation3D,
        InviscidBurgersEquation1D,
        LatticeBoltzmannEquations2D, LatticeBoltzmannEquations3D,
-       ShallowWaterEquations1D, ShallowWaterEquations2D
+       ShallowWaterEquations1D, ShallowWaterEquations2D, 
+       LinearizedEulerEquations1D, LinearizedEulerEquations2D
 
 export flux, flux_central, flux_lax_friedrichs, flux_hll, flux_hllc, flux_hlle, flux_godunov,
        flux_chandrashekar, flux_ranocha, flux_derigs_etal, flux_hindenlang_gassner,
@@ -149,13 +150,17 @@ export flux, flux_central, flux_lax_friedrichs, flux_hll, flux_hllc, flux_hlle, 
 export initial_condition_constant,
        initial_condition_gauss,
        initial_condition_density_wave,
-       initial_condition_weak_blast_wave
+       initial_condition_weak_blast_wave,
+       initial_condition_entropy_wave,
+       initial_condition_acoustic_wave,
+       initial_condition_rest
 
 export boundary_condition_periodic,
        BoundaryConditionDirichlet,
        boundary_condition_noslip_wall,
        boundary_condition_slip_wall,
-       boundary_condition_wall
+       boundary_condition_wall,
+       boundary_condition_inlet
 
 export initial_condition_convergence_test, source_terms_convergence_test
 export source_terms_harmonic

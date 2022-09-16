@@ -329,5 +329,10 @@ include("lattice_boltzmann_3d.jl")
 abstract type AbstractAcousticPerturbationEquations{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
 include("acoustic_perturbation_2d.jl")
 
+# Linearized Euler equations
+abstract type LinearizedEulerEquations{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
+include("linearized_euler_1d.jl")
+include("linearized_euler_2d.jl")
+
 
 end # @muladd

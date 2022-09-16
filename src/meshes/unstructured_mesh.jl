@@ -77,8 +77,8 @@ function UnstructuredMesh2D(filename; RealT=Float64, periodicity=false, unsaved_
 
   arrays = (; corner_nodes, interface_info, element_node_ids, curved_check,
               quad_corners, quad_corners_flipped, curve_values,
-              element_is_curved, surface_curves, boundary_names)
-  counters = (; n_corners, n_surfaces, n_elements)
+              element_is_curved, surface_curves, boundary_names) # "Leading semicolon" makes this a named tuple
+  counters = (; n_corners, n_surfaces, n_elements) # "Leading semicolon" makes this a named tuple
 
   n_boundaries = parse_mesh_file!(arrays, RealT, CurvedSurfaceT, file_lines, counters, cheby_nodes, bary_weights)
 

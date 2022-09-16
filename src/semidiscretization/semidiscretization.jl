@@ -72,6 +72,11 @@ function semidiscretize(semi::AbstractSemidiscretization, tspan)
   # TODO: MPI, do we want to synchonize loading and print debug statements, e.g. using
   #       mpi_isparallel() && MPI.Barrier(mpi_comm())
   #       See https://github.com/trixi-framework/Trixi.jl/issues/328
+  
+  # rhs! is the function Trixi.rhs!, i.e., 
+  # all methods defined inside the Trixi module that have the name rhs! might be invoked
+  # Here, this is the "rhs!" the different semidiscretizations provide.
+  # semi: Passed in as a parameter
   return ODEProblem(rhs!, u0_ode, tspan, semi)
 end
 
@@ -88,6 +93,11 @@ function semidiscretize(semi::AbstractSemidiscretization, tspan, restart_file::A
   # TODO: MPI, do we want to synchonize loading and print debug statements, e.g. using
   #       mpi_isparallel() && MPI.Barrier(mpi_comm())
   #       See https://github.com/trixi-framework/Trixi.jl/issues/328
+
+  # rhs! is the function Trixi.rhs!, i.e., 
+  # all methods defined inside the Trixi module that have the name rhs! might be invoked.
+  # Here, this is the "rhs!" the different semidiscretizations provide.
+  # semi: Passed in as a parameter
   return ODEProblem(rhs!, u0_ode, tspan, semi)
 end
 

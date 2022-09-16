@@ -8,7 +8,7 @@
 function rhs!(du, u, t,
               mesh::ParallelP4estMesh{3}, equations,
               initial_condition, boundary_conditions, source_terms,
-              dg::DG, cache)
+              #= solver =# dg::DG, cache)
   # Start to receive MPI data
   @trixi_timeit timer() "start MPI receive" start_mpi_receive!(cache.mpi_cache)
 
@@ -33,7 +33,7 @@ function rhs!(du, u, t,
     have_nonconservative_terms(equations), equations,
     dg.volume_integral, dg, cache)
 
-  # Prolong solution to interfaces
+  # Prolong solution to interfaces, i.e., reconstruct interface/trace values
   @trixi_timeit timer() "prolong2interfaces" prolong2interfaces!(
     cache, u, mesh, equations, dg.surface_integral, dg)
 
