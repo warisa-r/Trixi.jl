@@ -1794,7 +1794,6 @@ function Solvers.update_level_info!(dg::Dg, mesh::TreeMesh)
   # simplify the implementation.
 
   # Determine level for each element
-  tmp = BitArray(undef, n_levels, dg.n_elements)
   for element_id in 1:dg.n_elements
     # Determine level
     level = mesh.tree.levels[dg.elements.cell_ids[element_id]]
