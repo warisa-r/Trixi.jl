@@ -304,5 +304,22 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t)
   return nothing
 end
 
+function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t, ode_int_level::Int)
+  @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
+
+  u  = wrap_array(u_ode,  mesh, equations, solver, cache)
+  du = wrap_array(du_ode, mesh, equations, solver, cache)
+
+  # TODO: Taal decide, do we need to pass the mesh?
+  time_start = time_ns()
+  # Call "rhs!" of the corresponding solver
+  @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, 
+                                    source_terms, solver, cache, ode_int_level)
+  runtime = time_ns() - time_start
+  put!(semi.performance_counter, runtime)
+
+  return nothing
+end
+
 
 end # @muladd
