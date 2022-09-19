@@ -272,13 +272,14 @@ const MeshesDGSEM = Union{TreeMesh, StructuredMesh, UnstructuredMesh2D, P4estMes
 @inline ndofs(mesh::MeshesDGSEM, dg::DG, cache) = nelements(cache.elements) * nnodes(dg)^ndims(mesh)
 
 # TODO: Taal performance, 1:nnodes(dg) vs. Base.OneTo(nnodes(dg)) vs. SOneTo(nnodes(dg)) for DGSEM
-@inline eachnode(dg::DG) = Base.OneTo(nnodes(dg))
+@inline eachnode(dg::DG) = Base.OneTo(nnodes(dg)) # Returns range of indices, not the objects itself!
 @inline nnodes(dg::DG)   = nnodes(dg.basis)
 
 # This is used in some more general analysis code and needs to dispatch on the
 # `mesh` for some combinations of mesh/solver.
 @inline nelements(mesh, dg::DG, cache) = nelements(dg, cache)
 
+# These return effectively ranges of indices, not the objects itself!
 @inline eachelement(dg::DG, cache)   = Base.OneTo(nelements(dg, cache))
 @inline eachinterface(dg::DG, cache) = Base.OneTo(ninterfaces(dg, cache))
 @inline eachboundary(dg::DG, cache)  = Base.OneTo(nboundaries(dg, cache))

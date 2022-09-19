@@ -100,6 +100,7 @@ end
 
 @inline nnodes(basis::LobattoLegendreBasis{RealT, NNODES}) where {RealT, NNODES} = NNODES
 
+# Returns range of indices, not the objects itself!
 @inline eachnode(basis::LobattoLegendreBasis) = Base.OneTo(nnodes(basis))
 
 @inline polydeg(basis::LobattoLegendreBasis) = nnodes(basis) - 1
@@ -266,6 +267,7 @@ end
 @inline Base.real(analyzer::LobattoLegendreAnalyzer{RealT}) where {RealT} = RealT
 
 @inline nnodes(analyzer::LobattoLegendreAnalyzer{RealT, NNODES}) where {RealT, NNODES} = NNODES
+# Returns range of indices, not the objects itself!
 @inline eachnode(analyzer::LobattoLegendreAnalyzer) = Base.OneTo(nnodes(analyzer))
 
 @inline polydeg(analyzer::LobattoLegendreAnalyzer) = nnodes(analyzer) - 1

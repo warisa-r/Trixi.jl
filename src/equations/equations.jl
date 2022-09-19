@@ -9,7 +9,7 @@
 @inline nvariables(::AbstractEquations{NDIMS, NVARS}) where {NDIMS, NVARS} = NVARS
 
 # TODO: Taal performance, 1:NVARS vs. Base.OneTo(NVARS) vs. SOneTo(NVARS)
-@inline eachvariable(equations::AbstractEquations) = Base.OneTo(nvariables(equations))
+@inline eachvariable(equations::AbstractEquations) = Base.OneTo(nvariables(equations)) # Returns range of indices, not the objects itself!
 
 """
     get_name(equations::AbstractEquations)
@@ -297,6 +297,7 @@ include("compressible_euler_multicomponent_2d.jl")
 
 # Retrieve number of components from equation instance for the multicomponent case
 @inline ncomponents(::AbstractCompressibleEulerMulticomponentEquations{NDIMS, NVARS, NCOMP}) where {NDIMS, NVARS, NCOMP} = NCOMP
+# Returns range of indices, not the objects itself!
 @inline eachcomponent(equations::AbstractCompressibleEulerMulticomponentEquations) = Base.OneTo(ncomponents(equations))
 
 # Ideal MHD
@@ -312,6 +313,7 @@ include("ideal_glm_mhd_multicomponent_2d.jl")
 
 # Retrieve number of components from equation instance for the multicomponent case
 @inline ncomponents(::AbstractIdealGlmMhdMulticomponentEquations{NDIMS, NVARS, NCOMP}) where {NDIMS, NVARS, NCOMP} = NCOMP
+# Returns range of indices, not the objects itself!
 @inline eachcomponent(equations::AbstractIdealGlmMhdMulticomponentEquations) = Base.OneTo(ncomponents(equations))
 
 # Diffusion equation: first order hyperbolic system

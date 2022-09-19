@@ -39,6 +39,7 @@ end
 
 
 @inline nelements(elements::UnstructuredElementContainer2D) = size(elements.surface_flux_values, 4)
+# Returns range of indices, not the objects itself!
 @inline eachelement(elements::UnstructuredElementContainer2D) = Base.OneTo(nelements(elements))
 
 @inline nvariables(elements::UnstructuredElementContainer2D) = size(elements.surface_flux_values, 1)
