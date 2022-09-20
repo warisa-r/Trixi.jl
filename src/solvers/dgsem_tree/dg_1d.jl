@@ -213,7 +213,8 @@ function rhs!(du, u, t,
               initial_condition, boundary_conditions, source_terms,
               #= solver =# dg::DG, cache, ode_int_level::Int)           
   # Reset du
-  @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, cache, ode_int_level)
+  #@trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, cache, ode_int_level)
+  @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 
   # Calculate volume integral
   @trixi_timeit timer() "volume integral" calc_volume_integral!(

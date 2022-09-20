@@ -20,68 +20,123 @@ function ReadInFile(FilePath::AbstractString, DataType::Type)
   return NumLines, Data
 end
 
-function ComputeFE2S_Coefficients(NumStages::Int, PathPseudoExtrema::AbstractString)
+function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString)
 
-  PathPureReal = PathPseudoExtrema * "PureReal" * string(NumStages) * ".txt"
+  ForwardEulerWeights = zeros(1, NumDoublings+1)
+  StagesMax = -1
+  if NumDoublings == 0
+    StagesMax = StagesMin
+  else
+    StagesMax = StagesMin * 2^(NumDoublings-1) -1
+  end
+  println(StagesMax)
+
+  a  = zeros(StagesMax, NumDoublings+1)
+  b1 = zeros(StagesMax, NumDoublings+1)
+  b2 = zeros(StagesMax, NumDoublings+1)
+
+  ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
+
+  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
   NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
 
-  # CARE: This assumes there is only one pure real root (left end of the spectrum)
-  @assert NumPureReal == 1
-  ForwardEulerWeight = -1.0 / PureReal[1]
-  #println(ForwardEulerWeight)
+  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+  @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
+  ForwardEulerWeights[1, 1] = -1.0 / PureReal[1]
 
-  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(NumStages) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
-  @assert NumTrueComplex == NumStages / 2 - 1
+  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
+  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
 
   # Sort ascending => ascending timesteps (real part is always negative)
   perm = sortperm(real.(TrueComplex))
   TrueComplex = TrueComplex[perm]
 
-  #=
-  Variables of the NumTrueComplex different Butcher Tableaus of form 
-
-    |
-  a | a
-  __|______
-    | b1 b2 
-
-  We have 3 degrees of freedom, but only two constraints.
-  This leaves one with some flexibility.
-  =#
-
-  # Find first element where a timestep would be greater 1 => Avoid this
+  # Find first element where a timestep would be greater 1 => Special treatment
   IndGreater1 = findfirst(x->real(x) > -1.0, TrueComplex)
 
-  a  = zeros(NumTrueComplex)
-  b1 = zeros(NumTrueComplex)
-  b2 = zeros(NumTrueComplex)
+  if IndGreater1 == nothing
+    # Easy: All can use negated inverse root as timestep
+    IndGreater1 = NumTrueComplex + 1
+  end
 
-  # TODO: Performance gain possible by only saving one of b1 / b2 here and passing on "IndGreater1"!
   for i in 1:IndGreater1 - 1
-    a[i]  = -1.0 / real(TrueComplex[i])
-    b1[i] = -real(TrueComplex[i]) / (abs(TrueComplex[i]) .* abs.(TrueComplex[i]))
-    b2[i] = b1[i]
+    a[i, 1]  = -1.0 / real(TrueComplex[i])
+    b1[i, 1] = -real(TrueComplex[i]) / (abs(TrueComplex[i]) .* abs.(TrueComplex[i]))
+    b2[i, 1] = b1[i, 1]
   end
 
   # To avoid timesteps > 1, compute difference between current maximum timestep = a[IndGreater1 - 1] +  and 1.
-  dtGreater1 = (1.0 - a[IndGreater1 - 1]) / (NumTrueComplex - IndGreater1 + 1)
+  dtGreater1 = (1.0 - a[IndGreater1 - 1, 1]) / (NumTrueComplex - IndGreater1 + 1)
 
   for i in IndGreater1:NumTrueComplex
     # Fill gap a[IndGreater1 - 1] to 1 equidistantly
-    a[i]  = a[IndGreater1 - 1] + dtGreater1 * (i - IndGreater1 + 1)
+    a[i, 1]  = a[IndGreater1 - 1, 1] + dtGreater1 * (i - IndGreater1 + 1)
 
-    b2[i] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i])
-    b1[i] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i]
+    b2[i, 1] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i, 1])
+    b1[i, 1] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i, 1]
   end
 
-  #=
-  display(a); println()
-  display(b1); println()
-  display(b2); println()
-  =#
+  # Combine distinc (!) timesteps of pure real and true complex roots
+  c = vcat(ForwardEulerWeights[1, 1], a)
 
-  return ForwardEulerWeight, a, b1, b2
+  ### Set RKM / Butcher Tableau parameters corresponding for higher stages ### 
+
+  for i = 1:NumDoublings
+    Degree = StagesMin * 2^i
+
+    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
+    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+
+    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+    @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
+    ForwardEulerWeights[1, i+1] = -1.0 / PureReal[1]
+
+    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
+    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
+    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+
+    # Sort ascending => ascending timesteps (real part is always negative)
+    perm = sortperm(real.(TrueComplex))
+    TrueComplex = TrueComplex[perm]
+
+    # Different (!) timesteps of higher degree RKM
+    c_higher = zeros(Int(Degree / 2))
+    c_higher[1] = ForwardEulerWeights[1, i+1]
+    for j in 2:Int(Degree / 2)
+      if j % 2 == 0 # Copy timestep from lower degree
+        c_higher[j] = c[Int(j / 2)]
+      else # Interpolate timestep
+        c_higher[j] = c[Int((j-1)/2)] + 0.5 * (c[Int((j+1)/2)] - c[Int((j-1)/2)])
+      end
+    end
+    c = copy(c_higher)
+
+    for j in 1:length(c_higher) - 1
+      a[j, i+1]  = c_higher[j+1]
+      b2[j, i+1] = 1.0 / (abs(TrueComplex[j]) * abs(TrueComplex[j]) * a[j, i+1])
+      b1[j, i+1] = -2.0 * real(TrueComplex[j]) / (abs(TrueComplex[j]) * abs(TrueComplex[j])) - b2[j, i+1]
+    end
+  end
+
+  # Re-order columns to comply with the level structure of the mesh quantities
+  perm = Vector(NumDoublings+1:-1:1)
+  permute!(ForwardEulerWeights, perm)
+  Base.permutecols!!(a, perm)
+
+  perm = Vector(NumDoublings+1:-1:1) # 'permutecols!!' "deletes" perm it seems
+  Base.permutecols!!(b1, perm)
+  
+  perm = Vector(NumDoublings+1:-1:1) # 'permutecols!!' "deletes" perm it seems
+  Base.permutecols!!(b2, perm)
+
+  println("ForwardEulerWeights:\n"); display(ForwardEulerWeights); println("\n")
+  println("a:\n"); display(a); println("\n")
+  println("b1:\n"); display(b1); println("\n")
+  println("b2:\n"); display(b2); println("\n")
+  println("c:\n"); display(c); println("\n")
+
+  return ForwardEulerWeights, a, b1, b2, c
 end
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
@@ -93,24 +148,30 @@ The following structures and methods provide a minimal implementation of
 the 'ForwardEulerTwoStep' temporal integrator.
 
 This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods_2N.jl" for the
-CarpenterKennedy2N{5,4}{4,3} methods.
+CarpenterKennedy2N{54, 43} methods.
 """
 
 mutable struct FE2S
-  NumStages::Int
-  dtOpt::Real
+  # Reference = minimum number of stages
+  StagesMin::Int
+  # Determines how often one doubles the number of stages 
+  # Number of methods = NumDoublings +1 
+  NumDoublings::Int
+  # Timestep corresponding to lowest number of stages
+  dtOptMin::Real
 
-  ForwardEulerWeight::AbstractFloat
-  a::Vector{AbstractFloat}
-  b1::Vector{AbstractFloat}
-  b2::Vector{AbstractFloat}
-
+  ForwardEulerWeights::Matrix{AbstractFloat}
+  a::Matrix{AbstractFloat}
+  b1::Matrix{AbstractFloat}
+  b2::Matrix{AbstractFloat}
+  c::Vector{AbstractFloat}
 
   # Constructor for previously computed A Coeffs
-  function FE2S(NumStages_::Int, dtOpt_::Real, PathPseudoExtrema_::AbstractString)
-    newFE2S = new(NumStages_, dtOpt_)
+  function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString)
+    newFE2S = new(StagesMin_, NumDoublings_, dtOptMin_)
 
-    newFE2S.ForwardEulerWeight, newFE2S.a, newFE2S.b1, newFE2S.b2 = ComputeFE2S_Coefficients(NumStages_, PathPseudoExtrema_)
+    newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
+      ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
     return newFE2S
   end
@@ -213,28 +274,90 @@ function solve!(integrator::FE2S_Integrator)
     # one time step
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-      t_stage = integrator.t
+      t_stages = integrator.t .* ones(alg.NumDoublings + 1) # TODO: Make member variable?
 
-      # Call "rhs!" of the semidiscretization
-      integrator.f(integrator.du, integrator.u, prob.p, t_stage) # du = k1
+      # Perform first Forward Euler step on finest grid
+      integrator.f(integrator.du, integrator.u, prob.p, t_stages[1], 1) # du = k1
 
-      integrator.u_tmp .= integrator.u .+ alg.ForwardEulerWeight * integrator.dt .* integrator.du
-      t_stage += alg.ForwardEulerWeight * integrator.dt
+      # TODO: Update only relevant entries of u (that of the corresponding level)
+      integrator.u_tmp .= integrator.u .+ alg.ForwardEulerWeights[1] .* integrator.dt .* integrator.du
+      t_stages[1] += alg.ForwardEulerWeights[1] * integrator.dt
+
+      # TODO: Try also just "linear" integration (does not require ifs) of every level
+      for step in 1:2^alg.NumDoublings - 1
+        # Intermediate "two-step" sub methods on finest level
+
+        # Low-storage implementation (only one k = du):
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
+        integrator.u_tmp .+= integrator.dt .* alg.b1[step, 1] .* integrator.du
+
+        # FIXME Not sure if this is the right way to do the time steps
+        t_stages[1] = integrator.t + alg.a[step, 1] * integrator.dt
+        integrator.f(integrator.du, integrator.u_tmp .+ integrator.dt .*(alg.a[step, 1] - alg.b1[step, 1]) .* integrator.du, 
+                     prob.p, t_stages[1], 1) # du = k2
+        integrator.u_tmp .+= integrator.dt .* alg.b2[step, 1] .* integrator.du
+
+        for coarse_level in 2:alg.NumDoublings+1
+          # Check if we can take a timestep on a coarser level
+          if step % (2^(coarse_level - 1)) == 1
+            if step == 2^(coarse_level - 1) - 1 # Do Forward Euler step for coarser levels
+              integrator.f(integrator.du, integrator.u, prob.p, t_stages[coarse_level], coarse_level) # du = k1
+              integrator.u_tmp .= integrator.u_tmp .+ alg.ForwardEulerWeights[coarse_level] .* integrator.dt .* integrator.du
+
+              # FIXME Not sure if this is the right way to do the time steps
+              t_stages[coarse_level] = integrator.t + alg.ForwardEulerWeights[coarse_level] * integrator.dt
+            else # Do intermediate "two-steps" for coarser levels (except for the coarsest, where we do only Forward Euler)
+              pos = Int(step / 2^(coarse_level - 1))
+              integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
+              integrator.u_tmp .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
+
+              # NOTE: Not sure if this is the right way to do the time steps
+              t_stages[coarse_level] = integrator.t + alg.a[pos, coarse_level] * integrator.dt
+
+              integrator.f(integrator.du, 
+                integrator.u_tmp .+ integrator.dt .*(alg.a[pos, coarse_level] - alg.b1[pos, coarse_level]) .* integrator.du, 
+                prob.p, t_stages[coarse_level], coarse_level) # du = k2
+
+              integrator.u_tmp .+= integrator.dt .* alg.b2[pos, coarse_level] .* integrator.du
+            end
+          end
+        end
+      end
 
       # Intermediate "two-step" sub methods
-      for i in eachindex(alg.a)
+      for step in 2^alg.NumDoublings:length(alg.a[:, 1])
         # Low-storage implementation (only one k = du):
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # du = k1
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
 
-        integrator.u_tmp .+= integrator.dt .* alg.b1[i] .* integrator.du
+        integrator.u_tmp .+= integrator.dt .* alg.b1[step, 1] .* integrator.du
 
-        t_stage += alg.a[i] * integrator.dt
-        integrator.f(integrator.du, integrator.u_tmp .+ integrator.dt .*(alg.a[i] - alg.b1[i]) .* integrator.du, 
-                     prob.p, t_stage) # du = k2
-        integrator.u_tmp .+= integrator.dt .* alg.b2[i] .* integrator.du
+        t_stages[1] = integrator.t + alg.a[step, 1] * integrator.dt
+        integrator.f(integrator.du, integrator.u_tmp .+ integrator.dt .*(alg.a[step, 1] - alg.b1[step, 1]) .* integrator.du, 
+                     prob.p, t_stages[1], 1) # du = k2
+        integrator.u_tmp .+= integrator.dt .* alg.b2[step, 1] .* integrator.du
+
+        for coarse_level in 2:alg.NumDoublings+1
+          # Check if we can take a timestep on a coarser level
+          if step % (2^(coarse_level - 1)) == 1 # Do only intermediate "two-steps" (no Forward Euler) from here on
+            pos = Int((step - 1) / 2^(coarse_level - 1))
+            integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
+            integrator.u_tmp .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
+
+            # NOTE: Not sure if this is the right way to do the time steps
+            t_stages[coarse_level] = integrator.t + alg.a[pos, coarse_level] * integrator.dt
+
+            integrator.f(integrator.du, 
+              integrator.u_tmp .+ integrator.dt .*(alg.a[pos, coarse_level] - alg.b1[pos, coarse_level]) .* integrator.du, 
+              prob.p, t_stages[coarse_level], coarse_level) # du = k2
+
+            integrator.u_tmp .+= integrator.dt .* alg.b2[pos, coarse_level] .* integrator.du
+          end
+        end
       end
       # Final Euler step with step length of dt
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # k1
+      @assert all(y->y == t_stages[1], t_stages) # Expect that every stage is at the same time by now ...
+      # ... Then, we can use this time to develop from
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1]) # k1
       integrator.u .+= integrator.dt .* integrator.du
     end # FE2S step
 
