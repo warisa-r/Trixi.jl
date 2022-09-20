@@ -28,7 +28,7 @@ function create_cache(mesh::TreeMesh{1}, equations,
   cache = (;cache..., create_cache(mesh, equations, dg.volume_integral, dg, uEltype)...)
 
   # Current approach for cell-dependent time integration: Add datastructures to cache
-  # TODO: This is not possible for amr, since named tuples (thus, 'cache') are immutable
+  # TODO: This is not possible for amr, since named tuple => 'cache' is immutable
   n_elements = length(elements.cell_ids)
   n_interfaces = length(interfaces.orientations)
   n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
@@ -39,12 +39,8 @@ function create_cache(mesh::TreeMesh{1}, equations,
   println("Current number of levels: ", n_levels)
 
   # Initialize storage for level-wise information
-  level_info_elements = [Vector{Int}() for _ in 1:n_levels]
-  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
-
-  # TODO: For the accumulated values, we should not store the min_level since
-  # it contains all cell ids by definition. It is left for the moment to
-  # simplify the implementation.
+  # Set-like datastructures more suited then vectros (Especially for interfaces)
+  level_info_elements = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each element
   for element_id in 1:n_elements
@@ -52,78 +48,76 @@ function create_cache(mesh::TreeMesh{1}, equations,
     level = mesh.tree.levels[elements.cell_ids[element_id]]
     # Convert to level id
     level_id = max_level + 1 - level
+
     push!(level_info_elements[level_id], element_id)
-
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(level_info_elements_acc[l], element_id)
-    end
   end
-  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
 
-  # Reset level info for interfaces
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each interface
-  # Note: Since interfaces are by definition between same-sized elements, i.e.,
-  # elements at the same refinement level, we need to consider only one of the
-  # neighbor elements (here: the left one) in determining to which level this
-  # interface belongs.
   for interface_id in 1:n_interfaces
     # Get element ids
-    element_id_left = interfaces.neighbor_ids[1, interface_id]
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    #=
+    println("We are at interface(ID) ", interface_id, " with left element(ID) ", 
+            element_id_left, " and right element(ID) ", element_id_right )
+    =#
 
     # Determine level
-    level_left = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
     # Convert to level id
-    level_id_left = max_level + 1 - level_left
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
 
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(level_info_interfaces_acc[l], interface_id)
+    push!(level_info_interfaces[level_id_left], interface_id)
+    if level_id_left != level_id_right
+      push!(level_info_interfaces[level_id_right], interface_id)
     end
   end
-  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
   # Reset level info for boundaries
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_boundaries = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each boundary
-  # Note: Since boundarys are by definition between same-sized elements, i.e.,
-  # elements at the same refinement level, we need to consider only one of the
-  # neighbor elements (here: the left one) in determining to which level this
-  # boundary belongs.
   for boundary_id in 1:n_boundaries
     # Get element ids
-    element_id_left = boundaries.neighbor_ids[1, boundary_id]
+    element_id_left  = boundaries.neighbor_ids[1, boundary_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
 
     # Determine level
-    level_left = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
     # Convert to level id
-    level_id_left = max_level + 1 - level_left
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
 
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(level_info_boundaries_acc[l], boundary_id)
+    push!(level_info_boundaries[level_left], boundary_id)
+    if level_id_left != level_id_right
+      push!(level_info_boundaries[level_id_right], interface_id)
     end
   end
-  @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
 
 
   # Specificially designed cache for non-uniform meshes
   cache = (;cache..., n_elements, n_interfaces, 
-                      level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc)
+                      level_info_elements, level_info_interfaces, level_info_boundaries)
 
   println("n_elements: ", n_elements)
   println("\nn_interfaces: ", n_interfaces)
-  println("level_info_elements_acc:")
-  display(level_info_elements_acc); println()
-  println("level_info_interfaces_acc:")
-  display(level_info_interfaces_acc); println()
-  println("level_info_boundaries_acc:")
-  display(level_info_boundaries_acc); println()
+
+  println("level_info_elements:")
+  display(level_info_elements); println()
+
+  println("level_info_interfaces:")
+  display(level_info_interfaces); println()
+
+  println("level_info_boundaries:")
+  display(level_info_boundaries); println()
   
   return cache
 end
@@ -283,7 +277,7 @@ function calc_volume_integral!(du, u,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     weak_form_kernel!(du, u, element, mesh,
                       nonconservative_terms, equations,
                       dg, cache)
@@ -331,7 +325,7 @@ function calc_volume_integral!(du, u,
                                volume_integral::VolumeIntegralFluxDifferencing,
                                dg::DGSEM, cache, ode_int_level::Int)
                     
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     split_form_kernel!(du, u, element, mesh, nonconservative_terms, equations,
                        volume_integral.volume_flux, dg, cache)
   end
@@ -463,7 +457,7 @@ function calc_volume_integral!(du, u,
   @unpack volume_flux_fv = volume_integral
 
   # Calculate LGL FV volume integral
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
                dg, cache, element, true)
   end
@@ -575,7 +569,7 @@ function prolong2interfaces!(cache, u,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG, ode_int_level::Int)
   @unpack interfaces = cache
 
-  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  @threaded for interface in cache.level_info_interfaces[ode_int_level]
     left_element  = interfaces.neighbor_ids[1, interface]
     right_element = interfaces.neighbor_ids[2, interface]
 
@@ -625,7 +619,7 @@ function calc_interface_flux!(surface_flux_values,
   @unpack surface_flux = surface_integral
   @unpack u, neighbor_ids, orientations = cache.interfaces
 
-  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  @threaded for interface in cache.level_info_interfaces[ode_int_level]
     # Get neighboring elements
     left_id  = neighbor_ids[1, interface]
     right_id = neighbor_ids[2, interface]
@@ -694,7 +688,7 @@ function calc_interface_flux!(surface_flux_values,
   surface_flux, nonconservative_flux = surface_integral.surface_flux
   @unpack u, neighbor_ids, orientations = cache.interfaces
 
-  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  @threaded for interface in cache.level_info_interfaces[ode_int_level]
     # Get neighboring elements
     left_id  = neighbor_ids[1, interface]
     right_id = neighbor_ids[2, interface]
@@ -757,7 +751,7 @@ function prolong2boundaries!(cache, u,
   @unpack boundaries = cache
   @unpack neighbor_sides = boundaries
 
-  @threaded for boundary in cache.level_info_boundaries_acc[ode_int_level]
+  @threaded for boundary in cache.level_info_boundaries[ode_int_level]
     element = boundaries.neighbor_ids[boundary]
 
     # boundary in x-direction
@@ -811,8 +805,8 @@ end
 # TODO: Not sure if correct
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG, ode_int_level::Int)
-  @unpack surface_flux_values = cache.elements.level_info_elements_acc[ode_int_level]
-  @unpack n_boundaries_per_direction = cache.level_info_boundaries_acc[ode_int_level]
+  @unpack surface_flux_values = cache.elements.level_info_elements[ode_int_level]
+  @unpack n_boundaries_per_direction = cache.level_info_boundaries[ode_int_level]
 
   # Calculate indices
   # TODO: Probably not that easy
@@ -868,7 +862,7 @@ function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:A
                                           direction, first_boundary, last_boundary, ode_int_level::Int)
 
   @unpack surface_flux = surface_integral
-  @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.level_info_boundaries_acc[ode_int_level]
+  @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.level_info_boundaries[ode_int_level]
 
   @threaded for boundary in first_boundary:last_boundary
     # Get neighboring element
@@ -935,7 +929,7 @@ function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:A
                                           direction, first_boundary, last_boundary, ode_int_level::Int)
 
   surface_flux, nonconservative_flux = surface_integral.surface_flux
-  @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.level_info_boundaries_acc[ode_int_level]
+  @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.level_info_boundaries[ode_int_level]
 
   @threaded for boundary in first_boundary:last_boundary
     # Get neighboring element
@@ -1001,7 +995,7 @@ function calc_surface_integral!(du, u, mesh::Union{TreeMesh{1}, StructuredMesh{1
   # into FMAs (see comment at the top of the file).
   factor_1 = boundary_interpolation[1,          1]
   factor_2 = boundary_interpolation[nnodes(dg), 2]
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     for v in eachvariable(equations)
       # surface at -x
       du[v, 1,          element] = (
@@ -1036,7 +1030,7 @@ end
 function apply_jacobian!(du, mesh::Union{TreeMesh{1}, StructuredMesh{1}},
                          equations, dg::DG, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     factor = -cache.elements.inverse_jacobian[element]
 
     for i in eachnode(dg)
@@ -1080,7 +1074,7 @@ end
 function calc_sources!(du, u, t, source_terms,
                        equations::AbstractEquations{1}, dg::DG, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     for i in eachnode(dg)
       u_local = get_node_vars(u, equations, dg, i, element)
       x_local = get_node_coords(cache.elements.node_coordinates, equations, dg, i, element)

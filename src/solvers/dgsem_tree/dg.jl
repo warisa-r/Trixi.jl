@@ -18,7 +18,7 @@ end
 # du .= zero(eltype(du)) doesn't scale when using multiple threads.
 # See https://github.com/trixi-framework/Trixi.jl/pull/924 for a performance comparison.
 function reset_du!(du, cache, ode_int_level::Int)
-  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  @threaded for element in cache.level_info_elements[ode_int_level]
     du[.., element] .= zero(eltype(du))
   end
 
