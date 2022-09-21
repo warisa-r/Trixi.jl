@@ -20,16 +20,40 @@ function ReadInFile(FilePath::AbstractString, DataType::Type)
   return NumLines, Data
 end
 
+function ReadInEvals(Path_toEvalFile::AbstractString)
+
+  NumEigVals = -1 # Declare and set to some value
+  open(Path_toEvalFile, "r") do EvalFile
+    NumEigVals = countlines(EvalFile)
+  end
+
+  EigVals = Array{ComplexF64}(undef, NumEigVals)
+
+  LineIndex = 0
+  open(Path_toEvalFile, "r") do file
+    # read till end of file
+    while !eof(file)
+      # read a new / next line for every iteration          
+      LineContent = readline(file)     
+      EigVals[LineIndex + 1] = parse(ComplexF64, LineContent)
+
+      LineIndex += 1
+    end
+  end
+
+  return NumEigVals, EigVals
+end
+
 function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString)
 
-  ForwardEulerWeights = zeros(1, NumDoublings+1)
+  ForwardEulerWeights = zeros(NumDoublings+1)
   StagesMax = -1
   if NumDoublings == 0
-    StagesMax = StagesMin
+    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
+    StagesMax = Int(StagesMin / 2 - 1)
   else
     StagesMax = StagesMin * 2^(NumDoublings-1) -1
   end
-  println(StagesMax)
 
   a  = zeros(StagesMax, NumDoublings+1)
   b1 = zeros(StagesMax, NumDoublings+1)
@@ -42,7 +66,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
 
   @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
   @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
-  ForwardEulerWeights[1, 1] = -1.0 / PureReal[1]
+  ForwardEulerWeights[1] = -1.0 / PureReal[1]
 
   PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
   NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
@@ -77,8 +101,8 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
     b1[i, 1] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i, 1]
   end
 
-  # Combine distinc (!) timesteps of pure real and true complex roots
-  c = vcat(ForwardEulerWeights[1, 1], a)
+  # Combine distinct (!) timesteps of pure real and true complex roots
+  c = vcat(ForwardEulerWeights[1], a[:, 1])
 
   ### Set RKM / Butcher Tableau parameters corresponding for higher stages ### 
 
@@ -90,7 +114,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
 
     @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
     @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
-    ForwardEulerWeights[1, i+1] = -1.0 / PureReal[1]
+    ForwardEulerWeights[i+1] = -1.0 / PureReal[1]
 
     PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
     NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
@@ -102,7 +126,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
 
     # Different (!) timesteps of higher degree RKM
     c_higher = zeros(Int(Degree / 2))
-    c_higher[1] = ForwardEulerWeights[1, i+1]
+    c_higher[1] = ForwardEulerWeights[i+1]
     for j in 2:Int(Degree / 2)
       if j % 2 == 0 # Copy timestep from lower degree
         c_higher[j] = c[Int(j / 2)]
@@ -139,6 +163,33 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   return ForwardEulerWeights, a, b1, b2, c
 end
 
+function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b1::Vector{AbstractFloat}, b2::Vector{AbstractFloat},
+                        NumEigVals::Int, EigVals::Vector{<:Complex{<:Float64}}, dt::Float64)
+
+  @assert length(a)  == length(b1)
+  @assert length(b1) == length(b2)
+
+  for i = 1:NumEigVals
+    z = Complex(EigVals[i] * dt)
+
+    StabPnom = 1.0;
+    for j in eachindex(ForwardEulerWeight)
+      StabPnom *= 1.0 + z * ForwardEulerWeight[j]
+    end
+
+    for j in eachindex(a)
+      StabPnom *= 1.0 + z * ((b1[j] + b2[j]) + z * a[j] * b2[j])
+    end
+
+    StabPnom *= z
+    StabPnom += 1.0
+
+    if abs(StabPnom) > 1.0
+      println(string(i) * "'th Eigenvalue constraints violates stability bound with value " * string(abs(StabPnom)))
+    end
+  end
+end
+
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
 """
@@ -160,7 +211,7 @@ mutable struct FE2S
   # Timestep corresponding to lowest number of stages
   dtOptMin::Real
 
-  ForwardEulerWeights::Matrix{AbstractFloat}
+  ForwardEulerWeights::Vector{AbstractFloat}
   a::Matrix{AbstractFloat}
   b1::Matrix{AbstractFloat}
   b2::Matrix{AbstractFloat}
@@ -172,6 +223,13 @@ mutable struct FE2S
 
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
+
+    #NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined45.txt")
+    NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined4.txt")
+    println("Stage 1 stability test")
+    CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], NumEigVals, EigVals, dtOptMin_)
+    #println("Stage 2 stability test")
+    #CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals, EigVals, dtOptMin_)
 
     return newFE2S
   end
@@ -411,4 +469,3 @@ function Base.resize!(integrator::FE2S_Integrator, new_size)
 end
 
 end # @muladd
-
