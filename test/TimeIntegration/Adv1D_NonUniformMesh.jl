@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -21,11 +21,21 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
+LLID = Trixi.local_leaf_cells(mesh.tree)
+for id in LLID
+  println(Trixi.cell_coordinates(mesh.tree, id))
+end
+
 leaf_cell_ids = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(leaf_cell_ids)
 @assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
 # Refine right half of mesh
 Trixi.refine!(mesh.tree, leaf_cell_ids[Int(num_leafs/2)+1 : end])
+
+LLID = Trixi.local_leaf_cells(mesh.tree)
+for id in LLID
+  println(Trixi.cell_coordinates(mesh.tree, id))
+end
 
 # The 16 cells on the lowest tree level * 4 DoF of the Third order element polynomial 
 # give the reported total 64 DoF
@@ -37,8 +47,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 0.05
-EndTime = 1.0
+EndTime = 0.05
+#EndTime = 100.0
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -58,8 +68,8 @@ save_solution = SaveSolutionCallback(interval=100,
 stepsize_callback = StepsizeCallback(cfl=1.0)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-callbacks = CallbackSet(summary_callback, analysis_callback, save_solution, stepsize_callback)
-#callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
+#callbacks = CallbackSet(summary_callback, analysis_callback, save_solution, stepsize_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 ###############################################################################
 # run the simulation
@@ -67,14 +77,18 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution, step
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
 #dtOptMin = 0.0427
-#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+dtOptMin = 0.03
+ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 #exit()
-ode_algorithm = Trixi.CarpenterKennedy2N54()
+#ode_algorithm = Trixi.CarpenterKennedy2N54()
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
 sol = Trixi.solve(ode, ode_algorithm,
-                  dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  #dt = dtOptMin,
+                  #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+                  dt = dtOptMin,
                   save_everystep=false, callback=callbacks);
 
 # Print the timer summary
 summary_callback()
+
+pd = PlotData1D(sol)
+plot(getmesh(pd))

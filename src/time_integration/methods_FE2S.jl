@@ -169,6 +169,7 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b
   @assert length(a)  == length(b1)
   @assert length(b1) == length(b2)
 
+  NumStableEigVals = 0
   for i = 1:NumEigVals
     z = Complex(EigVals[i] * dt)
 
@@ -186,8 +187,16 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b
 
     if abs(StabPnom) > 1.0
       println(string(i) * "'th Eigenvalue constraints violates stability bound with value " * string(abs(StabPnom)))
+    else
+      if imag(z) == 0
+        NumStableEigVals += 0.5
+      else
+        NumStableEigVals += 1
+      end
     end
   end
+
+  println("Number of stable Eigenvalues is: ", NumStableEigVals)
 end
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
@@ -224,12 +233,12 @@ mutable struct FE2S
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
-    #NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined45.txt")
-    NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined4.txt")
+    NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined45.txt")
+    #NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined4.txt")
     println("Stage 1 stability test")
     CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], NumEigVals, EigVals, dtOptMin_)
-    #println("Stage 2 stability test")
-    #CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals, EigVals, dtOptMin_)
+    println("Stage 2 stability test")
+    CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals, EigVals, dtOptMin_)
 
     return newFE2S
   end
@@ -413,6 +422,7 @@ function solve!(integrator::FE2S_Integrator)
         end
       end
       # Final Euler step with step length of dt
+      # TODO: Remove assert later (performance)
       @assert all(y->y == t_stages[1], t_stages) # Expect that every stage is at the same time by now ...
       # ... Then, we can use this time to develop from
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1]) # k1
