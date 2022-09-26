@@ -57,7 +57,7 @@ The following structures and methods provide a minimal implementation of
 the paired explicit Runge-Kutta method optimized for a certain simulation setup.
 
 This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods_2N.jl" for the
-CarpenterKennedy2N{5,4}{4,3} methods.
+CarpenterKennedy2N{54, 43} methods.
 """
 
 mutable struct PERK

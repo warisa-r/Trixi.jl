@@ -20,30 +20,6 @@ function ReadInFile(FilePath::AbstractString, DataType::Type)
   return NumLines, Data
 end
 
-function ReadInEvals(Path_toEvalFile::AbstractString)
-
-  NumEigVals = -1 # Declare and set to some value
-  open(Path_toEvalFile, "r") do EvalFile
-    NumEigVals = countlines(EvalFile)
-  end
-
-  EigVals = Array{ComplexF64}(undef, NumEigVals)
-
-  LineIndex = 0
-  open(Path_toEvalFile, "r") do file
-    # read till end of file
-    while !eof(file)
-      # read a new / next line for every iteration          
-      LineContent = readline(file)     
-      EigVals[LineIndex + 1] = parse(ComplexF64, LineContent)
-
-      LineIndex += 1
-    end
-  end
-
-  return NumEigVals, EigVals
-end
-
 function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString)
 
   ForwardEulerWeights = zeros(NumDoublings+1)
@@ -185,18 +161,40 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b
     StabPnom *= z
     StabPnom += 1.0
 
-    if abs(StabPnom) > 1.0
+    if (abs(StabPnom) -1.0) >= eps(Float64)
+    #if abs(StabPnom) > 1.0
       println(string(i) * "'th Eigenvalue constraints violates stability bound with value " * string(abs(StabPnom)))
-    else
-      if imag(z) == 0
-        NumStableEigVals += 0.5
-      else
+    else # Stable eigenvalue
+      if imag(z) <= 1e-12
         NumStableEigVals += 1
+      else # Eigenvalue is complex-conjugated
+        NumStableEigVals += 2
       end
     end
   end
 
   println("Number of stable Eigenvalues is: ", NumStableEigVals)
+
+  return NumStableEigVals
+end
+
+function FindMaxdtScaling(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b1::Vector{AbstractFloat}, b2::Vector{AbstractFloat},
+                          NumEigVals::Int, EigVals::Vector{<:Complex{<:Float64}}, dt::Float64, MinStableCount::Int)
+
+  dtScaling = 1.0
+  dtScalingMax = 1.0
+  dtScalingMin = 0.0
+  while dtScalingMax - dtScalingMin > 1e-12
+    dtScaling = 0.5 * (dtScalingMax + dtScalingMin)
+    if CheckStability(ForwardEulerWeight, a, b1, b2, NumEigVals, EigVals, dt * dtScaling) >= MinStableCount
+      dtScalingMin = dtScaling
+    else
+      dtScalingMax = dtScaling
+    end
+  end
+
+  println("Scaling to get the exact minimum count of stable eigenvalues is: ", dtScalingMin)
+  return dtScalingMin
 end
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
@@ -227,18 +225,20 @@ mutable struct FE2S
   c::Vector{AbstractFloat}
 
   # Constructor for previously computed A Coeffs
-  function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString)
+  function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString, 
+                EigVals_::Vector{<:ComplexF64}, NumEigVals_::Int, NumStableEigVals_::Int)
     newFE2S = new(StagesMin_, NumDoublings_, dtOptMin_)
 
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
-    NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined45.txt")
-    #NumEigVals, EigVals = ReadInEvals("/home/daniel/Desktop/git/MA/EigenspectraGeneration/EigenvalueList_Refined4.txt")
-    println("Stage 1 stability test")
-    CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], NumEigVals, EigVals, dtOptMin_)
+    #println("Stage 1 stability test")
+    #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], NumEigVals_, EigVals_, dtOptMin_)
     println("Stage 2 stability test")
-    CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals, EigVals, dtOptMin_)
+    CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals_, EigVals_, dtOptMin_)
+
+    newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
+                                         NumEigVals_, EigVals_, dtOptMin_, NumStableEigVals_)
 
     return newFE2S
   end

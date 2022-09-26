@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -9,10 +9,11 @@ advection_velocity = 1.0
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-solver = DGSEM(polydeg=3, surface_flux=flux_lax_friedrichs)
+PolyDegree = 3
+solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max =  1.0 # maximum coordinate
+coordinates_min = 0.0 # minimum coordinate
+coordinates_max = 1.0 # maximum coordinate
 
 InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
@@ -22,23 +23,31 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
 LLID = Trixi.local_leaf_cells(mesh.tree)
-for id in LLID
-  println(Trixi.cell_coordinates(mesh.tree, id))
-end
+num_leafs = length(LLID)
 
-leaf_cell_ids = Trixi.local_leaf_cells(mesh.tree)
-num_leafs = length(leaf_cell_ids)
-@assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
+# Refine only one mesh cell
+Trixi.refine!(mesh.tree, LLID[end])
+
 # Refine right half of mesh
-Trixi.refine!(mesh.tree, leaf_cell_ids[Int(num_leafs/2)+1 : end])
+#@assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
+#Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
 
+# Refine right three quarters of mesh
+#@assert num_leafs % 4 == 0
+#Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : end])
+
+# Refine mesh completely
+#Trixi.refine!(mesh.tree, LLID)
+
+# Update num_leafs:
+num_leafs = length(Trixi.local_leaf_cells(mesh.tree))
+
+#=
 LLID = Trixi.local_leaf_cells(mesh.tree)
 for id in LLID
   println(Trixi.cell_coordinates(mesh.tree, id))
 end
-
-# The 16 cells on the lowest tree level * 4 DoF of the Third order element polynomial 
-# give the reported total 64 DoF
+=#
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
@@ -47,8 +56,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 0.05
-#EndTime = 100.0
+#EndTime = 0.05
+EndTime = 100.0
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -76,15 +85,25 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-#dtOptMin = 0.0427
-dtOptMin = 0.03
-ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+dtOptMin = 0.0427
+#dtOptMin = 0.0427 / 2
+
+A, = linear_structure(semi) # Potentially cheaper than jacobian
+EigVals = eigvals(Matrix(A))
+
+# Complex conjugate eigenvalues have same modulus
+EigVals = EigVals[imag(EigVals) .>= 0]
+NumEigVals = length(EigVals)
+
+ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", EigVals, NumEigVals, 
+                           num_leafs * (PolyDegree + 1))
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  dt = dtOptMin,
+                  #dt = dtOptMin,
+                  dt = ode_algorithm.dtOptMin,
                   save_everystep=false, callback=callbacks);
 
 # Print the timer summary
