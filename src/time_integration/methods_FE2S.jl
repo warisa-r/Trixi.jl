@@ -60,7 +60,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
     IndGreater1 = NumTrueComplex + 1
   end
 
-  for i in 1:IndGreater1 - 1
+  for i = 1:IndGreater1 - 1
     a[i, 1]  = -1.0 / real(TrueComplex[i])
     b1[i, 1] = -real(TrueComplex[i]) / (abs(TrueComplex[i]) .* abs.(TrueComplex[i]))
     b2[i, 1] = b1[i, 1]
@@ -69,7 +69,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   # To avoid timesteps > 1, compute difference between current maximum timestep = a[IndGreater1 - 1] +  and 1.
   dtGreater1 = (1.0 - a[IndGreater1 - 1, 1]) / (NumTrueComplex - IndGreater1 + 1)
 
-  for i in IndGreater1:NumTrueComplex
+  for i = IndGreater1:NumTrueComplex
     # Fill gap a[IndGreater1 - 1] to 1 equidistantly
     a[i, 1]  = a[IndGreater1 - 1, 1] + dtGreater1 * (i - IndGreater1 + 1)
 
@@ -103,7 +103,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
     # Different (!) timesteps of higher degree RKM
     c_higher = zeros(Int(Degree / 2))
     c_higher[1] = ForwardEulerWeights[i+1]
-    for j in 2:Int(Degree / 2)
+    for j = 2:Int(Degree / 2)
       if j % 2 == 0 # Copy timestep from lower degree
         c_higher[j] = c[Int(j / 2)]
       else # Interpolate timestep
@@ -112,7 +112,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
     end
     c = copy(c_higher)
 
-    for j in 1:length(c_higher) - 1
+    for j = 1:length(c_higher) - 1
       a[j, i+1]  = c_higher[j+1]
       b2[j, i+1] = 1.0 / (abs(TrueComplex[j]) * abs(TrueComplex[j]) * a[j, i+1])
       b1[j, i+1] = -2.0 * real(TrueComplex[j]) / (abs(TrueComplex[j]) * abs(TrueComplex[j])) - b2[j, i+1]
@@ -186,62 +186,173 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{Float64}, b1::Vec
   return MaxAbsStabPnom
 end
 
-function ComputeAmpMatrix(A::Matrix{Float64}, dt::Float64)
+function ComputeAmpMatrix(A::Matrix{Float64}, dt::Float64, DistributionMatrix::Matrix{Int})
 
-  Apow = A * A
-  dtpow = dt^2                              
-  BasePnom2 = I + dt .* A + 0.5 * dtpow .* Apow
-  Apow *= A
-  dtpow *= dt
-  LowDegreePnom  = BasePnom2 + 0.156149396314828 * dtpow .* Apow
-  HighDegreePnom = BasePnom2 + 0.164081689164205 * dtpow .* Apow
+  dtApow = dt^2 .* A * A                          
+  BasePnom2 = DistributionMatrix * I + dt .* A + 0.5 .* dtApow
+  dtApow *= dt .* A
+  LowDegreePnom  = BasePnom2 + 0.156149396314828 .* dtApow
+  HighDegreePnom = BasePnom2 + 0.164081689164205 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  LowDegreePnom  += 0.0308768369075866 * dtpow .* Apow
-  HighDegreePnom += 0.0390225916568780 * dtpow .* Apow
+  dtApow *= dt .* A
+  LowDegreePnom  += 0.0308768369075866 .* dtApow
+  HighDegreePnom += 0.0390225916568780 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  LowDegreePnom  += 0.00365477959519221 * dtpow .* Apow
-  HighDegreePnom += 0.00704232209800608 * dtpow .* Apow
+  dtApow *= dt .* A
+  LowDegreePnom  += 0.00365477959519221 .* dtApow
+  HighDegreePnom += 0.00704232209800608 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  LowDegreePnom  += 0.000201261605214267 * dtpow .* Apow
-  HighDegreePnom += 0.000984618576386692 * dtpow .* Apow
+  dtApow *= dt .* A
+  LowDegreePnom  += 0.000201261605214267 .* dtApow
+  HighDegreePnom += 0.000984618576386692 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 0.000107132166432604 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 0.000107132166432604 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 8.98404284721041e-06 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 8.98404284721041e-06 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 5.65495237992257e-07 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 5.65495237992257e-07 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 2.53388343562130e-08 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 2.53388343562130e-08 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 7.25350370838813e-10 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 7.25350370838813e-10 .* dtApow
 
-  Apow *= A
-  dtpow *= dt
-  HighDegreePnom += 1.00289907472715e-11 * dtpow .* Apow
+  dtApow *= dt .* A
+  HighDegreePnom += 1.00289907472715e-11 .* dtApow
 
-  return LowDegreePnom, HighDegreePnom
+  return HighDegreePnom, LowDegreePnom
+end
+
+function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
+                            A::Matrix{Float64}, dt::Float64)
+
+  StagesMax = -1
+  if NumDoublings == 0
+    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
+    StagesMax = Int(StagesMin / 2)
+  else
+    StagesMax = StagesMin * 2^(NumDoublings-1)
+  end
+
+  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
+
+  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
+  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+  PseudoExtrema[1, 1] = PureReal[1]
+
+  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
+  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
+
+  for i = 1:NumDoublings
+    Degree = StagesMin * 2^i
+
+    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
+    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+    PseudoExtrema[1, i+1] = PureReal[1]
+
+    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
+    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
+    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
+  end
+
+  # Keep same order as the datastructures in other files
+  perm = Vector(NumDoublings+1:-1:1)
+  Base.permutecols!!(PseudoExtrema, perm)
+  #display(PseudoExtrema)
+
+  AmpMatrices = zeros(NumDoublings+1, size(A, 1), size(A, 2))
+  for i = 1:NumDoublings+1
+    AmpMatrices[i, :, :] = dt .* A
+
+    # Pure real pseudo-extrema
+    AmpMatrices[i, :, :] *= (I - dt .* A ./ PseudoExtrema[1, i])
+
+    # Complex conjugated pseudo-extrema
+    for j = 2:Int((StagesMin/2) * 2^(NumDoublings + 1 - i))
+      AmpMatrices[i, :, :] *= real((I - dt .* A ./ PseudoExtrema[j,i]) * (I - dt .* A ./ conj(PseudoExtrema[j,i])))
+    end
+
+    AmpMatrices[i, :, :] += I
+  end
+
+  return AmpMatrices
+end
+
+function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
+                            A::Matrix{Float64}, dt::Float64, DistributionMatrices)
+
+  StagesMax = -1
+  if NumDoublings == 0
+    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
+    StagesMax = Int(StagesMin / 2)
+  else
+    StagesMax = StagesMin * 2^(NumDoublings-1)
+  end
+
+  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
+
+  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
+  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+  PseudoExtrema[1, 1] = PureReal[1]
+
+  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
+  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
+
+  for i = 1:NumDoublings
+    Degree = StagesMin * 2^i
+
+    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
+    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+    PseudoExtrema[1, i+1] = PureReal[1]
+
+    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
+    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
+    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
+  end
+
+  # Keep same order as the datastructures in other files
+  perm = Vector(NumDoublings+1:-1:1)
+  Base.permutecols!!(PseudoExtrema, perm)
+  #display(PseudoExtrema)
+
+  AmpMatrices = zeros(NumDoublings+1, size(A, 1), size(A, 2))
+  for i = 1:NumDoublings+1
+    AmpMatrices[i, :, :] = dt .* DistributionMatrices[i, :, :] * A
+
+    # Pure real pseudo-extrema
+    # TODO: Not sure if the identity matrix may also scaled with the DistributionMatrices...
+    AmpMatrices[i, :, :] *= (DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[1, i])
+
+    # Complex conjugated pseudo-extrema
+    for j = 2:Int((StagesMin/2) * 2^(NumDoublings + 1 - i))
+      AmpMatrices[i, :, :] *= real((DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[j,i]) * 
+                                   (DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ conj(PseudoExtrema[j,i])))
+    end
+
+    AmpMatrices[i, :, :] += DistributionMatrices[i, :, :] * I
+  end
+
+  return AmpMatrices
 end
 
 function CheckStabilityJointMethod(dtMax_::Float64, A::Matrix{Float64})
 
-  DistributionMatrix = zeros(80, 80)
-  for i = 12 * 4:80
+  DistributionMatrix = zeros(Int, 96, 96)
+  for i = 8 * 4 + 1:96
     DistributionMatrix[i, i] = 1
   end
 
@@ -251,20 +362,68 @@ function CheckStabilityJointMethod(dtMax_::Float64, A::Matrix{Float64})
   while dtMax - dtMin > dtEps
     dt = 0.5 * (dtMax + dtMin)
 
-    LowDegreePnom, HighDegreePnom = ComputeAmpMatrix(A, dt)
+    #LowDegreePnom, HighDegreePnom = ComputeAmpMatrix(A, dt, I)
+    #CombinedAmpMat = DistributionMatrix * HighDegreePnom + (I - DistributionMatrix) * LowDegreePnom
 
-    CombinedAmpMat = DistributionMatrix * HighDegreePnom + (I - DistributionMatrix) * LowDegreePnom
+    HighDegreePnom, LowDegreePnom = ComputeAmpMatrix((I - DistributionMatrix) * A, dt, I - DistributionMatrix)
+    HighDegreePnom, = ComputeAmpMatrix(DistributionMatrix * A, dt, DistributionMatrix)
+    CombinedAmpMat = HighDegreePnom + LowDegreePnom
 
     eigs = eigvals(CombinedAmpMat)
-    eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
-    #println("Eigs for dt ", dt, "\n"); display(eigs); println()
+    #eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
     SpectralRadius = maximum(abs.(eigs))
 
-    if SpectralRadius > 1
+    if SpectralRadius - 1.0 >= eps(Float64)
       dtMax = dt
     else
       dtMin = dt
     end
+  end
+
+  return dtMin
+end
+
+function CheckStabilityJointMethod(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
+                                   A::Matrix{Float64}, dtMax_::Float64)
+
+  DistributionMatrices = zeros(Int, NumDoublings + 1, 96, 96)
+  for i = 8 * 4 + 1:96
+    DistributionMatrices[1, i, i] = 1
+  end
+  for i = 1:8*4
+    DistributionMatrices[2, i, i] = 1
+  end
+
+  #dtMax = dtMax_
+  dtMax = 4.2
+  dtMin = 0
+  dtEps = 1e-9
+  while dtMax - dtMin > dtEps
+    dt = 0.5 * (dtMax + dtMin)
+
+    #=
+    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt)
+    CombinedAmpMat = DistributionMatrices[1, :, :] * AmpMatrices[1, :, :]
+    for i = 2:NumDoublings+1
+      CombinedAmpMat += DistributionMatrices[i, :, :] * AmpMatrices[i, :, :]
+    end
+    =#
+    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
+    CombinedAmpMat = AmpMatrices[1, :, :]
+    for i = 2:NumDoublings+1
+      CombinedAmpMat += AmpMatrices[i, :, :]
+    end
+
+    eigs = eigvals(CombinedAmpMat)
+    #eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
+    SpectralRadius = maximum(abs.(eigs))
+
+    if SpectralRadius - 1.0 >= eps(Float64)
+      dtMax = dt
+    else
+      dtMin = dt
+    end
+    println(dt)
   end
 
   return dtMin
@@ -327,17 +486,23 @@ mutable struct FE2S
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
+    ComputeAmpMatrices(StagesMin_, NumDoublings_, PathPseudoExtrema_, A_, dtOptMin_)
+
     #println("Stage 1 stability test")
     #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], EigVals_, dtOptMin_)
     if NumDoublings_ > 0
       #println("Stage 2 stability test")
       #CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], EigVals_, dtOptMin_)
 
-      #newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
-      #                                    EigVals_, dtOptMin_)
+      newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
+                                          EigVals_, dtOptMin_)
+      println("Stable timestep is: ", newFE2S.dtOptMin)                                          
 
       println("Check joint stability, maximum possible timestep is:")
       println(CheckStabilityJointMethod(dtOptMin_, A_))
+
+      println("Check joint stability, maximum possible timestep is:")
+      println(CheckStabilityJointMethod(StagesMin_, NumDoublings_, PathPseudoExtrema_, A_, dtOptMin_))
     end
 
     return newFE2S
@@ -451,7 +616,7 @@ function solve!(integrator::FE2S_Integrator)
       t_stages[1] += alg.ForwardEulerWeights[1] * integrator.dt
 
       # TODO: Try also just "linear" integration (does not require ifs) of every level
-      for step in 1:2^alg.NumDoublings - 1
+      for step = 1:2^alg.NumDoublings - 1
         # Intermediate "two-step" sub methods on finest level
 
         # Low-storage implementation (only one k = du):
@@ -464,7 +629,7 @@ function solve!(integrator::FE2S_Integrator)
                      prob.p, t_stages[1], 1) # du = k2
         integrator.u_tmp .+= integrator.dt .* alg.b2[step, 1] .* integrator.du
 
-        for coarse_level in 2:alg.NumDoublings+1
+        for coarse_level = 2:alg.NumDoublings+1
           # Check if we can take a timestep on a coarser level
           if step % (2^(coarse_level - 1)) == 1
             if step == 2^(coarse_level - 1) - 1 # Do Forward Euler step for coarser levels
@@ -492,7 +657,7 @@ function solve!(integrator::FE2S_Integrator)
       end
 
       # Intermediate "two-step" sub methods
-      for step in 2^alg.NumDoublings:length(alg.a[:, 1])
+      for step = 2^alg.NumDoublings:length(alg.a[:, 1])
         # Low-storage implementation (only one k = du):
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
 
@@ -503,7 +668,7 @@ function solve!(integrator::FE2S_Integrator)
                      prob.p, t_stages[1], 1) # du = k2
         integrator.u_tmp .+= integrator.dt .* alg.b2[step, 1] .* integrator.du
 
-        for coarse_level in 2:alg.NumDoublings+1
+        for coarse_level = 2:alg.NumDoublings+1
           # Check if we can take a timestep on a coarser level
           if step % (2^(coarse_level - 1)) == 1 # Do only intermediate "two-steps" (no Forward Euler) from here on
             pos = Int((step - 1) / 2^(coarse_level - 1))
