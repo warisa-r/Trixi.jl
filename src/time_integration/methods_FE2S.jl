@@ -139,14 +139,17 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   return ForwardEulerWeights, a, b1, b2, c
 end
 
-function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b1::Vector{AbstractFloat}, b2::Vector{AbstractFloat},
-                        NumEigVals::Int, EigVals::Vector{<:Complex{<:Float64}}, dt::Float64)
+# Check stability of individual methods
+function CheckStability(ForwardEulerWeight::Float64, a::Vector{Float64}, b1::Vector{Float64}, b2::Vector{Float64},
+                        EigVals::Vector{<:Complex{<:Float64}}, dt::Float64)
 
   @assert length(a)  == length(b1)
   @assert length(b1) == length(b2)
 
+  MaxAbsStabPnom = -1.0
+
   NumStableEigVals = 0
-  for i = 1:NumEigVals
+  for i in eachindex(EigVals)
     z = Complex(EigVals[i] * dt)
 
     StabPnom = 1.0;
@@ -161,35 +164,125 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b
     StabPnom *= z
     StabPnom += 1.0
 
-    if (abs(StabPnom) -1.0) >= eps(Float64)
+    if abs(StabPnom) - 1.0 >= eps(Float64)
     #if abs(StabPnom) > 1.0
-      println(string(i) * "'th Eigenvalue constraints violates stability bound with value " * string(abs(StabPnom)))
+      println(string(i) * "'th Eigenvalue constraint violates stability bound with value " * string(abs(StabPnom)))
+      println("This is eigenvalue: ", EigVals[i], "\n")
     else # Stable eigenvalue
-      if imag(z) <= 1e-12
+      if imag(z) <= 1e-12 # Eigenvalue is assumed real
         NumStableEigVals += 1
       else # Eigenvalue is complex-conjugated
         NumStableEigVals += 2
       end
     end
+
+    if abs(StabPnom) > MaxAbsStabPnom
+      MaxAbsStabPnom = abs(StabPnom)
+    end
   end
 
   println("Number of stable Eigenvalues is: ", NumStableEigVals)
 
-  return NumStableEigVals
+  return MaxAbsStabPnom
 end
 
-function FindMaxdtScaling(ForwardEulerWeight::Float64, a::Vector{AbstractFloat}, b1::Vector{AbstractFloat}, b2::Vector{AbstractFloat},
-                          NumEigVals::Int, EigVals::Vector{<:Complex{<:Float64}}, dt::Float64, MinStableCount::Int)
+function ComputeAmpMatrix(A::Matrix{Float64}, dt::Float64)
+
+  Apow = A * A
+  dtpow = dt^2                              
+  BasePnom2 = I + dt .* A + 0.5 * dtpow .* Apow
+  Apow *= A
+  dtpow *= dt
+  LowDegreePnom  = BasePnom2 + 0.156149396314828 * dtpow .* Apow
+  HighDegreePnom = BasePnom2 + 0.164081689164205 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  LowDegreePnom  += 0.0308768369075866 * dtpow .* Apow
+  HighDegreePnom += 0.0390225916568780 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  LowDegreePnom  += 0.00365477959519221 * dtpow .* Apow
+  HighDegreePnom += 0.00704232209800608 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  LowDegreePnom  += 0.000201261605214267 * dtpow .* Apow
+  HighDegreePnom += 0.000984618576386692 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 0.000107132166432604 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 8.98404284721041e-06 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 5.65495237992257e-07 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 2.53388343562130e-08 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 7.25350370838813e-10 * dtpow .* Apow
+
+  Apow *= A
+  dtpow *= dt
+  HighDegreePnom += 1.00289907472715e-11 * dtpow .* Apow
+
+  return LowDegreePnom, HighDegreePnom
+end
+
+function CheckStabilityJointMethod(dtMax_::Float64, A::Matrix{Float64})
+
+  DistributionMatrix = zeros(80, 80)
+  for i = 12 * 4:80
+    DistributionMatrix[i, i] = 1
+  end
+
+  dtMax = dtMax_
+  dtMin = 0
+  dtEps = 1e-9
+  while dtMax - dtMin > dtEps
+    dt = 0.5 * (dtMax + dtMin)
+
+    LowDegreePnom, HighDegreePnom = ComputeAmpMatrix(A, dt)
+
+    CombinedAmpMat = DistributionMatrix * HighDegreePnom + (I - DistributionMatrix) * LowDegreePnom
+
+    eigs = eigvals(CombinedAmpMat)
+    eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
+    #println("Eigs for dt ", dt, "\n"); display(eigs); println()
+    SpectralRadius = maximum(abs.(eigs))
+
+    if SpectralRadius > 1
+      dtMax = dt
+    else
+      dtMin = dt
+    end
+  end
+
+  return dtMin
+end
+
+function FindMaxdtScaling(ForwardEulerWeight::Float64, a::Vector{Float64}, b1::Vector{Float64}, b2::Vector{Float64},
+                          EigVals::Vector{<:Complex{<:Float64}}, dt::Float64)
 
   dtScaling = 1.0
   dtScalingMax = 1.0
   dtScalingMin = 0.0
   while dtScalingMax - dtScalingMin > 1e-12
     dtScaling = 0.5 * (dtScalingMax + dtScalingMin)
-    if CheckStability(ForwardEulerWeight, a, b1, b2, NumEigVals, EigVals, dt * dtScaling) >= MinStableCount
-      dtScalingMin = dtScaling
-    else
+    if CheckStability(ForwardEulerWeight, a, b1, b2, EigVals, dt * dtScaling) - 1.0 >= eps(Float64)
+    #if CheckStability(ForwardEulerWeight, a, b1, b2, EigVals, dt * dtScaling) - 1.0 > eps(Float64)
       dtScalingMax = dtScaling
+    else
+      dtScalingMin = dtScaling
     end
   end
 
@@ -218,27 +311,34 @@ mutable struct FE2S
   # Timestep corresponding to lowest number of stages
   dtOptMin::Real
 
-  ForwardEulerWeights::Vector{AbstractFloat}
-  a::Matrix{AbstractFloat}
-  b1::Matrix{AbstractFloat}
-  b2::Matrix{AbstractFloat}
-  c::Vector{AbstractFloat}
+  ForwardEulerWeights::Vector{Float64}
+  a::Matrix{Float64}
+  b1::Matrix{Float64}
+  b2::Matrix{Float64}
+  c::Vector{Float64}
 
   # Constructor for previously computed A Coeffs
   function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString, 
-                EigVals_::Vector{<:ComplexF64}, NumEigVals_::Int, NumStableEigVals_::Int)
+                EigVals_::Vector{<:ComplexF64}, 
+                # TODO: A: Only for testing
+                A_::Matrix{Float64})
     newFE2S = new(StagesMin_, NumDoublings_, dtOptMin_)
 
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
     #println("Stage 1 stability test")
-    #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], NumEigVals_, EigVals_, dtOptMin_)
-    println("Stage 2 stability test")
-    CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], NumEigVals_, EigVals_, dtOptMin_)
+    #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], EigVals_, dtOptMin_)
+    if NumDoublings_ > 0
+      #println("Stage 2 stability test")
+      #CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], EigVals_, dtOptMin_)
 
-    newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
-                                         NumEigVals_, EigVals_, dtOptMin_, NumStableEigVals_)
+      #newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
+      #                                    EigVals_, dtOptMin_)
+
+      println("Check joint stability, maximum possible timestep is:")
+      println(CheckStabilityJointMethod(dtOptMin_, A_))
+    end
 
     return newFE2S
   end
