@@ -310,6 +310,14 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t, ode_int_leve
   u  = wrap_array(u_ode,  mesh, equations, solver, cache)
   du = wrap_array(du_ode, mesh, equations, solver, cache)
 
+  # Quick & dirty way to see what unknowns / DoF belong to finest level
+  #=
+  for element in cache.level_info_elements[1] # Finest level
+    u[.., element] .= 42.0
+  end
+  display(u); println()
+  =#
+
   # TODO: Taal decide, do we need to pass the mesh?
   time_start = time_ns()
   # Call "rhs!" of the corresponding solver

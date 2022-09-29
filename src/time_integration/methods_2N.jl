@@ -150,8 +150,9 @@ function solve!(integrator::SimpleIntegrator2N)
     integrator.u_tmp .= 0
     for stage in eachindex(alg.c)
       t_stage = integrator.t + integrator.dt * alg.c[stage]
-      #integrator.f(integrator.du, integrator.u, prob.p, t_stage)
-      integrator.f(integrator.du, integrator.u, prob.p, t_stage, 2)
+      integrator.f(integrator.du, integrator.u, prob.p, t_stage)
+      #integrator.f(integrator.du, integrator.u, prob.p, t_stage, 1) # Fine level
+      #integrator.f(integrator.du, integrator.u, prob.p, t_stage, 2) # Coarse level
 
       a_stage    = alg.a[stage]
       b_stage_dt = alg.b[stage] * integrator.dt
