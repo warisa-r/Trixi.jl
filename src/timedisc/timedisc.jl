@@ -53,7 +53,7 @@ function timestep!(solver::AbstractSolver, mesh::TreeMesh,
     # Determine number of levels and obtain accumulated level id for each stage
     n_levels = length(solver.level_info_elements)
     acc_level_ids = acc_level_ids_by_stage(n_stages, n_levels)
-  end
+  end # timing
 
   # Stage 1
   @timeit timer() "time integration" begin
@@ -127,7 +127,7 @@ function substep!(u, un, dt, a_1, k1, a_2, k, ::Val{NNODES}, ::Val{NVARS}) where
 end
 
 
-# Second-order paired Runge-Kutta method
+# Second-order paired Runge-Kutta method (non multi-level I guess)
 function timestep!(solver::AbstractSolver, mesh::TreeMesh,
                    ::Val{:paired_rk_2_s}, t::Float64, dt::Float64)
   @timeit timer() "time integration" begin
@@ -144,7 +144,7 @@ function timestep!(solver::AbstractSolver, mesh::TreeMesh,
     k   = solver.elements.u_t
     k1 = solver.elements.u_rungekutta
     un  = similar(k)
-  end
+  end # timer
 
   # Implement general Runge-Kutta method (not storage-optimized) for paired RK schemes, where
   # aᵢⱼ= 0 except for j = 1 or j = i - 1
@@ -175,7 +175,7 @@ function timestep!(solver::AbstractSolver, mesh::TreeMesh,
   # Stage 2
   stage = 2
   t_stage = t + dt * c[stage]
-  @timeit timer() "time integration" @. u = un + dt * a[ 2, 1] * k1
+  @timeit timer() "time integration" @. u = un + dt * a[2, 1] * k1
   @timeit timer() "rhs" rhs!(solver, t_stage, stage)
 
   # Stages 3-n_stages
