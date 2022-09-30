@@ -168,6 +168,39 @@ function linear_structure(semi::AbstractSemidiscretization;
   return A, b
 end
 
+"""
+    linear_structure(semi::AbstractSemidiscretization, level;
+                     t0=zero(real(semi)))
+
+Wraps the right-hand side operator of the semidiscretization `semi`
+at time `t0` as an affine-linear operator given by a linear operator `A`
+and a vector `b` for a specific (mesh) level
+"""
+function linear_structure(semi::AbstractSemidiscretization, level::Int;
+                          t0=zero(real(semi)))
+  # allocate memory
+  u_ode = allocate_coefficients(mesh_equations_solver_cache(semi)...)
+  du_ode = similar(u_ode)
+
+  # get the right hand side from possible source terms
+  u_ode .= zero(eltype(u_ode))
+  rhs!(du_ode, u_ode, semi, t0, level)
+  # Create a copy of `b` used internally to extract the linear part of `semi`.
+  # This is necessary to get everything correct when the users updates the
+  # returned vector `b`.
+  b = -du_ode
+  b_tmp = copy(b)
+
+  # wrap the linear operator
+  A = LinearMap(length(u_ode), ismutating=true) do dest,src
+    rhs!(dest, src, semi, t0, level)
+    @. dest += b_tmp
+    dest
+  end
+
+  return A, b
+end
+
 
 """
     jacobian_fd(semi::AbstractSemidiscretization;

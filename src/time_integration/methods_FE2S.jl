@@ -69,6 +69,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   # To avoid timesteps > 1, compute difference between current maximum timestep = a[IndGreater1 - 1] +  and 1.
   dtGreater1 = (1.0 - a[IndGreater1 - 1, 1]) / (NumTrueComplex - IndGreater1 + 1)
 
+  # TODO: Fill only up to 0.5 for coupled schemes
   for i = IndGreater1:NumTrueComplex
     # Fill gap a[IndGreater1 - 1] to 1 equidistantly
     a[i, 1]  = a[IndGreater1 - 1, 1] + dtGreater1 * (i - IndGreater1 + 1)
@@ -228,66 +229,6 @@ function ComputeAmpMatrix(A::Matrix{Float64}, dt::Float64, DistributionMatrix::M
 end
 
 function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
-                            A::Matrix{Float64}, dt::Float64)
-
-  StagesMax = -1
-  if NumDoublings == 0
-    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
-    StagesMax = Int(StagesMin / 2)
-  else
-    StagesMax = StagesMin * 2^(NumDoublings-1)
-  end
-
-  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
-
-  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
-  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-  PseudoExtrema[1, 1] = PureReal[1]
-
-  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
-  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
-
-  for i = 1:NumDoublings
-    Degree = StagesMin * 2^i
-
-    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
-    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-    PseudoExtrema[1, i+1] = PureReal[1]
-
-    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
-    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
-    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
-  end
-
-  # Keep same order as the datastructures in other files
-  perm = Vector(NumDoublings+1:-1:1)
-  Base.permutecols!!(PseudoExtrema, perm)
-  #display(PseudoExtrema)
-
-  AmpMatrices = zeros(NumDoublings+1, size(A, 1), size(A, 2))
-  for i = 1:NumDoublings+1
-    AmpMatrices[i, :, :] = dt .* A
-
-    # Pure real pseudo-extrema
-    AmpMatrices[i, :, :] *= (I - dt .* A ./ PseudoExtrema[1, i])
-
-    # Complex conjugated pseudo-extrema
-    for j = 2:Int((StagesMin/2) * 2^(NumDoublings + 1 - i))
-      AmpMatrices[i, :, :] *= real((I - dt .* A ./ PseudoExtrema[j,i]) * (I - dt .* A ./ conj(PseudoExtrema[j,i])))
-    end
-
-    AmpMatrices[i, :, :] += I
-  end
-
-  return AmpMatrices
-end
-
-function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
                             A::Matrix{Float64}, dt::Float64, DistributionMatrices)
 
   StagesMax = -1
@@ -334,19 +275,103 @@ function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema
     AmpMatrices[i, :, :] = dt .* DistributionMatrices[i, :, :] * A
 
     # Pure real pseudo-extrema
-    # TODO: Not sure if the identity matrix may also scaled with the DistributionMatrices...
-    AmpMatrices[i, :, :] *= (DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[1, i])
+    AmpMatrices[i, :, :] *= (I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[1, i])
 
     # Complex conjugated pseudo-extrema
     for j = 2:Int((StagesMin/2) * 2^(NumDoublings + 1 - i))
-      AmpMatrices[i, :, :] *= real((DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[j,i]) * 
-                                   (DistributionMatrices[i, :, :] * I - dt .* DistributionMatrices[i, :, :] * A ./ conj(PseudoExtrema[j,i])))
+      AmpMatrices[i, :, :] *= real((I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[j,i]) * 
+                                   (I - dt .* DistributionMatrices[i, :, :] * A ./ conj(PseudoExtrema[j,i])))
     end
 
-    AmpMatrices[i, :, :] += DistributionMatrices[i, :, :] * I
+    AmpMatrices[i, :, :] += I
   end
 
   return AmpMatrices
+end
+
+function ComputeAmpMatrix(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
+                          A::Matrix{Float64}, dt::Float64, DistributionMatrices)
+
+  StagesMax = -1
+  if NumDoublings == 0
+    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
+    StagesMax = Int(StagesMin / 2)
+  else
+    StagesMax = StagesMin * 2^(NumDoublings-1)
+  end
+
+  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
+
+  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
+  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+  PseudoExtrema[1, 1] = PureReal[1]
+
+  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
+  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
+
+  for i = 1:NumDoublings
+    Degree = StagesMin * 2^i
+
+    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
+    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+    PseudoExtrema[1, i+1] = PureReal[1]
+
+    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
+    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
+    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
+    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
+  end
+
+  # Keep same order as the datastructures in other files
+  perm = Vector(NumDoublings+1:-1:1)
+  Base.permutecols!!(PseudoExtrema, perm)
+  #display(PseudoExtrema)
+
+  # Perform first Forward Euler step on finest grid
+  AmpMatrix = I - dt .* DistributionMatrices[1, :, :] * A ./ real(PseudoExtrema[1, 1])
+
+  for step = 1:2^NumDoublings - 1
+    # Intermediate "two-step" sub methods on finest level
+    AmpMatrix *= real((I - dt .* DistributionMatrices[1, :, :] * A ./ PseudoExtrema[step + 1, 1]) * 
+                      (I - dt .* DistributionMatrices[1, :, :] * A ./ conj(PseudoExtrema[step + 1, 1])))
+    for coarse_level = 2:NumDoublings+1
+      # Check if we can take a timestep on a coarser level
+      if step % (2^(coarse_level - 1)) == 1
+        if step == 2^(coarse_level - 1) - 1 # Do Forward Euler step for coarser levels
+          AmpMatrix *= I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ real(PseudoExtrema[1, coarse_level])
+        else # Do intermediate "two-steps" for coarser levels (except for the coarsest, where we do only Forward Euler)
+          pos = Int((step - 1) / 2^(coarse_level - 1)) + 1
+          AmpMatrix *= real((I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ PseudoExtrema[pos, coarse_level]) * 
+                            (I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ conj(PseudoExtrema[pos, coarse_level])))
+        end
+      end
+    end
+  end
+
+  # Intermediate "two-step" sub methods
+  for step = 2^NumDoublings:length(PseudoExtrema[:, 1]) - 1
+    AmpMatrix *= real((I - dt .* DistributionMatrices[1, :, :] * A ./ PseudoExtrema[step + 1, 1]) * 
+                      (I - dt .* DistributionMatrices[1, :, :] * A ./ conj(PseudoExtrema[step + 1, 1])))
+
+    for coarse_level = 2:NumDoublings+1
+      # Check if we can take a timestep on a coarser level
+      if step % (2^(coarse_level - 1)) == 1 # Do only intermediate "two-steps" (no Forward Euler) from here on                      
+        pos = Int((step - 1) / 2^(coarse_level - 1)) + 1
+
+        AmpMatrix *= real((I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ PseudoExtrema[pos, coarse_level]) * 
+                          (I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ conj(PseudoExtrema[pos, coarse_level])))
+      end
+    end
+  end
+
+  AmpMatrix *= dt .* A
+  AmpMatrix += I
+
+  return AmpMatrix
 end
 
 function CheckStabilityJointMethod(dtMax_::Float64, A::Matrix{Float64})
@@ -394,25 +419,21 @@ function CheckStabilityJointMethod(StagesMin::Int, NumDoublings::Int, PathPseudo
     DistributionMatrices[2, i, i] = 1
   end
 
-  #dtMax = dtMax_
-  dtMax = 4.2
+  dtMax = dtMax_
+  #dtMax = 4.2
   dtMin = 0
   dtEps = 1e-9
   while dtMax - dtMin > dtEps
     dt = 0.5 * (dtMax + dtMin)
 
     #=
-    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt)
+    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
     CombinedAmpMat = DistributionMatrices[1, :, :] * AmpMatrices[1, :, :]
     for i = 2:NumDoublings+1
       CombinedAmpMat += DistributionMatrices[i, :, :] * AmpMatrices[i, :, :]
     end
     =#
-    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
-    CombinedAmpMat = AmpMatrices[1, :, :]
-    for i = 2:NumDoublings+1
-      CombinedAmpMat += AmpMatrices[i, :, :]
-    end
+    CombinedAmpMat = ComputeAmpMatrix(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
 
     eigs = eigvals(CombinedAmpMat)
     #eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
@@ -486,17 +507,17 @@ mutable struct FE2S
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
 
-    ComputeAmpMatrices(StagesMin_, NumDoublings_, PathPseudoExtrema_, A_, dtOptMin_)
-
     #println("Stage 1 stability test")
     #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], EigVals_, dtOptMin_)
     if NumDoublings_ > 0
       #println("Stage 2 stability test")
       #CheckStability(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], EigVals_, dtOptMin_)
 
+      #=
       newFE2S.dtOptMin *= FindMaxdtScaling(newFE2S.ForwardEulerWeights[2], newFE2S.a[:, 2], newFE2S.b1[:, 2], newFE2S.b2[:, 2], 
                                           EigVals_, dtOptMin_)
-      println("Stable timestep is: ", newFE2S.dtOptMin)                                          
+      println("Stable timestep is: ", newFE2S.dtOptMin)
+      =#                                     
 
       println("Check joint stability, maximum possible timestep is:")
       println(CheckStabilityJointMethod(dtOptMin_, A_))
@@ -603,7 +624,6 @@ function solve!(integrator::FE2S_Integrator)
       terminate!(integrator)
     end
 
-    # one time step
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
       t_stages = integrator.t .* ones(alg.NumDoublings + 1) # TODO: Make member variable?
@@ -615,9 +635,8 @@ function solve!(integrator::FE2S_Integrator)
       integrator.u_tmp .= integrator.u .+ alg.ForwardEulerWeights[1] .* integrator.dt .* integrator.du
       t_stages[1] += alg.ForwardEulerWeights[1] * integrator.dt
 
-      # TODO: Try also just "linear" integration (does not require ifs) of every level
+      # Intermediate "two-step" sub methods on finest level
       for step = 1:2^alg.NumDoublings - 1
-        # Intermediate "two-step" sub methods on finest level
 
         # Low-storage implementation (only one k = du):
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
@@ -634,11 +653,13 @@ function solve!(integrator::FE2S_Integrator)
           if step % (2^(coarse_level - 1)) == 1
             if step == 2^(coarse_level - 1) - 1 # Do Forward Euler step for coarser levels
               integrator.f(integrator.du, integrator.u, prob.p, t_stages[coarse_level], coarse_level) # du = k1
-              integrator.u_tmp .= integrator.u_tmp .+ alg.ForwardEulerWeights[coarse_level] .* integrator.dt .* integrator.du
+              integrator.u_tmp .+= alg.ForwardEulerWeights[coarse_level] .* integrator.dt .* integrator.du
 
               # FIXME Not sure if this is the right way to do the time steps
               t_stages[coarse_level] = integrator.t + alg.ForwardEulerWeights[coarse_level] * integrator.dt
             else # Do intermediate "two-steps" for coarser levels (except for the coarsest, where we do only Forward Euler)
+              println("This is erronous!")
+              # TODO: This will currently not work, we evolve from wrong u_tmp!
               pos = Int(step / 2^(coarse_level - 1))
               integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
               integrator.u_tmp .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
@@ -656,8 +677,16 @@ function solve!(integrator::FE2S_Integrator)
         end
       end
 
+      u_prev_timestep = 42 # Just declare this
+
       # Intermediate "two-step" sub methods
       for step = 2^alg.NumDoublings:length(alg.a[:, 1])
+        # TODO: This works currently only for two levels, need probably to store as many solutions (in fact only neighboring cells)
+        # As we have refinement levels
+        if step % 2 == 0 # Save u_tmp every second timestep
+          u_prev_timestep = copy(integrator.u_tmp)
+        end
+
         # Low-storage implementation (only one k = du):
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
 
@@ -672,17 +701,28 @@ function solve!(integrator::FE2S_Integrator)
           # Check if we can take a timestep on a coarser level
           if step % (2^(coarse_level - 1)) == 1 # Do only intermediate "two-steps" (no Forward Euler) from here on
             pos = Int((step - 1) / 2^(coarse_level - 1))
-            integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
-            integrator.u_tmp .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
+            #integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
+            #integrator.u_tmp .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
+
+            integrator.f(integrator.du, u_prev_timestep, prob.p, t_stages[coarse_level], coarse_level) # du = k1
+            u_prev_timestep .+= integrator.dt .* alg.b1[pos, coarse_level] .* integrator.du
 
             # NOTE: Not sure if this is the right way to do the time steps
             t_stages[coarse_level] = integrator.t + alg.a[pos, coarse_level] * integrator.dt
 
+            #=
             integrator.f(integrator.du, 
               integrator.u_tmp .+ integrator.dt .*(alg.a[pos, coarse_level] - alg.b1[pos, coarse_level]) .* integrator.du, 
               prob.p, t_stages[coarse_level], coarse_level) # du = k2
 
             integrator.u_tmp .+= integrator.dt .* alg.b2[pos, coarse_level] .* integrator.du
+            =#
+
+            integrator.f(integrator.du, 
+              u_prev_timestep .+ integrator.dt .*(alg.a[pos, coarse_level] - alg.b1[pos, coarse_level]) .* integrator.du, 
+              prob.p, t_stages[coarse_level], coarse_level) # du = k2
+
+            integrator.u_tmp[1:32] = u_prev_timestep[1:32] + integrator.dt .* alg.b2[pos, coarse_level] .* integrator.du[1:32]
           end
         end
       end

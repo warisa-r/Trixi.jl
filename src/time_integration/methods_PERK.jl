@@ -6,44 +6,45 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-function ComputePERK_ButcherTableau(NumStages::Int, NumStageEvals::Int, NumEvalReduction::Int,
-  PathAUnknowns::AbstractString)
-
-  # Now compute Butcher Tableau coefficients
-  if NumStages > 2
-    @assert isfile(PathAUnknowns)
-    AUnknown = Vector{Float64}(undef, NumStageEvals)
-    open(PathAUnknowns, "r") do AUnknownsFile
-      index = 1
-      while !eof(AUnknownsFile)
-        LineContent = readline(AUnknownsFile)
-        AUnknown[index] = parse(Float64, LineContent)
-        index += 1
-      end
+function ReadInFile(FilePath::AbstractString, DataType::Type)
+  @assert isfile(FilePath)
+  Data = zeros(DataType, 0)
+  open(FilePath, "r") do File
+    while !eof(File)     
+      LineContent = readline(File)     
+      append!(Data, parse(DataType, LineContent))
     end
-  end # Else: For order 2: Explicit midpoint: https://en.wikipedia.org/wiki/Midpoint_method
+  end
+  NumLines = length(Data)
 
-  # TODO: Read-in from C++ (for higher precision) ?
+  return NumLines, Data
+end
+
+function ComputePERK_ButcherTableau(NumStageEvalsMin::Int, NumDoublings::Int, NumStages::Int, 
+                                    PathAUnknowns::AbstractString)
+
   # c Vector form Butcher Tableau (defines timestep per stage)
   c = zeros(Float64, NumStages)
   for k in 2:NumStages
     c[k] = (k - 1)/(2.0*(NumStages - 1))
   end
-  #println("Timestep-split: "); display(c); println("\n")
+  println("Timestep-split: "); display(c); println("\n")
 
-  ### Assemble Butcher Tableau coeffcients in (relatively) sparse & easy to handle datastructure ###
-  ACoeffs = zeros(Float64, NumStages, 2)
-  # Rows with only entry in first column
-  for k in 2:2 + NumEvalReduction
-    ACoeffs[k, 1] = c[k]
-    #ACoeffs[k, 2] = 0 # This is the core idea of reduced evaluations: Set sub-diagonal to zero
-  end
+  # - 2 Since First entry of A is always zero (explicit method)
+  # and second is given by c (PERK specific)
+  StagesMax = NumStageEvalsMin * 2^NumDoublings -2
 
-  for k in 3 + NumEvalReduction:NumStages
-    ACoeffs[k, 1] = c[k] - AUnknown[k - (3 + NumEvalReduction) + 1]
-    ACoeffs[k, 2] = AUnknown[k - (3 + NumEvalReduction) + 1]
+  ACoeffs = zeros(StagesMax, NumDoublings+1)
+
+  for i = NumDoublings+1:-1:1
+    PathA = PathAUnknowns * "a" * string(Int(NumStageEvalsMin * 2^(i-1))) * ".txt"
+    NumA, A = ReadInFile(PathA, Float64)
+    @assert NumA == NumStageEvalsMin * 2^(i- 1) - 2
+    ACoeffs[StagesMax - (NumStageEvalsMin * 2^(i- 1) - 3):end, i] = A
   end
-  #println("Butcher Tableau Coefficient Matrix A:"); display(ACoeffs); println("\n")
+  perm = Vector(NumDoublings+1:-1:1)
+  Base.permutecols!!(ACoeffs, perm)
+  display(ACoeffs); println()
 
   return ACoeffs, c
 end
@@ -61,10 +62,10 @@ CarpenterKennedy2N{54, 43} methods.
 """
 
 mutable struct PERK
+  NumStageEvalsMin::Int
+  NumDoublings::Int
   NumStages::Int
-  NumStageEvals::Int
-  NumEvalReduction::Int
-  # TODO: Consistency Order
+  dtOptMin::Real
 
   ACoeffs::Matrix{AbstractFloat}
   c::Vector{AbstractFloat}
@@ -72,21 +73,12 @@ mutable struct PERK
   dtOpt::AbstractFloat
 
   # Constructor for previously computed A Coeffs
-  function PERK(NumStages_::Int, NumStageEvals_::Int, OptFilesLoc::AbstractString)
-    newPERK = new(NumStages_, NumStageEvals_, NumStages_ - NumStageEvals_)
+  function PERK(NumStageEvalsMin_::Int, NumDoublings_::Int, NumStages_::Int, dtOptMin_::Real,
+                PathACoeffs_::AbstractString)
+    newPERK = new(NumStageEvalsMin_, NumDoublings_, NumStages_, dtOptMin_)
 
-    @assert isfile(OptFilesLoc * "dtOpt.txt")
-    open(OptFilesLoc * "dtOpt.txt", "r") do dtOptFile
-      while !eof(dtOptFile)
-        lineContent = readline(dtOptFile)
-        newPERK.dtOpt = parse(Float64, lineContent)
-      end
-    end
-
-    newPERK.ACoeffs, newPERK.c = ComputePERK_ButcherTableau(NumStages_, NumStageEvals_,
-                                                            newPERK.NumEvalReduction,
-                                                            OptFilesLoc * "ACoeffs" * string(NumStages_) *
-                                                            "_" * string(NumStageEvals_) * ".txt")
+    newPERK.ACoeffs, newPERK.c = 
+      ComputePERK_ButcherTableau(NumStageEvalsMin_, NumDoublings_, NumStages_, PathACoeffs_)
 
     return newPERK
   end
@@ -186,18 +178,50 @@ function solve!(integrator::PERK_Integrator)
 
     # TODO: Try multi-threaded execution as implemented for other integrators!
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-      # NOTE: Possible make these member variables of integrator to avoid repeated declaration ?
-      k1      = similar(integrator.u)
-      kHigher = similar(integrator.u)
-
       # Treat first two stages seperately
       # Stage 1: Note: Hard-coded to c[0] = 0! (tstage = t)
-      integrator.f(k1, integrator.u, prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      k1 = copy(integrator.du)
 
-      # Stage 2: (Adapted for only coefficient a_{21})
+      # Stage 2:
       t_stage = integrator.t + integrator.dt * alg.c[2]
-      integrator.f(kHigher, integrator.u .+ integrator.dt * alg.ACoeffs[2, 1] .* k1, prob.p, t_stage)
+      # This utilizes A[2, :] = c[2]
+      integrator.f(integrator.du, integrator.u .+ integrator.dt * alg.c[2] .* k1, prob.p, t_stage, 1)
 
+      # Now: Domain-splitted integration
+      kDomains = zeros(length(k1), alg.NumDoublings + 1)
+      kDomains[:, 1] = copy(integrator.du) # Essentially k higher
+
+      # Not most efficient implementation, but simple
+      for stage in 1:alg.NumStages - 2
+        t_stage = integrator.t + integrator.dt * alg.c[stage+2]
+
+        # Fine level
+        integrator.f(integrator.du, 
+          integrator.u .+ integrator.dt * ((alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* k1 + 
+                                            alg.ACoeffs[stage, 1] .* kDomains[:, 1]), 
+          prob.p, t_stage, 1)
+        kDomains[:, 1] = copy(integrator.du)
+
+        # Coarse level (hard-coded)
+        if stage >= alg.NumStageEvalsMin
+          if stage == alg.NumStageEvalsMin
+            integrator.f(integrator.du, 
+              integrator.u .+ integrator.dt * alg.c[stage+2] .* k1, 
+              prob.p, t_stage, 2)
+            kDomains[:, 2] = copy(integrator.du)
+          else
+            integrator.f(integrator.du, 
+              integrator.u .+ integrator.dt * ((alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* k1 + 
+                                                alg.ACoeffs[stage, 2] .* kDomains[:, 2]), 
+              prob.p, t_stage, 2)
+            kDomains[:, 2] = copy(integrator.du)
+          end
+        end
+      end
+
+      # More efficient implementation
+      #=
       for stage in 3:2+alg.NumEvalReduction # Here, the non-zero coeffs are only in the first column
         t_stage = integrator.t + integrator.dt * alg.c[stage]
         integrator.f(kHigher, integrator.u .+ integrator.dt * (alg.ACoeffs[stage, 1] .* k1), prob.p, t_stage)
@@ -208,9 +232,12 @@ function solve!(integrator::PERK_Integrator)
         t_stage = integrator.t + integrator.dt * alg.c[stage]
         integrator.f(kHigher, integrator.u .+ integrator.dt * (alg.ACoeffs[stage, 1] .* k1 + alg.ACoeffs[stage, 2] .* kHigher), prob.p, t_stage)
       end
+      =#
 
       # Final step: Update u (only b_s = 1, other b_i = 0)
-      integrator.u += integrator.dt * kHigher
+      #integrator.u += integrator.dt * kHigher
+      integrator.u[33:96] += integrator.dt .* kDomains[33:96, 1]
+      integrator.u[1:32] += integrator.dt .* kDomains[1:32, 2]
     end # PERK step
 
     integrator.iter += 1

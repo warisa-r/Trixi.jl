@@ -22,15 +22,30 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
+# semidiscretization for non-refined mesh (only for plotting eigenvalues)
+semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
+A, = linear_structure(semi) # Potentially cheaper than jacobian
+EigVals = eigvals(Matrix(A))
+
+# Complex conjugate eigenvalues have same modulus
+EigVals = EigVals[imag(EigVals) .>= 0]
+
+plotdata = scatter(real.(EigVals), imag.(EigVals), label = "Non-refined discretization")
+
+
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
 # Refine only one mesh cell
-Trixi.refine!(mesh.tree, LLID[end])
+#Trixi.refine!(mesh.tree, LLID[end])
+
+# Refine right one quarter of mesh
+#@assert num_leafs % 4 == 0
+#Trixi.refine!(mesh.tree, LLID[Int(3 * num_leafs/4)+1 : end])
 
 # Refine right half of mesh
-#@assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
-#Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
+@assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
+Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
 
 # Refine right three quarters of mesh
 #@assert num_leafs % 4 == 0
@@ -56,7 +71,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 0.05
+#EndTime = 0.0427
 EndTime = 100.0
 
 # Create ODEProblem
@@ -85,18 +100,43 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.0427
+#dtOptMin = 0.0427
 #dtOptMin = 0.0427 / 2
+dtOptMin = 0.0427 *0.5
 
-A, = linear_structure(semi) # Potentially cheaper than jacobian
-EigVals = eigvals(Matrix(A))
+#A = jacobian_ad_forward(semi)
+A, = linear_structure(semi)
+A = Matrix(A)
 
+A1, = linear_structure(semi, 1)
+A1 = Matrix(A1)
+A2, = linear_structure(semi, 2)
+A2 = Matrix(A2)
+
+#display(eigvals(A1 + A2))
+@assert(zeros(size(A, 1), size(A, 2)) == A - (A1 + A2))
+
+#EigVals = eigvals(Matrix(A))
+EigVals = eigvals(Matrix(A), sortby=nothing)
 # Complex conjugate eigenvalues have same modulus
 EigVals = EigVals[imag(EigVals) .>= 0]
-NumEigVals = length(EigVals)
 
-ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", EigVals, NumEigVals, 
-                           num_leafs * (PolyDegree + 1))
+# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
+if findfirst(x -> real(x) > 0, EigVals) != nothing
+  println("Somewhat erronous spectrum (eigenvalue with positive real part)!")
+end
+EigVals = EigVals[real(EigVals) .< 0]
+
+#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", EigVals, A)
+ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+
+plotdata = scatter!(real.(EigVals), imag.(EigVals), label = "Refined discretization")
+
+plotdata = scatter!(real.(ode_algorithm.dtOptMin / dtOptMin * EigVals), 
+                    imag.(ode_algorithm.dtOptMin / dtOptMin * EigVals), label = "Refined & rescaled discretization",
+                    legend=:topleft)
+#display(plotdata)
+
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
