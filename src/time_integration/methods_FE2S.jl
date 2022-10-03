@@ -69,7 +69,6 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   # To avoid timesteps > 1, compute difference between current maximum timestep = a[IndGreater1 - 1] +  and 1.
   dtGreater1 = (1.0 - a[IndGreater1 - 1, 1]) / (NumTrueComplex - IndGreater1 + 1)
 
-  # TODO: Fill only up to 0.5 for coupled schemes
   for i = IndGreater1:NumTrueComplex
     # Fill gap a[IndGreater1 - 1] to 1 equidistantly
     a[i, 1]  = a[IndGreater1 - 1, 1] + dtGreater1 * (i - IndGreater1 + 1)
@@ -137,6 +136,10 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
   println("b2:\n"); display(b2); println("\n")
   println("c:\n"); display(c); println("\n")
 
+  # Compatibility condition (https://link.springer.com/article/10.1007/BF01395956)
+  println("Sum of ForwardEuleWeight and b1, b2 pairs:")
+  display(transpose(ForwardEulerWeights) .+ sum(b1, dims=1) .+ sum(b2, dims=1)); println()
+
   return ForwardEulerWeights, a, b1, b2, c
 end
 
@@ -185,269 +188,6 @@ function CheckStability(ForwardEulerWeight::Float64, a::Vector{Float64}, b1::Vec
   println("Number of stable Eigenvalues is: ", NumStableEigVals)
 
   return MaxAbsStabPnom
-end
-
-function ComputeAmpMatrix(A::Matrix{Float64}, dt::Float64, DistributionMatrix::Matrix{Int})
-
-  dtApow = dt^2 .* A * A                          
-  BasePnom2 = DistributionMatrix * I + dt .* A + 0.5 .* dtApow
-  dtApow *= dt .* A
-  LowDegreePnom  = BasePnom2 + 0.156149396314828 .* dtApow
-  HighDegreePnom = BasePnom2 + 0.164081689164205 .* dtApow
-
-  dtApow *= dt .* A
-  LowDegreePnom  += 0.0308768369075866 .* dtApow
-  HighDegreePnom += 0.0390225916568780 .* dtApow
-
-  dtApow *= dt .* A
-  LowDegreePnom  += 0.00365477959519221 .* dtApow
-  HighDegreePnom += 0.00704232209800608 .* dtApow
-
-  dtApow *= dt .* A
-  LowDegreePnom  += 0.000201261605214267 .* dtApow
-  HighDegreePnom += 0.000984618576386692 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 0.000107132166432604 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 8.98404284721041e-06 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 5.65495237992257e-07 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 2.53388343562130e-08 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 7.25350370838813e-10 .* dtApow
-
-  dtApow *= dt .* A
-  HighDegreePnom += 1.00289907472715e-11 .* dtApow
-
-  return HighDegreePnom, LowDegreePnom
-end
-
-function ComputeAmpMatrices(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
-                            A::Matrix{Float64}, dt::Float64, DistributionMatrices)
-
-  StagesMax = -1
-  if NumDoublings == 0
-    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
-    StagesMax = Int(StagesMin / 2)
-  else
-    StagesMax = StagesMin * 2^(NumDoublings-1)
-  end
-
-  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
-
-  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
-  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-  PseudoExtrema[1, 1] = PureReal[1]
-
-  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
-  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
-
-  for i = 1:NumDoublings
-    Degree = StagesMin * 2^i
-
-    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
-    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-    PseudoExtrema[1, i+1] = PureReal[1]
-
-    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
-    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
-    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
-  end
-
-  # Keep same order as the datastructures in other files
-  perm = Vector(NumDoublings+1:-1:1)
-  Base.permutecols!!(PseudoExtrema, perm)
-  #display(PseudoExtrema)
-
-  AmpMatrices = zeros(NumDoublings+1, size(A, 1), size(A, 2))
-  for i = 1:NumDoublings+1
-    AmpMatrices[i, :, :] = dt .* DistributionMatrices[i, :, :] * A
-
-    # Pure real pseudo-extrema
-    AmpMatrices[i, :, :] *= (I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[1, i])
-
-    # Complex conjugated pseudo-extrema
-    for j = 2:Int((StagesMin/2) * 2^(NumDoublings + 1 - i))
-      AmpMatrices[i, :, :] *= real((I - dt .* DistributionMatrices[i, :, :] * A ./ PseudoExtrema[j,i]) * 
-                                   (I - dt .* DistributionMatrices[i, :, :] * A ./ conj(PseudoExtrema[j,i])))
-    end
-
-    AmpMatrices[i, :, :] += I
-  end
-
-  return AmpMatrices
-end
-
-function ComputeAmpMatrix(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
-                          A::Matrix{Float64}, dt::Float64, DistributionMatrices)
-
-  StagesMax = -1
-  if NumDoublings == 0
-    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
-    StagesMax = Int(StagesMin / 2)
-  else
-    StagesMax = StagesMin * 2^(NumDoublings-1)
-  end
-
-  PseudoExtrema = zeros(ComplexF64, StagesMax, NumDoublings+1)
-
-  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
-  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-  PseudoExtrema[1, 1] = PureReal[1]
-
-  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
-  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-  PseudoExtrema[2:Int(StagesMin / 2), 1] = TrueComplex
-
-  for i = 1:NumDoublings
-    Degree = StagesMin * 2^i
-
-    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
-    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
-    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-    PseudoExtrema[1, i+1] = PureReal[1]
-
-    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
-    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
-    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-    PseudoExtrema[2:Int(Degree / 2), i+1] = TrueComplex
-  end
-
-  # Keep same order as the datastructures in other files
-  perm = Vector(NumDoublings+1:-1:1)
-  Base.permutecols!!(PseudoExtrema, perm)
-  #display(PseudoExtrema)
-
-  # Perform first Forward Euler step on finest grid
-  AmpMatrix = I - dt .* DistributionMatrices[1, :, :] * A ./ real(PseudoExtrema[1, 1])
-
-  for step = 1:2^NumDoublings - 1
-    # Intermediate "two-step" sub methods on finest level
-    AmpMatrix *= real((I - dt .* DistributionMatrices[1, :, :] * A ./ PseudoExtrema[step + 1, 1]) * 
-                      (I - dt .* DistributionMatrices[1, :, :] * A ./ conj(PseudoExtrema[step + 1, 1])))
-    for coarse_level = 2:NumDoublings+1
-      # Check if we can take a timestep on a coarser level
-      if step % (2^(coarse_level - 1)) == 1
-        if step == 2^(coarse_level - 1) - 1 # Do Forward Euler step for coarser levels
-          AmpMatrix *= I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ real(PseudoExtrema[1, coarse_level])
-        else # Do intermediate "two-steps" for coarser levels (except for the coarsest, where we do only Forward Euler)
-          pos = Int((step - 1) / 2^(coarse_level - 1)) + 1
-          AmpMatrix *= real((I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ PseudoExtrema[pos, coarse_level]) * 
-                            (I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ conj(PseudoExtrema[pos, coarse_level])))
-        end
-      end
-    end
-  end
-
-  # Intermediate "two-step" sub methods
-  for step = 2^NumDoublings:length(PseudoExtrema[:, 1]) - 1
-    AmpMatrix *= real((I - dt .* DistributionMatrices[1, :, :] * A ./ PseudoExtrema[step + 1, 1]) * 
-                      (I - dt .* DistributionMatrices[1, :, :] * A ./ conj(PseudoExtrema[step + 1, 1])))
-
-    for coarse_level = 2:NumDoublings+1
-      # Check if we can take a timestep on a coarser level
-      if step % (2^(coarse_level - 1)) == 1 # Do only intermediate "two-steps" (no Forward Euler) from here on                      
-        pos = Int((step - 1) / 2^(coarse_level - 1)) + 1
-
-        AmpMatrix *= real((I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ PseudoExtrema[pos, coarse_level]) * 
-                          (I - dt .* DistributionMatrices[coarse_level, :, :] * A ./ conj(PseudoExtrema[pos, coarse_level])))
-      end
-    end
-  end
-
-  AmpMatrix *= dt .* A
-  AmpMatrix += I
-
-  return AmpMatrix
-end
-
-function CheckStabilityJointMethod(dtMax_::Float64, A::Matrix{Float64})
-
-  DistributionMatrix = zeros(Int, 96, 96)
-  for i = 8 * 4 + 1:96
-    DistributionMatrix[i, i] = 1
-  end
-
-  dtMax = dtMax_
-  dtMin = 0
-  dtEps = 1e-9
-  while dtMax - dtMin > dtEps
-    dt = 0.5 * (dtMax + dtMin)
-
-    #LowDegreePnom, HighDegreePnom = ComputeAmpMatrix(A, dt, I)
-    #CombinedAmpMat = DistributionMatrix * HighDegreePnom + (I - DistributionMatrix) * LowDegreePnom
-
-    HighDegreePnom, LowDegreePnom = ComputeAmpMatrix((I - DistributionMatrix) * A, dt, I - DistributionMatrix)
-    HighDegreePnom, = ComputeAmpMatrix(DistributionMatrix * A, dt, DistributionMatrix)
-    CombinedAmpMat = HighDegreePnom + LowDegreePnom
-
-    eigs = eigvals(CombinedAmpMat)
-    #eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
-    SpectralRadius = maximum(abs.(eigs))
-
-    if SpectralRadius - 1.0 >= eps(Float64)
-      dtMax = dt
-    else
-      dtMin = dt
-    end
-  end
-
-  return dtMin
-end
-
-function CheckStabilityJointMethod(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString, 
-                                   A::Matrix{Float64}, dtMax_::Float64)
-
-  DistributionMatrices = zeros(Int, NumDoublings + 1, 96, 96)
-  for i = 8 * 4 + 1:96
-    DistributionMatrices[1, i, i] = 1
-  end
-  for i = 1:8*4
-    DistributionMatrices[2, i, i] = 1
-  end
-
-  dtMax = dtMax_
-  #dtMax = 4.2
-  dtMin = 0
-  dtEps = 1e-9
-  while dtMax - dtMin > dtEps
-    dt = 0.5 * (dtMax + dtMin)
-
-    #=
-    AmpMatrices = ComputeAmpMatrices(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
-    CombinedAmpMat = DistributionMatrices[1, :, :] * AmpMatrices[1, :, :]
-    for i = 2:NumDoublings+1
-      CombinedAmpMat += DistributionMatrices[i, :, :] * AmpMatrices[i, :, :]
-    end
-    =#
-    CombinedAmpMat = ComputeAmpMatrix(StagesMin, NumDoublings, PathPseudoExtrema, A, dt, DistributionMatrices)
-
-    eigs = eigvals(CombinedAmpMat)
-    #eigs = eigs[real(eigs) .< 0] # Remove positive eigenvalues
-    SpectralRadius = maximum(abs.(eigs))
-
-    if SpectralRadius - 1.0 >= eps(Float64)
-      dtMax = dt
-    else
-      dtMin = dt
-    end
-    println(dt)
-  end
-
-  return dtMin
 end
 
 function FindMaxdtScaling(ForwardEulerWeight::Float64, a::Vector{Float64}, b1::Vector{Float64}, b2::Vector{Float64},
@@ -518,12 +258,6 @@ mutable struct FE2S
                                           EigVals_, dtOptMin_)
       println("Stable timestep is: ", newFE2S.dtOptMin)
       =#                                     
-
-      println("Check joint stability, maximum possible timestep is:")
-      println(CheckStabilityJointMethod(dtOptMin_, A_))
-
-      println("Check joint stability, maximum possible timestep is:")
-      println(CheckStabilityJointMethod(StagesMin_, NumDoublings_, PathPseudoExtrema_, A_, dtOptMin_))
     end
 
     return newFE2S
@@ -626,18 +360,18 @@ function solve!(integrator::FE2S_Integrator)
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
+      #=
       t_stages = integrator.t .* ones(alg.NumDoublings + 1) # TODO: Make member variable?
 
       # Perform first Forward Euler step on finest grid
       integrator.f(integrator.du, integrator.u, prob.p, t_stages[1], 1) # du = k1
 
-      # TODO: Update only relevant entries of u (that of the corresponding level)
+      # TODO: Access only relevant entries of u (that of the corresponding level)
       integrator.u_tmp .= integrator.u .+ alg.ForwardEulerWeights[1] .* integrator.dt .* integrator.du
       t_stages[1] += alg.ForwardEulerWeights[1] * integrator.dt
 
       # Intermediate "two-step" sub methods on finest level
       for step = 1:2^alg.NumDoublings - 1
-
         # Low-storage implementation (only one k = du):
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
         integrator.u_tmp .+= integrator.dt .* alg.b1[step, 1] .* integrator.du
@@ -658,7 +392,7 @@ function solve!(integrator::FE2S_Integrator)
               # FIXME Not sure if this is the right way to do the time steps
               t_stages[coarse_level] = integrator.t + alg.ForwardEulerWeights[coarse_level] * integrator.dt
             else # Do intermediate "two-steps" for coarser levels (except for the coarsest, where we do only Forward Euler)
-              println("This is erronous!")
+              println("This is not yet supported, errors will arise!")
               # TODO: This will currently not work, we evolve from wrong u_tmp!
               pos = Int(step / 2^(coarse_level - 1))
               integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[coarse_level], coarse_level) # du = k1
@@ -689,10 +423,10 @@ function solve!(integrator::FE2S_Integrator)
 
         # Low-storage implementation (only one k = du):
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1], 1) # du = k1
-
         integrator.u_tmp .+= integrator.dt .* alg.b1[step, 1] .* integrator.du
 
         t_stages[1] = integrator.t + alg.a[step, 1] * integrator.dt
+
         integrator.f(integrator.du, integrator.u_tmp .+ integrator.dt .*(alg.a[step, 1] - alg.b1[step, 1]) .* integrator.du, 
                      prob.p, t_stages[1], 1) # du = k2
         integrator.u_tmp .+= integrator.dt .* alg.b2[step, 1] .* integrator.du
@@ -732,6 +466,131 @@ function solve!(integrator::FE2S_Integrator)
       # ... Then, we can use this time to develop from
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stages[1]) # k1
       integrator.u .+= integrator.dt .* integrator.du
+      =#
+
+      k1 = zeros(96, 12)
+      k2 = zeros(96, 6)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      k1[:, 1] = integrator.du .* integrator.dt
+      k2[:, 1] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1], prob.p, integrator.t, 1)
+      k1[:, 2] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.a[1, 1] .* k1[:, 2], prob.p, integrator.t, 1)
+      k1[:, 3] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3], prob.p, integrator.t, 1)
+      k1[:, 4] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.a[2, 1] .* k1[:, 4], prob.p, integrator.t, 1)
+      k1[:, 5] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5], prob.p, integrator.t, 1)
+      k1[:, 6] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.a[3, 1] .* k1[:, 6], prob.p, integrator.t, 1)
+      k1[:, 7] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.b1[3, 1] .* k1[:, 6]
+                                             + alg.b2[3, 1] .* k1[:, 7], prob.p, integrator.t, 1)
+      k1[:, 8] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.b1[3, 1] .* k1[:, 6]
+                                             + alg.b1[3, 1] .* k1[:, 7]
+                                             + alg.a[4, 1] .* k1[:, 8], prob.p, integrator.t, 1)
+      k1[:, 9] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.b1[3, 1] .* k1[:, 6]
+                                             + alg.b2[3, 1] .* k1[:, 7]
+                                             + alg.b1[4, 1] .* k1[:, 8]
+                                             + alg.b2[4, 1] .* k1[:, 9], prob.p, integrator.t, 1)
+      k1[:, 10] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.b1[3, 1] .* k1[:, 6]
+                                             + alg.b2[3, 1] .* k1[:, 7]
+                                             + alg.b1[4, 1] .* k1[:, 8]
+                                             + alg.b2[4, 1] .* k1[:, 9]
+                                             + alg.a[5, 1] .* k1[:, 10], prob.p, integrator.t, 1)
+      k1[:, 11] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
+                                             + alg.b1[1, 1] .* k1[:, 2]
+                                             + alg.b2[1, 1] .* k1[:, 3]
+                                             + alg.b1[2, 1] .* k1[:, 4]
+                                             + alg.b2[2, 1] .* k1[:, 5]
+                                             + alg.b1[3, 1] .* k1[:, 6]
+                                             + alg.b2[3, 1] .* k1[:, 7]
+                                             + alg.b1[4, 1] .* k1[:, 8]
+                                             + alg.b1[4, 1] .* k1[:, 9]
+                                             + alg.b1[5, 1] .* k1[:, 10]
+                                             + alg.b2[5, 1] .* k1[:, 11], prob.p, integrator.t, 1)
+      k1[:, 12] = integrator.du .* integrator.dt
+
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[2] .* k2[:, 1], prob.p, integrator.t, 2)
+      k2[:, 2] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
+                                             + alg.a[1, 2] .* k2[:, 2], prob.p, integrator.t, 2)
+      k2[:, 3] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
+                                             + alg.b1[1, 2] .* k2[:, 2]
+                                             + alg.b2[1, 2] .* k2[:, 3], prob.p, integrator.t, 2)
+      k2[:, 4] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
+                                             + alg.b1[1, 2] .* k2[:, 2]
+                                             + alg.b2[1, 2] .* k2[:, 3]
+                                             + alg.a[2, 2] .* k2[:, 4], prob.p, integrator.t, 2)
+      k2[:, 5] = integrator.du .* integrator.dt
+
+      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
+                                             + alg.b1[1, 2] .* k2[:, 2]
+                                             + alg.b2[1, 2] .* k2[:, 3]
+                                             + alg.b1[2, 2] .* k2[:, 4]
+                                             + alg.b2[2, 2] .* k2[:, 5], prob.p, integrator.t, 2)
+      k2[:, 6] = integrator.du .* integrator.dt
+
+      integrator.u[33:96] += integrator.dt .* k1[33:96, 12]
+      integrator.u[1:32] += integrator.dt .* k2[1:32, 6]
+
     end # FE2S step
 
     integrator.iter += 1

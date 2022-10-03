@@ -190,7 +190,7 @@ function solve!(integrator::PERK_Integrator)
 
       # Now: Domain-splitted integration
       kDomains = zeros(length(k1), alg.NumDoublings + 1)
-      kDomains[:, 1] = copy(integrator.du) # Essentially k higher
+      kDomains[:, 1] = copy(integrator.du) # Essentially k_higher
 
       # Not most efficient implementation, but simple
       for stage in 1:alg.NumStages - 2
@@ -205,7 +205,7 @@ function solve!(integrator::PERK_Integrator)
 
         # Coarse level (hard-coded)
         if stage >= alg.NumStageEvalsMin
-          if stage == alg.NumStageEvalsMin
+          if stage == alg.NumStageEvalsMin # Do f evaluation before part with two stage evals starts
             integrator.f(integrator.du, 
               integrator.u .+ integrator.dt * alg.c[stage+2] .* k1, 
               prob.p, t_stage, 2)
