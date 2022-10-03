@@ -20,20 +20,13 @@ function ReadInFile(FilePath::AbstractString, DataType::Type)
   return NumLines, Data
 end
 
-function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString)
+function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString,
+                                  MaxNumTwoStepSubstage::Int)
 
   ForwardEulerWeights = zeros(NumDoublings+1)
-  StagesMax = -1
-  if NumDoublings == 0
-    @assert StagesMin % 2 == 0 "Expect even number of Runge-Kutta steges!"
-    StagesMax = Int(StagesMin / 2 - 1)
-  else
-    StagesMax = StagesMin * 2^(NumDoublings-1) -1
-  end
-
-  a  = zeros(StagesMax, NumDoublings+1)
-  b1 = zeros(StagesMax, NumDoublings+1)
-  b2 = zeros(StagesMax, NumDoublings+1)
+  a  = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
+  b1 = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
+  b2 = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
 
   ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
 
@@ -245,7 +238,7 @@ mutable struct FE2S
     newFE2S = new(StagesMin_, NumDoublings_, dtOptMin_)
 
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
-      ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_)
+      ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_, Int((StagesMin_ * 2^NumDoublings_ - 2)/2))
 
     #println("Stage 1 stability test")
     #CheckStability(newFE2S.ForwardEulerWeights[1], newFE2S.a[:, 1], newFE2S.b1[:, 1], newFE2S.b2[:, 1], EigVals_, dtOptMin_)
@@ -360,9 +353,9 @@ function solve!(integrator::FE2S_Integrator)
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-      #=
       t_stages = integrator.t .* ones(alg.NumDoublings + 1) # TODO: Make member variable?
 
+      #=
       # Perform first Forward Euler step on finest grid
       integrator.f(integrator.du, integrator.u, prob.p, t_stages[1], 1) # du = k1
 
@@ -468,128 +461,38 @@ function solve!(integrator::FE2S_Integrator)
       integrator.u .+= integrator.dt .* integrator.du
       =#
 
-      k1 = zeros(96, 12)
-      k2 = zeros(96, 6)
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      k1[:, 1] = integrator.du .* integrator.dt
-      k2[:, 1] = integrator.du .* integrator.dt
+      integrator.f(integrator.du, integrator.u, prob.p, t_stages[1])
 
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1], prob.p, integrator.t, 1)
-      k1[:, 2] = integrator.du .* integrator.dt
+      # Current state of the different levels
+      u_levels = zeros(length(integrator.u), alg.NumDoublings+1)
 
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.a[1, 1] .* k1[:, 2], prob.p, integrator.t, 1)
-      k1[:, 3] = integrator.du .* integrator.dt
+      # Perform Forward Euler steps
+      for i = 1:alg.NumDoublings + 1
+        u_levels[:, i] = integrator.u + integrator.dt .* alg.ForwardEulerWeights[i] .* integrator.du 
+        t_stages[i] += alg.ForwardEulerWeights[i] * integrator.dt
+      end
 
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3], prob.p, integrator.t, 1)
-      k1[:, 4] = integrator.du .* integrator.dt
+      # Intermediate "two-step" sub methods
+      for i = 1:alg.NumDoublings + 1
+        for step = 1:Int((alg.StagesMin * 2^(alg.NumDoublings + 1 - i) - 2)/2)
+          # Low-storage implementation (only one k = du):
+          integrator.f(integrator.du, u_levels[:, i], prob.p, t_stages[i], i) # du = k1
+          u_levels[:, i] .+= integrator.dt .* alg.b1[step, i] .* integrator.du
 
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.a[2, 1] .* k1[:, 4], prob.p, integrator.t, 1)
-      k1[:, 5] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5], prob.p, integrator.t, 1)
-      k1[:, 6] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.a[3, 1] .* k1[:, 6], prob.p, integrator.t, 1)
-      k1[:, 7] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.b1[3, 1] .* k1[:, 6]
-                                             + alg.b2[3, 1] .* k1[:, 7], prob.p, integrator.t, 1)
-      k1[:, 8] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.b1[3, 1] .* k1[:, 6]
-                                             + alg.b1[3, 1] .* k1[:, 7]
-                                             + alg.a[4, 1] .* k1[:, 8], prob.p, integrator.t, 1)
-      k1[:, 9] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.b1[3, 1] .* k1[:, 6]
-                                             + alg.b2[3, 1] .* k1[:, 7]
-                                             + alg.b1[4, 1] .* k1[:, 8]
-                                             + alg.b2[4, 1] .* k1[:, 9], prob.p, integrator.t, 1)
-      k1[:, 10] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.b1[3, 1] .* k1[:, 6]
-                                             + alg.b2[3, 1] .* k1[:, 7]
-                                             + alg.b1[4, 1] .* k1[:, 8]
-                                             + alg.b2[4, 1] .* k1[:, 9]
-                                             + alg.a[5, 1] .* k1[:, 10], prob.p, integrator.t, 1)
-      k1[:, 11] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k1[:, 1]
-                                             + alg.b1[1, 1] .* k1[:, 2]
-                                             + alg.b2[1, 1] .* k1[:, 3]
-                                             + alg.b1[2, 1] .* k1[:, 4]
-                                             + alg.b2[2, 1] .* k1[:, 5]
-                                             + alg.b1[3, 1] .* k1[:, 6]
-                                             + alg.b2[3, 1] .* k1[:, 7]
-                                             + alg.b1[4, 1] .* k1[:, 8]
-                                             + alg.b1[4, 1] .* k1[:, 9]
-                                             + alg.b1[5, 1] .* k1[:, 10]
-                                             + alg.b2[5, 1] .* k1[:, 11], prob.p, integrator.t, 1)
-      k1[:, 12] = integrator.du .* integrator.dt
-
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[2] .* k2[:, 1], prob.p, integrator.t, 2)
-      k2[:, 2] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
-                                             + alg.a[1, 2] .* k2[:, 2], prob.p, integrator.t, 2)
-      k2[:, 3] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
-                                             + alg.b1[1, 2] .* k2[:, 2]
-                                             + alg.b2[1, 2] .* k2[:, 3], prob.p, integrator.t, 2)
-      k2[:, 4] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
-                                             + alg.b1[1, 2] .* k2[:, 2]
-                                             + alg.b2[1, 2] .* k2[:, 3]
-                                             + alg.a[2, 2] .* k2[:, 4], prob.p, integrator.t, 2)
-      k2[:, 5] = integrator.du .* integrator.dt
-
-      integrator.f(integrator.du, integrator.u + alg.ForwardEulerWeights[1] .* k2[:, 1]
-                                             + alg.b1[1, 2] .* k2[:, 2]
-                                             + alg.b2[1, 2] .* k2[:, 3]
-                                             + alg.b1[2, 2] .* k2[:, 4]
-                                             + alg.b2[2, 2] .* k2[:, 5], prob.p, integrator.t, 2)
-      k2[:, 6] = integrator.du .* integrator.dt
-
-      integrator.u[33:96] += integrator.dt .* k1[33:96, 12]
-      integrator.u[1:32] += integrator.dt .* k2[1:32, 6]
+          t_stages[i] = integrator.t + alg.a[step, i] * integrator.dt
+          integrator.f(integrator.du, u_levels[:, i] .+ integrator.dt .*(alg.a[step, i] - alg.b1[step, i]) .* integrator.du, 
+                       prob.p, t_stages[i], i)
+          u_levels[:, i] .+= integrator.dt .* alg.b2[step, i] .* integrator.du
+        end
+      end
+      # Final Euler step with step length of dt
+      # TODO: Remove assert later (performance)
+      @assert all(y->y == t_stages[1], t_stages) # Expect that every stage is at the same time by now ...
+      # ... Then, we can use this time to develop from
+      integrator.f(integrator.du, u_levels[:, 1], prob.p, t_stages[1], 1)
+      integrator.u[33:96] .+= integrator.dt .* integrator.du[33:96]
+      integrator.f(integrator.du, u_levels[:, 2], prob.p, t_stages[2], 2)
+      integrator.u[1:32] .+= integrator.dt .* integrator.du[1:32]
 
     end # FE2S step
 
