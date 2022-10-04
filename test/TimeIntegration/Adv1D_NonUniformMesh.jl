@@ -12,8 +12,8 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 PolyDegree = 3
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
-coordinates_min = 0.0 # minimum coordinate
-coordinates_max = 1.0 # maximum coordinate
+coordinates_min = -1.0 # minimum coordinate
+coordinates_max =  1.0 # maximum coordinate
 
 InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
@@ -31,7 +31,6 @@ EigVals = eigvals(Matrix(A))
 EigVals = EigVals[imag(EigVals) .>= 0]
 
 plotdata = scatter(real.(EigVals), imag.(EigVals), label = "Non-refined discretization")
-
 
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
@@ -72,7 +71,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 
 StartTime = 0.0
 #EndTime = 0.0427
-EndTime = 100.0
+EndTime = 10
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -100,14 +99,14 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-#dtOptMin = 0.0427
-#dtOptMin = 0.0427 / 2
-dtOptMin = 0.0427 *0.5
+dtOptMin = 0.0427
+dtOptMin = 0.0427 / 1
+
 
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
 A = Matrix(A)
-
+#=
 A1, = linear_structure(semi, 1)
 A1 = Matrix(A1)
 A2, = linear_structure(semi, 2)
@@ -115,6 +114,7 @@ A2 = Matrix(A2)
 
 #display(eigvals(A1 + A2))
 @assert(zeros(size(A, 1), size(A, 2)) == A - (A1 + A2))
+=#
 
 #EigVals = eigvals(Matrix(A))
 EigVals = eigvals(Matrix(A), sortby=nothing)
@@ -127,8 +127,8 @@ if findfirst(x -> real(x) > 0, EigVals) != nothing
 end
 EigVals = EigVals[real(EigVals) .< 0]
 
-#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", EigVals, A)
-ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
+#ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 
 plotdata = scatter!(real.(EigVals), imag.(EigVals), label = "Refined discretization")
 
@@ -142,12 +142,13 @@ plotdata = scatter!(real.(ode_algorithm.dtOptMin / dtOptMin * EigVals),
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  #dt = dtOptMin,
-                  dt = ode_algorithm.dtOptMin,
+                  dt = dtOptMin,
+                  #dt = ode_algorithm.dtOptMin,
                   save_everystep=false, callback=callbacks);
 
 # Print the timer summary
 summary_callback()
 
 pd = PlotData1D(sol)
+plot(sol)
 plot(getmesh(pd))

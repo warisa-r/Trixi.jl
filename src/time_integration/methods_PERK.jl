@@ -178,6 +178,41 @@ function solve!(integrator::PERK_Integrator)
 
     # TODO: Try multi-threaded execution as implemented for other integrators!
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
+
+      # Partitioned RK approach
+      kfast = zeros(length(integrator.u), alg.NumStages)
+      kslow = zeros(length(integrator.u), alg.NumStages)
+      # k1
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      kfast[:, 1] = integrator.du * integrator.dt
+      kslow[:, 1] = integrator.du * integrator.dt
+
+      # k2
+      integrator.f(integrator.du, integrator.u + alg.c[1] .* kfast[:, 1], prob.p, integrator.t)
+      kfast[:, 2] = integrator.du * integrator.dt
+      kslow[:, 2] = integrator.du * integrator.dt
+
+      for stage = 1:alg.NumStages - 2
+        tmp = integrator.u
+        tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[:, 1] + alg.ACoeffs[stage, 1] .* kfast[:, stage + 1]
+        tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kslow[:, 1] + alg.ACoeffs[stage, 2] .* kslow[:, stage + 1]
+
+        integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
+        #integrator.f(integrator.du, tmpfast, prob.p, integrator.t, 1)
+        #integrator.f(integrator.du, tmpfast, prob.p, integrator.t)
+        kfast[:, stage+2] = integrator.du * integrator.dt
+
+        integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
+        #integrator.f(integrator.du, tmpslow, prob.p, integrator.t, 2)
+        #integrator.f(integrator.du, tmpslow, prob.p, integrator.t)
+        kslow[:, stage+2] = integrator.du * integrator.dt
+      end
+      #display(kfast[:, MaxStages]); println()
+      #display(kslow[:, MaxStages]); println()
+
+      integrator.u += kfast[:, alg.NumStages] + kslow[:, alg.NumStages]
+
+      #=
       # Treat first two stages seperately
       # Stage 1: Note: Hard-coded to c[0] = 0! (tstage = t)
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
@@ -220,6 +255,9 @@ function solve!(integrator::PERK_Integrator)
         end
       end
 
+      integrator.u += integrator.dt .* (kDomains[:, 1] + kDomains[:, 2])
+      =#
+
       # More efficient implementation
       #=
       for stage in 3:2+alg.NumEvalReduction # Here, the non-zero coeffs are only in the first column
@@ -232,12 +270,10 @@ function solve!(integrator::PERK_Integrator)
         t_stage = integrator.t + integrator.dt * alg.c[stage]
         integrator.f(kHigher, integrator.u .+ integrator.dt * (alg.ACoeffs[stage, 1] .* k1 + alg.ACoeffs[stage, 2] .* kHigher), prob.p, t_stage)
       end
-      =#
 
       # Final step: Update u (only b_s = 1, other b_i = 0)
       #integrator.u += integrator.dt * kHigher
-      integrator.u[33:96] += integrator.dt .* kDomains[33:96, 1]
-      integrator.u[1:32] += integrator.dt .* kDomains[1:32, 2]
+      =#
     end # PERK step
 
     integrator.iter += 1
