@@ -70,8 +70,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 0.0427
-EndTime = 10
+EndTime = 0.0427
+EndTime = 100
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -99,9 +99,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.0427
 dtOptMin = 0.0427 / 1
-
 
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)

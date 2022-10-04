@@ -39,8 +39,9 @@ function create_cache(mesh::TreeMesh{1}, equations,
   println("Current number of levels: ", n_levels)
 
   # Initialize storage for level-wise information
-  # Set-like datastructures more suited then vectros (Especially for interfaces)
-  level_info_elements = [Set{Int}() for _ in 1:n_levels]
+  # Set-like datastructures more suited then vectors (Especially for interfaces)
+  level_info_elements     = [Set{Int}() for _ in 1:n_levels]
+  level_info_elements_acc = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each element
   for element_id in 1:n_elements
@@ -50,9 +51,14 @@ function create_cache(mesh::TreeMesh{1}, equations,
     level_id = max_level + 1 - level
 
     push!(level_info_elements[level_id], element_id)
+    # Add to accumulated container
+    for l in level_id:n_levels
+      push!(level_info_elements_acc[l], element_id)
+    end
   end
 
-  level_info_interfaces = [Set{Int}() for _ in 1:n_levels]
+  level_info_interfaces     = [Set{Int}() for _ in 1:n_levels]
+  level_info_interfaces_acc = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each interface
   for interface_id in 1:n_interfaces
@@ -77,10 +83,19 @@ function create_cache(mesh::TreeMesh{1}, equations,
     if level_id_left != level_id_right
       push!(level_info_interfaces[level_id_right], interface_id)
     end
+
+     # Add to accumulated container
+     for l in level_id_left:n_levels
+      push!(level_info_interfaces_acc[l], interface_id)
+    end
+    for l in level_id_right:n_levels
+      push!(level_info_interfaces_acc[l], interface_id)
+    end
   end
 
   # Reset level info for boundaries
-  level_info_boundaries = [Set{Int}() for _ in 1:n_levels]
+  level_info_boundaries     = [Set{Int}() for _ in 1:n_levels]
+  level_info_boundaries_acc = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
@@ -100,24 +115,40 @@ function create_cache(mesh::TreeMesh{1}, equations,
     if level_id_left != level_id_right
       push!(level_info_boundaries[level_id_right], interface_id)
     end
+
+    # Add to accumulated container
+    for l in level_id_left:n_levels
+      push!(level_info_boundaries_acc[l], surface_id)
+    end
+    for l in level_id_right:n_levels
+      push!(level_info_boundaries_acc[l], surface_id)
+    end
   end
 
 
   # Specificially designed cache for non-uniform meshes
   cache = (;cache..., n_elements, n_interfaces, 
-                      level_info_elements, level_info_interfaces, level_info_boundaries)
+                      level_info_elements, level_info_elements_acc,
+                      level_info_interfaces, level_info_interfaces_acc,
+                      level_info_boundaries, level_info_boundaries_acc)
 
   println("n_elements: ", n_elements)
   println("\nn_interfaces: ", n_interfaces)
 
   println("level_info_elements:")
   display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
 
   println("level_info_interfaces:")
   display(level_info_interfaces); println()
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
 
   println("level_info_boundaries:")
   display(level_info_boundaries); println()
+  println("level_info_boundaries_acc:")
+  display(level_info_boundaries_acc); println()
   
   return cache
 end
