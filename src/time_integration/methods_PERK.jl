@@ -182,30 +182,47 @@ function solve!(integrator::PERK_Integrator)
       # Partitioned RK approach
       kfast = zeros(length(integrator.u), alg.NumStages)
       kslow = zeros(length(integrator.u), alg.NumStages)
+
       # k1
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       kfast[:, 1] = integrator.du * integrator.dt
       kslow[:, 1] = integrator.du * integrator.dt
 
       # k2
-      integrator.f(integrator.du, integrator.u + alg.c[1] .* kfast[:, 1], prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u + alg.c[2] .* kfast[:, 1], prob.p, integrator.t)
       kfast[:, 2] = integrator.du * integrator.dt
       kslow[:, 2] = integrator.du * integrator.dt
 
-      for stage = 1:alg.NumStages - 2
+      #for stage = 1:alg.NumStages - 2
+      for stage = 1:1
         tmp = integrator.u
-        tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[:, 1] + alg.ACoeffs[stage, 1] .* kfast[:, stage + 1]
-        tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kslow[:, 1] + alg.ACoeffs[stage, 2] .* kslow[:, stage + 1]
+
+        tmp[33:96] += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[33:96, 1] 
+                     + alg.ACoeffs[stage, 1] .* kfast[33:96, stage + 1]
+        tmp[1:32 ] += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kslow[1:32, 1] 
+                     + alg.ACoeffs[stage, 2] .* kslow[1:32, stage + 1]
+
+        #=
+        # Testcase: Use same update rule throughout the domain
+        tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[:, 1] 
+              + alg.ACoeffs[stage, 1] .* kfast[:, stage + 1]
+        =#
 
         integrator.f(integrator.du, tmp, prob.p, integrator.t)
 
-        kfast[33:96, stage+2] = integrator.du[33:96] * integrator.dt
-        kslow[1:32, stage+2]  = integrator.du[1:32] * integrator.dt
-      end
-      #display(kfast[:, MaxStages]); println()
-      #display(kslow[:, MaxStages]); println()
+        #kfast[33:96, stage+2] = integrator.du[33:96] * integrator.dt
+        #kslow[1:32, stage+2]  = integrator.du[1:32] * integrator.dt
+        kfast[:, stage+2] = integrator.du * integrator.dt
+        kslow[:, stage+2] = integrator.du * integrator.dt
 
-      integrator.u += kfast[:, alg.NumStages] + kslow[:, alg.NumStages]
+        #display(tmp[33:96]); println()
+        #display(tmp[1:32]); println()
+      end
+      #display(kfast[:, alg.NumStages]); println()
+      #display(kslow[:, alg.NumStages]); println()
+
+      #integrator.u += kfast[:, alg.NumStages]
+      integrator.u += kfast[:, 3]
     end # PERK step
 
     integrator.iter += 1

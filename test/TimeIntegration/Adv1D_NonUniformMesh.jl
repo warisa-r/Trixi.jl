@@ -23,6 +23,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
 # semidiscretization for non-refined mesh (only for plotting eigenvalues)
+#=
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
 A, = linear_structure(semi) # Potentially cheaper than jacobian
 EigVals = eigvals(Matrix(A))
@@ -31,6 +32,7 @@ EigVals = eigvals(Matrix(A))
 EigVals = EigVals[imag(EigVals) .>= 0]
 
 plotdata = scatter(real.(EigVals), imag.(EigVals), label = "Non-refined discretization")
+=#
 
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
@@ -81,7 +83,7 @@ ode = semidiscretize(semi, (StartTime, EndTime));
 summary_callback = SummaryCallback()
 
 # The AnalysisCallback allows to analyse the solution in regular intervals and prints the results
-analysis_callback = AnalysisCallback(semi, interval=100)
+analysis_callback = AnalysisCallback(semi, interval=100, extra_analysis_errors=(:conservation_error,))
 
 # The SaveSolutionCallback allows to save the solution to a file in regular intervals
 save_solution = SaveSolutionCallback(interval=100,
@@ -99,7 +101,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.0427 / 1
+dtOptMin = 0.0854/2
 
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
@@ -125,8 +127,8 @@ if findfirst(x -> real(x) > 0, EigVals) != nothing
 end
 EigVals = EigVals[real(EigVals) .< 0]
 
-ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-#ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
+ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 
 plotdata = scatter!(real.(EigVals), imag.(EigVals), label = "Refined discretization")
 
