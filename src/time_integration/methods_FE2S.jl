@@ -287,6 +287,25 @@ function solve(ode::ODEProblem, alg::FE2S;
                  alg, # The ODE integration algorithm/method
                  FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false)
 
+  # Get indices in u of DoF of elements on different levels
+  # TODO: Move into solve! when doing AMR, since we have to update this               
+  @unpack mesh, equations, solver, cache = ode.p
+  u = wrap_array(u0, mesh, equations, solver, cache)
+
+  n_levels = length(cache.level_info_elements)
+  level_u_indices_elements     = [Vector{Int}() for _ in 1:n_levels]
+  level_u_indices_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    for element_id in cache.level_info_elements[level]
+      indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+      append!(level_u_indices_elements[level], indices)
+    end
+    for element_id in cache.level_info_elements_acc[level]
+      indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+      append!(level_u_indices_elements_acc[level], indices)
+    end
+  end
+
   # initialize callbacks
   if callback isa CallbackSet
     for cb in callback.continuous_callbacks
@@ -299,10 +318,13 @@ function solve(ode::ODEProblem, alg::FE2S;
     error("unsupported")
   end
 
-  solve!(integrator)
+  # TODO: Not really elegant way, maybe try to bundle 'indices' datastructures into 'integrator' 
+  solve!(integrator, level_u_indices_elements, level_u_indices_elements_acc)
 end
 
-function solve!(integrator::FE2S_Integrator)
+function solve!(integrator::FE2S_Integrator,
+                level_u_indices_elements::Vector{Vector{Int}}, 
+                level_u_indices_elements_acc::Vector{Vector{Int}})
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan) # Final time
@@ -331,8 +353,8 @@ function solve!(integrator::FE2S_Integrator)
       
       # k1: Computed on all levels simultaneously
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      kfast[33:96, 1] = integrator.du[33:96] * integrator.dt
-      kslow[1:32, 1] = integrator.du[1:32] * integrator.dt
+      kfast[level_u_indices_elements[1], 1] = integrator.du[level_u_indices_elements[1]] * integrator.dt
+      kslow[level_u_indices_elements[2], 1] = integrator.du[level_u_indices_elements[2]] * integrator.dt
 
       for i = 2:alg.StagesMax
         tmp = integrator.u
@@ -344,10 +366,10 @@ function solve!(integrator::FE2S_Integrator)
 
         # Forward Euler step on lower level required
         if i in [2^(alg.NumDoublings + 1), 7, 8, 11, 12]
-          # Evaluate f with all points
+          # Evaluate f with all elements
           integrator.f(integrator.du, tmp, prob.p, integrator.t)
-          kfast[33:96, i] = integrator.du[33:96] * integrator.dt
-          kslow[1:32, i]  = integrator.du[1:32] * integrator.dt
+          kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
+          kslow[level_u_indices_elements[2], i] = integrator.du[level_u_indices_elements[2]] * integrator.dt
         else
           # Evaluate only fine level
           integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)

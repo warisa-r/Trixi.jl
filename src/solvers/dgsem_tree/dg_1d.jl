@@ -38,10 +38,11 @@ function create_cache(mesh::TreeMesh{1}, equations,
   n_levels = max_level - min_level + 1
   println("Current number of levels: ", n_levels)
 
+
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
-  level_info_elements     = [Set{Int}() for _ in 1:n_levels]
-  level_info_elements_acc = [Set{Int}() for _ in 1:n_levels]
+  level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
 
   # Determine level for each element
   for element_id in 1:n_elements
@@ -57,8 +58,9 @@ function create_cache(mesh::TreeMesh{1}, equations,
     end
   end
 
-  level_info_interfaces     = [Set{Int}() for _ in 1:n_levels]
-  level_info_interfaces_acc = [Set{Int}() for _ in 1:n_levels]
+  # Use sets first to avoid double storage of interfaces
+  level_info_interfaces_set     = [Set{Int}() for _ in 1:n_levels]
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each interface
   for interface_id in 1:n_interfaces
@@ -79,23 +81,31 @@ function create_cache(mesh::TreeMesh{1}, equations,
     level_id_left  = max_level + 1 - level_left
     level_id_right = max_level + 1 - level_right
 
-    push!(level_info_interfaces[level_id_left], interface_id)
+    push!(level_info_interfaces_set[level_id_left], interface_id)
     if level_id_left != level_id_right
-      push!(level_info_interfaces[level_id_right], interface_id)
+      push!(level_info_interfaces_set[level_id_right], interface_id)
     end
 
      # Add to accumulated container
-     for l in level_id_left:n_levels
-      push!(level_info_interfaces_acc[l], interface_id)
+    for l in level_id_left:n_levels
+      push!(level_info_interfaces_set_acc[l], interface_id)
     end
     for l in level_id_right:n_levels
-      push!(level_info_interfaces_acc[l], interface_id)
+      push!(level_info_interfaces_set_acc[l], interface_id)
     end
   end
 
-  # Reset level info for boundaries
-  level_info_boundaries     = [Set{Int}() for _ in 1:n_levels]
-  level_info_boundaries_acc = [Set{Int}() for _ in 1:n_levels]
+  # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces     = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_interfaces[level]     = sort(collect(level_info_interfaces_set[level]))
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+
+
+  level_info_boundaries_set     = [Set{Int}() for _ in 1:n_levels]
+  level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
 
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
@@ -111,18 +121,26 @@ function create_cache(mesh::TreeMesh{1}, equations,
     level_id_left  = max_level + 1 - level_left
     level_id_right = max_level + 1 - level_right
 
-    push!(level_info_boundaries[level_left], boundary_id)
+    push!(level_info_boundaries_set[level_left], boundary_id)
     if level_id_left != level_id_right
-      push!(level_info_boundaries[level_id_right], interface_id)
+      push!(level_info_boundaries_set[level_id_right], interface_id)
     end
 
     # Add to accumulated container
     for l in level_id_left:n_levels
-      push!(level_info_boundaries_acc[l], surface_id)
+      push!(level_info_boundaries_set_acc[l], surface_id)
     end
     for l in level_id_right:n_levels
-      push!(level_info_boundaries_acc[l], surface_id)
+      push!(level_info_boundaries_set_acc[l], surface_id)
     end
+  end
+
+  # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_boundaries     = [Vector{Int}() for _ in 1:n_levels]
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_boundaries[level]     = sort(collect(level_info_boundaries_set[level]))
+    level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
   end
 
 
