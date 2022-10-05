@@ -21,12 +21,12 @@ function ReadInFile(FilePath::AbstractString, DataType::Type)
 end
 
 function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString,
-                                  MaxNumTwoStepSubstage::Int)
+                                  TrueComplexPEMax::Int)
 
   ForwardEulerWeights = zeros(NumDoublings+1)
-  a  = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
-  b1 = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
-  b2 = zeros(MaxNumTwoStepSubstage, NumDoublings+1)
+  a  = zeros(TrueComplexPEMax, NumDoublings+1)
+  b1 = zeros(TrueComplexPEMax, NumDoublings+1)
+  b2 = zeros(TrueComplexPEMax, NumDoublings+1)
 
   ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
 
@@ -154,6 +154,9 @@ function BuildButcherTableaus(ForwardEulerWeights::Vector{Float64}, a::Matrix{Fl
   display(c); println()
 
   A = zeros(NumDoublings+1, StagesMin * 2^NumDoublings, StagesMin * 2^NumDoublings)
+
+  # Try doing forward Euler step "one earlier"
+  A[2, 3, 1] = ForwardEulerWeights[2]
   for i = 1:NumDoublings+1
     # Forward Euler contribution
     A[i, 2*i:end, 1] .= ForwardEulerWeights[i]
@@ -168,6 +171,7 @@ function BuildButcherTableaus(ForwardEulerWeights::Vector{Float64}, a::Matrix{Fl
     display(A[i, :, :]); println()
     println("Sum of last row of A: ", sum(A[i, StagesMax, :], dims=1))
   end
+
   return A
 end
 
@@ -191,6 +195,8 @@ mutable struct FE2S
   NumDoublings::Int
   # Maximum number of stages = StagesMin * 2^NumDoublings
   StagesMax::Int
+  # Maximum Number of True Complex Pseudo Extrema, relevant for many datastructures
+  TrueComplexPEMax::Int
   # Timestep corresponding to lowest number of stages
   dtOptMin::Real
   # TODO:Add StagesMax member variable
@@ -201,28 +207,48 @@ mutable struct FE2S
   b2::Matrix{Float64}
   c::Vector{Float64}
 
+  CommonStages::Vector{Int64}
+  ActiveLevels::Vector{Vector{Int64}}
+
   A::Array{Float64} # Butcher Tableaus
 
   # Constructor for previously computed A Coeffs
   function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString, 
                 # TODO: A: Only for testing
                 A_::Matrix{Float64})
-    newFE2S = new(StagesMin_, NumDoublings_, StagesMin_ * 2^NumDoublings_, dtOptMin_)
+    newFE2S = new(StagesMin_, NumDoublings_, StagesMin_ * 2^NumDoublings_, 
+                  Int((StagesMin_ * 2^NumDoublings_ - 2)/2), dtOptMin_)
 
     newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c = 
       ComputeFE2S_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_, 
-                               Int((StagesMin_ * 2^NumDoublings_ - 2)/2))
-
-    newFE2S.A = BuildButcherTableaus(newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c, 
-                                     StagesMin_, NumDoublings_)
+                               newFE2S.TrueComplexPEMax)
 
     # Stages at that we have to take common steps                                 
-    CommonStages = [4] # Forward Euler step
+    newFE2S.CommonStages = [4] # Forward Euler step
     for i = 1:Int((newFE2S.StagesMax / 2 - 2)/2)
-      push!(CommonStages, 3 + i * 4)
-      push!(CommonStages, 4 + i * 4)
+      push!(newFE2S.CommonStages, 3 + i * 4)
+      push!(newFE2S.CommonStages, 4 + i * 4)
     end
-    display(CommonStages); println()
+    println("Commonstages"); display(newFE2S.CommonStages); println()
+
+    # TODO: Generalize this!
+    newFE2S.ActiveLevels = [Vector{Int}() for _ in 1:newFE2S.StagesMax]
+    newFE2S.ActiveLevels[1]  = [1, 2]
+    newFE2S.ActiveLevels[2]  = [1]
+    newFE2S.ActiveLevels[3]  = [1]
+    newFE2S.ActiveLevels[4]  = [1, 2]
+    newFE2S.ActiveLevels[5]  = [1]
+    newFE2S.ActiveLevels[6]  = [1]
+    newFE2S.ActiveLevels[7]  = [1, 2]
+    newFE2S.ActiveLevels[8]  = [1, 2]
+    newFE2S.ActiveLevels[9]  = [1]
+    newFE2S.ActiveLevels[10] = [1]
+    newFE2S.ActiveLevels[11] = [1, 2]
+    newFE2S.ActiveLevels[12] = [1, 2]
+
+
+    newFE2S.A = BuildButcherTableaus(newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c, 
+    StagesMin_, NumDoublings_)
 
     return newFE2S
   end
@@ -346,7 +372,6 @@ function solve!(integrator::FE2S_Integrator,
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-
       # Butcher-Tableau based approach
       kfast = zeros(length(integrator.u), alg.StagesMax)
       kslow = zeros(length(integrator.u), alg.StagesMax)
@@ -362,10 +387,10 @@ function solve!(integrator::FE2S_Integrator,
         # Partitioned Runge-Kutta approach: One state that contains updates from all levels
         for j = 1:i-1
           tmp += alg.A[1, i, j] .* kfast[:, j] + alg.A[2, i, j] .* kslow[:, j]
+          #tmp += alg.A[1, i, j] .* kfast[:, j] + alg.A[1, i, j] .* kslow[:, j]
         end
 
-        # Forward Euler step on lower level required
-        if i in [2^(alg.NumDoublings + 1), 7, 8, 11, 12]
+        if i in alg.CommonStages
           # Evaluate f with all elements
           integrator.f(integrator.du, tmp, prob.p, integrator.t)
           kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
@@ -373,51 +398,83 @@ function solve!(integrator::FE2S_Integrator,
         else
           # Evaluate only fine level
           integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
-          kfast[:, i] = integrator.du * integrator.dt
+          kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
         end
       end
       #display(kfast[:, alg.StagesMax]); println()
       #display(kslow[:, alg.StagesMax]); println()
 
       integrator.u += kfast[:, alg.StagesMax] + kslow[:, alg.StagesMax]
-
+      
       #=
-      t_stages = integrator.t .* ones(alg.NumDoublings + 1) # TODO: Make member variable?
+      integrator.u_tmp = integrator.u
+      t_stage = integrator.t
+      # Compute k1 for all elements simultaneously
+      integrator.f(integrator.du, integrator.u, prob.p, t_stage) # du = k1
 
-      # Compute k1
-      integrator.f(integrator.du, integrator.u, prob.p, t_stages[1])
+      # Need to store first derivative evaluation of the two-step submethods
+      k_minus = similar(integrator.u) # TODO: Make member variable?
+      u_minus = similar(integrator.u) # TODO: Make member variable?
 
-      # TODO: Find way of storing only the relevant portions of u
-      # Current state of the different levels
-      u_levels = zeros(length(integrator.u), alg.NumDoublings+1) # TODO: Make member variable?
+      for i = 2:alg.StagesMax
+        # Special treatment for Forward Euler
+        for level in alg.ActiveLevels[i]
+          # Check if we have to do single Forward Euler step
+          if i == 2^level
+            println("If-case, i and level: ", i, " ", level)
+            u_minus[level_u_indices_elements[level]] = integrator.u_tmp[level_u_indices_elements[level]] +
+            #integrator.u_tmp[level_u_indices_elements[level]] += 
+              alg.ForwardEulerWeights[level] * integrator.dt * integrator.du[level_u_indices_elements[level]]
+          
+          # TODO: For joint stages, we probably need to store u_tmp 
+          # First step of two-step substep method
+          end
+        end
 
-      # Perform Forward Euler steps
-      for i = 1:alg.NumDoublings + 1
-        u_levels[:, i] = integrator.u + integrator.dt .* alg.ForwardEulerWeights[i] .* integrator.du 
-        t_stages[i] += alg.ForwardEulerWeights[i] * integrator.dt
-      end
+        # Non-forward Euler steps
+        level = maximum(alg.ActiveLevels[i])
+        if (i + 1) % 2^level == 0
+          # TODO: Get stage times right!
+          t_stage = 42.
 
-      # Intermediate "two-step" sub methods
-      for i = 1:alg.NumDoublings + 1
-        for step = 1:Int((alg.StagesMin * 2^(alg.NumDoublings + 1 - i) - 2)/2)
-          # Low-storage implementation (only one k = du):
-          integrator.f(integrator.du, u_levels[:, i], prob.p, t_stages[i], i) # du = k1
-          u_levels[:, i] .+= integrator.dt .* alg.b1[step, i] .* integrator.du
+          println("First else case, i and level: ", i, " ", level)
 
-          t_stages[i] = integrator.t + alg.a[step, i] * integrator.dt
-          integrator.f(integrator.du, u_levels[:, i] .+ integrator.dt .*(alg.a[step, i] - alg.b1[step, i]) .* integrator.du, 
-                       prob.p, t_stages[i], i)
-          u_levels[:, i] .+= integrator.dt .* alg.b2[step, i] .* integrator.du
+          # Joint RHS evaluation
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage, level) # du = k-
+          
+          # Different regions are differently updated
+          for j = 1:level
+            integrator.u_tmp[level_u_indices_elements[j]] += integrator.dt * 
+              alg.a[Int((i+1)/2^j - 1), j] * integrator.du[level_u_indices_elements[j]]
+
+            # Store du 
+            k_minus[level_u_indices_elements[j]] = integrator.du[level_u_indices_elements[j]]
+          end
+        # Second step of two-step substep method
+        elseif i % 2^level == 0
+          # TODO: Get stage times right!
+          t_stage = 42.
+
+          println("Second else case, i and level: ", i, " ", level)
+
+          # Joint RHS evaluation
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage, level) # du = k+
+
+          # Different regions are differently updated
+          for j = 1:level
+            integrator.u_tmp[level_u_indices_elements[j]] += integrator.dt * 
+              (alg.b1[Int(i/2^j - 1), j] * k_minus[level_u_indices_elements[j]] + 
+               alg.b2[Int(i/2^j - 1), j] * integrator.du[level_u_indices_elements[j]])
+          end
         end
       end
-      # Final Euler step with step length of dt
-      # TODO: Remove assert later (performance)
-      @assert all(y->y == t_stages[1], t_stages) # Expect that every stage is at the same time by now
 
-      integrator.f(integrator.du, u_levels[:, 1], prob.p, t_stages[1], 1)
-      integrator.u += integrator.dt .* integrator.du
-      integrator.f(integrator.du, u_levels[:, 2], prob.p, t_stages[2], 2)
-      integrator.u += integrator.dt .* integrator.du
+      # TODO: Get stage times right!
+      t_stage = 42.
+
+      # Final Forward Euler step on entire domain
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+      integrator.u += integrator.dt * integrator.du
       =#
     end # FE2S step
 

@@ -86,7 +86,7 @@ function create_cache(mesh::TreeMesh{1}, equations,
       push!(level_info_interfaces_set[level_id_right], interface_id)
     end
 
-     # Add to accumulated container
+    # Add to accumulated container
     for l in level_id_left:n_levels
       push!(level_info_interfaces_set_acc[l], interface_id)
     end
@@ -327,7 +327,8 @@ function calc_volume_integral!(du, u,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     weak_form_kernel!(du, u, element, mesh,
                       nonconservative_terms, equations,
                       dg, cache)
@@ -375,7 +376,8 @@ function calc_volume_integral!(du, u,
                                volume_integral::VolumeIntegralFluxDifferencing,
                                dg::DGSEM, cache, ode_int_level::Int)
                     
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     split_form_kernel!(du, u, element, mesh, nonconservative_terms, equations,
                        volume_integral.volume_flux, dg, cache)
   end
@@ -507,7 +509,8 @@ function calc_volume_integral!(du, u,
   @unpack volume_flux_fv = volume_integral
 
   # Calculate LGL FV volume integral
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
                dg, cache, element, true)
   end
@@ -617,16 +620,25 @@ end
 
 function prolong2interfaces!(cache, u,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG, ode_int_level::Int)
-  @unpack interfaces = cache
+  @unpack interfaces, level_info_elements_acc = cache
 
-  @threaded for interface in cache.level_info_interfaces[ode_int_level]
+  # TODO: Not sure if you can do this that easy for multiple levels
+  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  #@threaded for interface in cache.level_info_interfaces[ode_int_level]
     left_element  = interfaces.neighbor_ids[1, interface]
     right_element = interfaces.neighbor_ids[2, interface]
 
     # interface in x-direction
     for v in eachvariable(equations)
-      interfaces.u[1, v, interface] = u[v, nnodes(dg), left_element]
-      interfaces.u[2, v, interface] = u[v,          1, right_element]
+      # CARE: if-questions added
+      if left_element in level_info_elements_acc[ode_int_level]
+      #if left_element in level_info_elements[ode_int_level]
+        interfaces.u[1, v, interface] = u[v, nnodes(dg), left_element]
+      end
+      if right_element in level_info_elements_acc[ode_int_level]
+      #if right_element in level_info_elements[ode_int_level]
+        interfaces.u[2, v, interface] = u[v,          1, right_element]
+      end
     end
   end
 
@@ -668,8 +680,12 @@ function calc_interface_flux!(surface_flux_values,
                               surface_integral, dg::DG, cache, ode_int_level::Int)
   @unpack surface_flux = surface_integral
   @unpack u, neighbor_ids, orientations = cache.interfaces
+  @unpack level_info_elements_acc = cache
+  #@unpack level_info_elements = cache
 
-  @threaded for interface in cache.level_info_interfaces[ode_int_level]
+  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  #@threaded for interface in cache.level_info_interfaces[ode_int_level]
+    # TODO: Not sure if this can be done for multiple levels - maybe check if elements are of same level...
     # Get neighboring elements
     left_id  = neighbor_ids[1, interface]
     right_id = neighbor_ids[2, interface]
@@ -685,8 +701,14 @@ function calc_interface_flux!(surface_flux_values,
 
     # Copy flux to left and right element storage
     for v in eachvariable(equations)
-      surface_flux_values[v, left_direction,  left_id]  = flux[v]
-      surface_flux_values[v, right_direction, right_id] = flux[v]
+      if left_id in level_info_elements_acc[ode_int_level]
+      #if left_id in level_info_elements[ode_int_level]
+        surface_flux_values[v, left_direction,  left_id]  = flux[v]
+      end
+      if right_id in level_info_elements_acc[ode_int_level]
+      #if right_id in level_info_elements[ode_int_level]
+        surface_flux_values[v, right_direction, right_id] = flux[v]
+      end
     end
   end
 end
@@ -737,8 +759,11 @@ function calc_interface_flux!(surface_flux_values,
                               surface_integral, dg::DG, cache, ode_int_level::Int)
   surface_flux, nonconservative_flux = surface_integral.surface_flux
   @unpack u, neighbor_ids, orientations = cache.interfaces
+  @unpack level_info_elements_acc = cache
+  #@unpack level_info_elements = cache
 
-  @threaded for interface in cache.level_info_interfaces[ode_int_level]
+  @threaded for interface in cache.level_info_interfaces_acc[ode_int_level]
+  #@threaded for interface in cache.level_info_interfaces[ode_int_level]
     # Get neighboring elements
     left_id  = neighbor_ids[1, interface]
     right_id = neighbor_ids[2, interface]
@@ -763,8 +788,15 @@ function calc_interface_flux!(surface_flux_values,
       # Note the factor 0.5 necessary for the nonconservative fluxes based on
       # the interpretation of global SBP operators coupled discontinuously via
       # central fluxes/SATs
-      surface_flux_values[v, left_direction,  left_id]  = flux[v] + 0.5 * noncons_left[v]
-      surface_flux_values[v, right_direction, right_id] = flux[v] + 0.5 * noncons_right[v]
+      # CARE: Added if-clauses 
+      if left_id in level_info_elements_acc[ode_int_level]
+      #if left_id in level_info_elements[ode_int_level]
+        surface_flux_values[v, left_direction,  left_id]  = flux[v] + 0.5 * noncons_left[v]
+      end
+      if right_id in level_info_elements_acc[ode_int_level]
+      #if right_id in level_info_elements[ode_int_level]
+        surface_flux_values[v, right_direction, right_id] = flux[v] + 0.5 * noncons_right[v]
+      end
     end
   end
 
@@ -801,7 +833,8 @@ function prolong2boundaries!(cache, u,
   @unpack boundaries = cache
   @unpack neighbor_sides = boundaries
 
-  @threaded for boundary in cache.level_info_boundaries[ode_int_level]
+  @threaded for boundary in cache.level_info_boundaries_acc[ode_int_level]
+  #@threaded for boundary in cache.level_info_boundaries[ode_int_level]
     element = boundaries.neighbor_ids[boundary]
 
     # boundary in x-direction
@@ -1045,7 +1078,8 @@ function calc_surface_integral!(du, u, mesh::Union{TreeMesh{1}, StructuredMesh{1
   # into FMAs (see comment at the top of the file).
   factor_1 = boundary_interpolation[1,          1]
   factor_2 = boundary_interpolation[nnodes(dg), 2]
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     for v in eachvariable(equations)
       # surface at -x
       du[v, 1,          element] = (
@@ -1080,7 +1114,8 @@ end
 function apply_jacobian!(du, mesh::Union{TreeMesh{1}, StructuredMesh{1}},
                          equations, dg::DG, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     factor = -cache.elements.inverse_jacobian[element]
 
     for i in eachnode(dg)
@@ -1124,7 +1159,8 @@ end
 function calc_sources!(du, u, t, source_terms,
                        equations::AbstractEquations{1}, dg::DG, cache, ode_int_level::Int)
 
-  @threaded for element in cache.level_info_elements[ode_int_level]
+  @threaded for element in cache.level_info_elements_acc[ode_int_level]
+  #@threaded for element in cache.level_info_elements[ode_int_level]
     for i in eachnode(dg)
       u_local = get_node_vars(u, equations, dg, i, element)
       x_local = get_node_coords(cache.elements.node_coordinates, equations, dg, i, element)

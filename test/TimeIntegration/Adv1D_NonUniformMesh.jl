@@ -71,7 +71,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 
 StartTime = 0.0
 EndTime = 0.0427
-EndTime = 100
+#EndTime = 100
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
