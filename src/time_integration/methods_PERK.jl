@@ -197,83 +197,15 @@ function solve!(integrator::PERK_Integrator)
         tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[:, 1] + alg.ACoeffs[stage, 1] .* kfast[:, stage + 1]
         tmp += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kslow[:, 1] + alg.ACoeffs[stage, 2] .* kslow[:, stage + 1]
 
-        integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
-        #integrator.f(integrator.du, tmpfast, prob.p, integrator.t, 1)
-        #integrator.f(integrator.du, tmpfast, prob.p, integrator.t)
-        kfast[:, stage+2] = integrator.du * integrator.dt
+        integrator.f(integrator.du, tmp, prob.p, integrator.t)
 
-        integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
-        #integrator.f(integrator.du, tmpslow, prob.p, integrator.t, 2)
-        #integrator.f(integrator.du, tmpslow, prob.p, integrator.t)
-        kslow[:, stage+2] = integrator.du * integrator.dt
+        kfast[33:96, stage+2] = integrator.du[33:96] * integrator.dt
+        kslow[1:32, stage+2]  = integrator.du[1:32] * integrator.dt
       end
       #display(kfast[:, MaxStages]); println()
       #display(kslow[:, MaxStages]); println()
 
       integrator.u += kfast[:, alg.NumStages] + kslow[:, alg.NumStages]
-
-      #=
-      # Treat first two stages seperately
-      # Stage 1: Note: Hard-coded to c[0] = 0! (tstage = t)
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      k1 = copy(integrator.du)
-
-      # Stage 2:
-      t_stage = integrator.t + integrator.dt * alg.c[2]
-      # This utilizes A[2, :] = c[2]
-      integrator.f(integrator.du, integrator.u .+ integrator.dt * alg.c[2] .* k1, prob.p, t_stage, 1)
-
-      # Now: Domain-splitted integration
-      kDomains = zeros(length(k1), alg.NumDoublings + 1)
-      kDomains[:, 1] = copy(integrator.du) # Essentially k_higher
-
-      # Not most efficient implementation, but simple
-      for stage in 1:alg.NumStages - 2
-        t_stage = integrator.t + integrator.dt * alg.c[stage+2]
-
-        # Fine level
-        integrator.f(integrator.du, 
-          integrator.u .+ integrator.dt * ((alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* k1 + 
-                                            alg.ACoeffs[stage, 1] .* kDomains[:, 1]), 
-          prob.p, t_stage, 1)
-        kDomains[:, 1] = copy(integrator.du)
-
-        # Coarse level (hard-coded)
-        if stage >= alg.NumStageEvalsMin
-          if stage == alg.NumStageEvalsMin # Do f evaluation before part with two stage evals starts
-            integrator.f(integrator.du, 
-              integrator.u .+ integrator.dt * alg.c[stage+2] .* k1, 
-              prob.p, t_stage, 2)
-            kDomains[:, 2] = copy(integrator.du)
-          else
-            integrator.f(integrator.du, 
-              integrator.u .+ integrator.dt * ((alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* k1 + 
-                                                alg.ACoeffs[stage, 2] .* kDomains[:, 2]), 
-              prob.p, t_stage, 2)
-            kDomains[:, 2] = copy(integrator.du)
-          end
-        end
-      end
-
-      integrator.u += integrator.dt .* (kDomains[:, 1] + kDomains[:, 2])
-      =#
-
-      # More efficient implementation
-      #=
-      for stage in 3:2+alg.NumEvalReduction # Here, the non-zero coeffs are only in the first column
-        t_stage = integrator.t + integrator.dt * alg.c[stage]
-        integrator.f(kHigher, integrator.u .+ integrator.dt * (alg.ACoeffs[stage, 1] .* k1), prob.p, t_stage)
-      end
-
-      # Higher stages with (in general) two coefficients
-      for stage in 3+alg.NumEvalReduction:alg.NumStages # Here, there are non-zero coeffs in the first column and on sub-diagonal
-        t_stage = integrator.t + integrator.dt * alg.c[stage]
-        integrator.f(kHigher, integrator.u .+ integrator.dt * (alg.ACoeffs[stage, 1] .* k1 + alg.ACoeffs[stage, 2] .* kHigher), prob.p, t_stage)
-      end
-
-      # Final step: Update u (only b_s = 1, other b_i = 0)
-      #integrator.u += integrator.dt * kHigher
-      =#
     end # PERK step
 
     integrator.iter += 1
