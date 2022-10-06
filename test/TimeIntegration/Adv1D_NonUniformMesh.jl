@@ -72,7 +72,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 0.0427
+EndTime = 0.068856907635927 * 1000
 #EndTime = 100
 
 # Create ODEProblem
@@ -101,7 +101,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.0854/2
+dtOptMin = 0.068856907635927/4
 
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
@@ -127,8 +127,8 @@ if findfirst(x -> real(x) > 0, EigVals) != nothing
 end
 EigVals = EigVals[real(EigVals) .< 0]
 
-#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
+#ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 
 plotdata = scatter!(real.(EigVals), imag.(EigVals), label = "Refined discretization")
 
@@ -146,9 +146,9 @@ sol = Trixi.solve(ode, ode_algorithm,
                   #dt = ode_algorithm.dtOptMin,
                   save_everystep=false, callback=callbacks);
 
+pd = PlotData1D(sol)
+plot(sol)
 # Print the timer summary
 summary_callback()
 
-pd = PlotData1D(sol)
-plot(sol)
 plot(getmesh(pd))

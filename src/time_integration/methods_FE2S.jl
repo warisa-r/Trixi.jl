@@ -370,6 +370,17 @@ function solve!(integrator::FE2S_Integrator,
       terminate!(integrator)
     end
 
+    # Hard-code consistent, but not conservative RK
+    #=
+    alg.StagesMax = 2
+    alg.A = zeros(2, 2, 2)
+    alg.A[1, :, :] = [0 0
+                      0.5 0]
+
+    alg.A[2, :, :] = [0 0
+                      0.5 0]
+    =#          
+
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
       # Butcher-Tableau based approach
@@ -400,11 +411,23 @@ function solve!(integrator::FE2S_Integrator,
           integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
           kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
         end
+
+        #=
+        # For hard-coded partitioned RK
+        integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
+        kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
+
+        integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
+        kslow[level_u_indices_elements[2], i] = integrator.du[level_u_indices_elements[2]] * integrator.dt
+        =#
       end
       #display(kfast[:, alg.StagesMax]); println()
       #display(kslow[:, alg.StagesMax]); println()
 
       integrator.u += kfast[:, alg.StagesMax] + kslow[:, alg.StagesMax]
+
+      # For hard-coded partitioned RK
+      #integrator.u += kslow[:, 1] + 0.5 *(kfast[:, 1] + kfast[:, 2])
       
       #=
       integrator.u_tmp = integrator.u
