@@ -22,7 +22,8 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-# Refine mesh locally
+# First refinement
+# Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
@@ -30,8 +31,26 @@ num_leafs = length(LLID)
 @assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
 
-# Update num_leafs:
-num_leafs = length(Trixi.local_leaf_cells(mesh.tree))
+
+# Second refinement
+# Refine mesh locally
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+# Refine right quarter of mesh
+@assert num_leafs % 4 == 0 "Assume even number of leaf nodes/cells"
+Trixi.refine!(mesh.tree, LLID[Int(3*num_leafs/4) : end])
+
+
+# Third refinement
+# Refine mesh locally
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+# Refine right eight of mesh
+@assert num_leafs % 8 == 0 "Assume even number of leaf nodes/cells"
+Trixi.refine!(mesh.tree, LLID[Int(7*num_leafs/8)+1 : end])
+
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
@@ -40,8 +59,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 0.068856907635927 * 100
-#EndTime = 100
+EndTime = 10
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -70,12 +88,9 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
 # Timestep for positive eigenvalue (arises for completely refined mesh) kept
-dtOptMin = 0.068856907635927/2
-#dtOptMin = 0.074401473253965 / 8
+dtOptMin = 0.05/2
 
-# Timestep for positive Eigenvalue (arises for completely refined mesh) removed
-#dtOptMin = 0.086533419042826
-
+#=
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
 A = Matrix(A)
@@ -85,14 +100,17 @@ EigVals = eigvals(Matrix(A), sortby=nothing)
 # Complex conjugate eigenvalues have same modulus
 EigVals = EigVals[imag(EigVals) .>= 0]
 
+
 # Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
 if findfirst(x -> real(x) > 0, EigVals) != nothing
   println("Somewhat erronous spectrum (eigenvalue with positive real part)!")
 end
 EigVals = EigVals[real(EigVals) .< 0]
+=#
+
 
 #ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+ode_algorithm = Trixi.PERK(4, 3, 32, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()

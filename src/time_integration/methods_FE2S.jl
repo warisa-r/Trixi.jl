@@ -381,6 +381,8 @@ function solve!(integrator::FE2S_Integrator,
                       0.5 0]
     =#          
 
+    # TODO: Use this not in the multilevel context, but only throughout the entire domain to showcase optimization
+
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
       # Butcher-Tableau based approach

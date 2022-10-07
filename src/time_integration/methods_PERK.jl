@@ -158,18 +158,12 @@
 
     n_levels = length(cache.level_info_elements)
     level_u_indices_elements     = [Vector{Int}() for _ in 1:n_levels]
-    level_u_indices_elements_acc = [Vector{Int}() for _ in 1:n_levels]
     for level in 1:n_levels
       for element_id in cache.level_info_elements[level]
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
-      for element_id in cache.level_info_elements_acc[level]
-        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
-        append!(level_u_indices_elements_acc[level], indices)
-      end
     end
-
     display(level_u_indices_elements); println()
     
     # initialize callbacks
@@ -184,12 +178,11 @@
       error("unsupported")
     end
   
-    solve!(integrator, level_u_indices_elements, level_u_indices_elements_acc)
+    solve!(integrator, level_u_indices_elements)
   end
   
   function solve!(integrator::PERK_Integrator,
-                  level_u_indices_elements::Vector{Vector{Int64}}, 
-                  level_u_indices_elements_acc::Vector{Vector{Int64}})
+                  level_u_indices_elements::Vector{Vector{Int64}})
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -236,6 +229,7 @@
 
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, CoarsestLevel)
 
+          # Update khigher of relevant levels
           for level in alg.ActiveLevels[stage]
             kHigher[level_u_indices_elements[level]] = integrator.du[level_u_indices_elements[level]] * integrator.dt
           end
