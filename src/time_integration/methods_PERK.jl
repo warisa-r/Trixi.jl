@@ -30,24 +30,34 @@
     end
     println("Timestep-split: "); display(c); println("\n")
   
-    # - 2 Since First entry of A is always zero (explicit method)
-    # and second is given by c (PERK specific)
-    StagesMax = NumStageEvalsMin * 2^NumDoublings -2
+    # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK specific)
+    CoeffsMax = NumStageEvalsMin * 2^NumDoublings - 2
+    StagesMax = CoeffsMax + 2
   
-    ACoeffs = zeros(StagesMax, NumDoublings+1)
+    ACoeffs = zeros(CoeffsMax, NumDoublings+1)
   
-    for i = NumDoublings+1:-1:1
-      PathA = PathAUnknowns * "a" * string(Int(NumStageEvalsMin * 2^(i-1))) * ".txt"
+    ActiveLevels = [Vector{Int}() for _ in 1:StagesMax]
+    # k1 is evaluated at all levels
+    ActiveLevels[1] = 1:NumDoublings+1
+
+    for level = 1:NumDoublings + 1
+      PathA = PathAUnknowns * "a" * string(Int(StagesMax / 2^(level - 1))) * ".txt"
       NumA, A = ReadInFile(PathA, Float64)
-      @assert NumA == NumStageEvalsMin * 2^(i- 1) - 2
-      ACoeffs[StagesMax - (NumStageEvalsMin * 2^(i- 1) - 3):end, i] = A
+      @assert NumA == StagesMax / 2^(level - 1) - 2
+      ACoeffs[CoeffsMax - Int(StagesMax / 2^(level - 1) - 3):end, level] = A
+
+      # Add refinement levels to stages
+      for stage = StagesMax:-1:StagesMax-NumA
+        push!(ActiveLevels[stage], level)
+      end
     end
-    perm = Vector(NumDoublings+1:-1:1)
-    Base.permutecols!!(ACoeffs, perm)
     display(ACoeffs); println()
-  
-    return ACoeffs, c
+    display(ActiveLevels); println()
+
+    return ACoeffs, c, ActiveLevels
   end
+
+  # TODO: Might be cool to compute actual propagation matrix to prove stability
   
   ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
   
@@ -69,6 +79,7 @@
   
     ACoeffs::Matrix{AbstractFloat}
     c::Vector{AbstractFloat}
+    ActiveLevels::Vector{Vector{Int64}}
   
     dtOpt::AbstractFloat
   
@@ -77,7 +88,7 @@
                   PathACoeffs_::AbstractString)
       newPERK = new(NumStageEvalsMin_, NumDoublings_, NumStages_, dtOptMin_)
   
-      newPERK.ACoeffs, newPERK.c = 
+      newPERK.ACoeffs, newPERK.c, newPERK.ActiveLevels = 
         ComputePERK_ButcherTableau(NumStageEvalsMin_, NumDoublings_, NumStages_, PathACoeffs_)
   
       return newPERK
@@ -133,14 +144,34 @@
   function solve(ode::ODEProblem, alg::PERK;
                  dt, callback=nothing, kwargs...)
     u0 = copy(ode.u0)
-    du = similar(u0) # Not used, for compliance with ODE solve
-    u_tmp = similar(u0) # Not used, for compliance with ODE solve
+    du = similar(u0)
+    u_tmp = similar(u0) # TODO: Maybe copy already here (for performance)
     t0 = first(ode.tspan)
     iter = 0
     integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                     (prob=ode,), ode.f, alg,
                     PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false)
-  
+
+    # TODO: Move into solve! when doing AMR, since we have to update this               
+    @unpack mesh, equations, solver, cache = ode.p
+    u = wrap_array(u0, mesh, equations, solver, cache)
+
+    n_levels = length(cache.level_info_elements)
+    level_u_indices_elements     = [Vector{Int}() for _ in 1:n_levels]
+    level_u_indices_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      for element_id in cache.level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+      for element_id in cache.level_info_elements_acc[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements_acc[level], indices)
+      end
+    end
+
+    display(level_u_indices_elements); println()
+    
     # initialize callbacks
     if callback isa CallbackSet
       for cb in callback.continuous_callbacks
@@ -153,10 +184,12 @@
       error("unsupported")
     end
   
-    solve!(integrator)
+    solve!(integrator, level_u_indices_elements, level_u_indices_elements_acc)
   end
   
-  function solve!(integrator::PERK_Integrator)
+  function solve!(integrator::PERK_Integrator,
+                  level_u_indices_elements::Vector{Vector{Int64}}, 
+                  level_u_indices_elements_acc::Vector{Vector{Int64}})
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -178,7 +211,42 @@
   
       # TODO: Try multi-threaded execution as implemented for other integrators!
       @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-  
+        # k1: Evaluated on entire domain / all levels
+        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+        k1 = integrator.du * integrator.dt
+
+        tstage = integrator.t + alg.c[2] * integrator.dt
+        # k2: Usually required for finest level [1]
+        # (Although possible that no scheme has full stage evaluations)
+        integrator.f(integrator.du, integrator.u + alg.c[2] * k1, prob.p, tstage, 1)
+        kHigher = integrator.du * integrator.dt
+
+        for stage = 3:alg.NumStages
+
+          # Construct current state
+          integrator.u_tmp = copy(integrator.u)
+          for level in 1:alg.NumDoublings+1
+             integrator.u_tmp[level_u_indices_elements[level]] += 
+              (alg.c[stage] - alg.ACoeffs[stage - 2, level]) * k1[level_u_indices_elements[level]] + 
+               alg.ACoeffs[stage - 2, level] * kHigher[level_u_indices_elements[level]]
+          end
+
+          tstage = integrator.t + alg.c[stage] * integrator.dt
+          CoarsestLevel = maximum(alg.ActiveLevels[stage])
+
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, CoarsestLevel)
+
+          for level in alg.ActiveLevels[stage]
+            kHigher[level_u_indices_elements[level]] = integrator.du[level_u_indices_elements[level]] * integrator.dt
+          end
+
+        end
+        #display(kfast[:, alg.NumStages]); println()
+        #display(kslow[:, alg.NumStages]); println()
+
+        integrator.u += kHigher
+
+        #=
         # Partitioned RK approach
         kfast = zeros(length(integrator.u), alg.NumStages)
         kslow = zeros(length(integrator.u), alg.NumStages)
@@ -187,49 +255,47 @@
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         kfast[:, 1] = integrator.du * integrator.dt
         kslow[:, 1] = integrator.du * integrator.dt
-  
+
         # k2
-        integrator.f(integrator.du, integrator.u + alg.c[2] .* kfast[:, 1], prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u + alg.c[2] * kfast[:, 1], prob.p, integrator.t)
         kfast[:, 2] = integrator.du * integrator.dt
         kslow[:, 2] = integrator.du * integrator.dt
   
-        # alg.NumStages = 3
         for stage = 1:alg.NumStages - 2
           tmp = copy(integrator.u)
-          
-          # Fine region 
-          tmp[33:96] += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kfast[33:96, 1] 
-                       + alg.ACoeffs[stage, 1] .* kfast[33:96, stage + 1]
 
-          #=
-          tmp[33:96] += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kfast[33:96, 1] 
-                       + alg.ACoeffs[stage, 2] .* kfast[33:96, stage + 2]                       
-  
-          tmp[1:32 ] += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) .* kslow[1:32, 1] 
-                       + alg.ACoeffs[stage, 2] .* kslow[1:32, stage + 1]
-          =#
-          # Testcase: Use same update rule throughout the domain
+          # Fine region
+          tmp[level_u_indices_elements[1]] += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) *
+                                                 kfast[level_u_indices_elements[1], 1] +
+                                                 alg.ACoeffs[stage, 1] * kfast[level_u_indices_elements[1], stage + 1]
 
-          tmp[1:32 ] += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) .* kslow[1:32, 1] 
-                       + alg.ACoeffs[stage, 1] .* kslow[1:32, stage + 1]
+          # Coarse region
+          tmp[level_u_indices_elements[2]] += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) *
+                                              kslow[level_u_indices_elements[2], 1] +
+                                              alg.ACoeffs[stage, 2] .* kslow[level_u_indices_elements[2], stage + 1]
 
-          integrator.f(integrator.du, tmp, prob.p, integrator.t)
-          kfast[:, stage+2] = integrator.du * integrator.dt
-          kslow[:, stage+2] = integrator.du * integrator.dt
+          if stage == 1                         
+            #println(norm(integrator.u))
 
-          #=
+            #println(norm(kfast[level_u_indices_elements[1], 1]))
+            #println(norm(kfast[level_u_indices_elements[1], stage + 1]))
+
+            #println((alg.c[stage+2] - alg.ACoeffs[stage, 1]))
+            #println(alg.ACoeffs[stage, 1])
+
+            println(norm(tmp[level_u_indices_elements[1]]))
+
+            #println(norm(tmp[level_u_indices_elements[2]]))
+            #println(norm(tmp)) 
+          end
           integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
-          kfast[33:96, stage+2] = integrator.du[33:96] * integrator.dt
+          kfast[:, stage+2] = integrator.du * integrator.dt
 
           integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
-          kslow[1:32, stage+2] = integrator.du[1:32] * integrator.dt
-          =#
+          kslow[:, stage+2] = integrator.du * integrator.dt
         end
-        #display(kfast[:, alg.NumStages]); println()
-        #display(kslow[:, alg.NumStages]); println()
-  
-        #integrator.u += kfast[:, alg.NumStages] + kslow[:, alg.NumStages]
-        integrator.u += kfast[:, alg.NumStages]
+        integrator.u += kslow[:, alg.NumStages]
+        =#
       end # PERK step
   
       integrator.iter += 1

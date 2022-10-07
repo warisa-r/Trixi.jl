@@ -349,8 +349,8 @@ function solve(ode::ODEProblem, alg::FE2S;
 end
 
 function solve!(integrator::FE2S_Integrator,
-                level_u_indices_elements::Vector{Vector{Int}}, 
-                level_u_indices_elements_acc::Vector{Vector{Int}})
+                level_u_indices_elements::Vector{Vector{Int64}}, 
+                level_u_indices_elements_acc::Vector{Vector{Int64}})
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan) # Final time

@@ -22,48 +22,16 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-# semidiscretization for non-refined mesh (only for plotting eigenvalues)
-#=
-semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
-A, = linear_structure(semi) # Potentially cheaper than jacobian
-EigVals = eigvals(Matrix(A))
-
-# Complex conjugate eigenvalues have same modulus
-EigVals = EigVals[imag(EigVals) .>= 0]
-
-plotdata = scatter(real.(EigVals), imag.(EigVals), label = "Non-refined discretization")
-=#
-
+# Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
-
-# Refine only one mesh cell
-#Trixi.refine!(mesh.tree, LLID[end])
-
-# Refine right one quarter of mesh
-#@assert num_leafs % 4 == 0
-#Trixi.refine!(mesh.tree, LLID[Int(3 * num_leafs/4)+1 : end])
 
 # Refine right half of mesh
 @assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
 
-# Refine right three quarters of mesh
-#@assert num_leafs % 4 == 0
-#Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : end])
-
-# Refine mesh completely
-#Trixi.refine!(mesh.tree, LLID)
-
 # Update num_leafs:
 num_leafs = length(Trixi.local_leaf_cells(mesh.tree))
-
-#=
-LLID = Trixi.local_leaf_cells(mesh.tree)
-for id in LLID
-  println(Trixi.cell_coordinates(mesh.tree, id))
-end
-=#
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
@@ -72,7 +40,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 0.068856907635927 * 1000
+EndTime = 0.068856907635927 * 100
 #EndTime = 100
 
 # Create ODEProblem
@@ -101,20 +69,16 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.068856907635927/4
+# Timestep for positive eigenvalue (arises for completely refined mesh) kept
+dtOptMin = 0.068856907635927/2
+#dtOptMin = 0.074401473253965 / 8
+
+# Timestep for positive Eigenvalue (arises for completely refined mesh) removed
+#dtOptMin = 0.086533419042826
 
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
 A = Matrix(A)
-#=
-A1, = linear_structure(semi, 1)
-A1 = Matrix(A1)
-A2, = linear_structure(semi, 2)
-A2 = Matrix(A2)
-
-#display(eigvals(A1 + A2))
-@assert(zeros(size(A, 1), size(A, 2)) == A - (A1 + A2))
-=#
 
 #EigVals = eigvals(Matrix(A))
 EigVals = eigvals(Matrix(A), sortby=nothing)
@@ -127,15 +91,8 @@ if findfirst(x -> real(x) > 0, EigVals) != nothing
 end
 EigVals = EigVals[real(EigVals) .< 0]
 
-ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-#ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
-
-plotdata = scatter!(real.(EigVals), imag.(EigVals), label = "Refined discretization")
-
-plotdata = scatter!(real.(ode_algorithm.dtOptMin / dtOptMin * EigVals), 
-                    imag.(ode_algorithm.dtOptMin / dtOptMin * EigVals), label = "Refined & rescaled discretization",
-                    legend=:topleft)
-#display(plotdata)
+#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
+ode_algorithm = Trixi.PERK(6, 1, 12, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
 
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
