@@ -59,13 +59,12 @@
 
   # TODO: Might be cool to compute actual propagation matrix to prove stability
   
-  ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
-  
   """
       PERK()
   
   The following structures and methods provide a minimal implementation of
-  the paired explicit Runge-Kutta method optimized for a certain simulation setup.
+  the paired explicit Runge-Kutta method (https://doi.org/10.1016/j.jcp.2019.05.014)
+  optimized for a certain simulation setup (PDE, IC & BC, Riemann Solver, DG Solver).
   
   This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods_2N.jl" for the
   CarpenterKennedy2N{54, 43} methods.
@@ -93,7 +92,6 @@
   
       return newPERK
     end
-  
   end # struct PERK
   
   
@@ -109,16 +107,20 @@
   function PERK_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
     PERK_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
   end
+
+  # Define this to be able to have a general base-class from which the actual PERK Integrator is derived.
+  # The reason for this are the 7 "type-arguments (?)" required for PERK-Integrator, which are unknown at compile time.
+  # To be able to call a specialized version of ARM, we define this base class.
+  abstract type PERK_IntegratorBase end
   
   # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
   # This implements the interface components described at
   # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
   # which are used in Trixi.
-  mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
+  mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions} <: PERK_IntegratorBase
     u::uType
-    # TODO: Add k1, khigher here?
-    du::uType # Not used, for compliance with ODE solve
-    u_tmp::uType # Not used, for compliance with ODE solve
+    du::uType
+    u_tmp::uType
     t::RealT
     dt::RealT # current time step
     dtcache::RealT # ignored
@@ -129,6 +131,14 @@
     alg::Alg # This is our own class written above; Abbreviation for ALGorithm
     opts::PERK_IntegratorOptions
     finalstep::Bool # added for convenience
+    # PERK stages:
+    k1::uType
+    k_higher::uType
+    # Variables managing level-depending integration
+    level_info_elements_acc::Vector{Vector{Int64}}
+    level_info_interfaces_acc::Vector{Vector{Int64}}
+    level_info_boundaries_acc::Vector{Vector{Int64}}
+    level_u_indices_elements::Vector{Vector{Int64}}
   end
   
   # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
@@ -145,27 +155,149 @@
                  dt, callback=nothing, kwargs...)
     u0 = copy(ode.u0)
     du = similar(u0)
-    u_tmp = similar(u0) # TODO: Maybe copy already here (for performance)
+    u_tmp = similar(u0)
+
+    # PERK stages
+    k1       = similar(u0)
+    k_higher = similar(u0)
+
     t0 = first(ode.tspan)
     iter = 0
-    integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
-                    (prob=ode,), ode.f, alg,
-                    PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false)
 
-    # TODO: Move into solve! when doing AMR, since we have to update this               
-    @unpack mesh, equations, solver, cache = ode.p
+    # Set datastructures for handling of level-dependent integration
+    @unpack mesh, cache = ode.p
+    @unpack elements, interfaces, boundaries = cache
+
+    n_elements   = length(elements.cell_ids)
+    n_interfaces = length(interfaces.orientations)
+    n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
+
+    min_level = minimum_level(mesh.tree)
+    max_level = maximum_level(mesh.tree)
+    n_levels = max_level - min_level + 1
+    println("Current number of levels: ", n_levels)
+
+    # Initialize storage for level-wise information
+    # Set-like datastructures more suited then vectors (Especially for interfaces)
+    level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
+    level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+
+    # Determine level for each element
+    for element_id in 1:n_elements
+      # Determine level
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
+      # Convert to level id
+      level_id = max_level + 1 - level
+
+      push!(level_info_elements[level_id], element_id)
+      # Add to accumulated container
+      for l in level_id:n_levels
+        push!(level_info_elements_acc[l], element_id)
+      end
+    end
+
+    # Use sets first to avoid double storage of interfaces
+    level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+    # Determine level for each interface
+    for interface_id in 1:n_interfaces
+      # Get element ids
+      element_id_left  = interfaces.neighbor_ids[1, interface_id]
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+      # Determine level
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+      # Convert to level id
+      level_id_left  = max_level + 1 - level_left
+      level_id_right = max_level + 1 - level_right
+
+      # Add to accumulated container
+      for l in level_id_left:n_levels
+        push!(level_info_interfaces_set_acc[l], interface_id)
+      end
+      for l in level_id_right:n_levels
+        push!(level_info_interfaces_set_acc[l], interface_id)
+      end
+    end
+
+    # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+    end
+
+
+    # Use sets first to avoid double storage of boundaries
+    level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+    # Determine level for each boundary
+    for boundary_id in 1:n_boundaries
+      # Get element ids
+      element_id_left  = boundaries.neighbor_ids[1, boundary_id]
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+      # Determine level
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+      # Convert to level id
+      level_id_left  = max_level + 1 - level_left
+      level_id_right = max_level + 1 - level_right
+
+      # Add to accumulated container
+      for l in level_id_left:n_levels
+        push!(level_info_boundaries_set_acc[l], surface_id)
+      end
+      for l in level_id_right:n_levels
+        push!(level_info_boundaries_set_acc[l], surface_id)
+      end
+    end
+
+    # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
+    end
+
+    println("n_elements: ", n_elements)
+    println("\nn_interfaces: ", n_interfaces)
+  
+    println("level_info_elements:")
+    display(level_info_elements); println()
+    println("level_info_elements_acc:")
+    display(level_info_elements_acc); println()
+  
+    println("level_info_interfaces_acc:")
+    display(level_info_interfaces_acc); println()
+  
+    println("level_info_boundaries_acc:")
+    display(level_info_boundaries_acc); println()
+  
+    
+    # Set initial distribution of DG Base function coefficients 
+    @unpack equations, solver = ode.p
     u = wrap_array(u0, mesh, equations, solver, cache)
 
-    n_levels = length(cache.level_info_elements)
-    level_u_indices_elements     = [Vector{Int}() for _ in 1:n_levels]
+    n_levels = length(level_info_elements)
+    level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
     for level in 1:n_levels
-      for element_id in cache.level_info_elements[level]
+      for element_id in level_info_elements[level]
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
     end
     display(level_u_indices_elements); println()
-    
+
+
+    integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+                  (prob=ode,), ode.f, alg,
+                  PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                  k1, k_higher, 
+                  level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
+                  level_u_indices_elements)
+
+    println(typeof(integrator))
+
     # initialize callbacks
     if callback isa CallbackSet
       for cb in callback.continuous_callbacks
@@ -178,11 +310,10 @@
       error("unsupported")
     end
   
-    solve!(integrator, level_u_indices_elements)
+    solve!(integrator)
   end
   
-  function solve!(integrator::PERK_Integrator,
-                  level_u_indices_elements::Vector{Vector{Int64}})
+  function solve!(integrator::PERK_Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -200,96 +331,46 @@
         terminate!(integrator)
       end
   
-      # one time step
-  
       # TODO: Try multi-threaded execution as implemented for other integrators!
       @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        k1 = integrator.du * integrator.dt
+        integrator.k1 = integrator.du * integrator.dt
 
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2: Usually required for finest level [1]
         # (Although possible that no scheme has full stage evaluations)
-        integrator.f(integrator.du, integrator.u + alg.c[2] * k1, prob.p, tstage, 1)
-        kHigher = integrator.du * integrator.dt
+        #integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 1)
+        integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
+                     integrator.level_info_elements_acc[1],
+                     integrator.level_info_interfaces_acc[1],
+                     integrator.level_info_boundaries_acc[1])
+        integrator.k_higher = integrator.du * integrator.dt
 
         for stage = 3:alg.NumStages
 
           # Construct current state
           integrator.u_tmp = copy(integrator.u)
-          for level in 1:alg.NumDoublings+1
-             integrator.u_tmp[level_u_indices_elements[level]] += 
-              (alg.c[stage] - alg.ACoeffs[stage - 2, level]) * k1[level_u_indices_elements[level]] + 
-               alg.ACoeffs[stage - 2, level] * kHigher[level_u_indices_elements[level]]
+          for level in eachindex(integrator.level_u_indices_elements)
+             integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
+              (alg.c[stage] - alg.ACoeffs[stage - 2, level]) * integrator.k1[integrator.level_u_indices_elements[level]] + 
+               alg.ACoeffs[stage - 2, level] * integrator.k_higher[integrator.level_u_indices_elements[level]]
           end
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
           CoarsestLevel = maximum(alg.ActiveLevels[stage])
+          # Joint RHS evaluation with all elements sharing this timestep
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
+                       integrator.level_info_elements_acc[CoarsestLevel],
+                       integrator.level_info_interfaces_acc[CoarsestLevel],
+                       integrator.level_info_boundaries_acc[CoarsestLevel])
 
-          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, CoarsestLevel)
-
-          # Update khigher of relevant levels
+          # Update k_higher of relevant levels
           for level in alg.ActiveLevels[stage]
-            kHigher[level_u_indices_elements[level]] = integrator.du[level_u_indices_elements[level]] * integrator.dt
+            integrator.k_higher[integrator.level_u_indices_elements[level]] = integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
           end
-
         end
-        #display(kfast[:, alg.NumStages]); println()
-        #display(kslow[:, alg.NumStages]); println()
-
-        integrator.u += kHigher
-
-        #=
-        # Partitioned RK approach
-        kfast = zeros(length(integrator.u), alg.NumStages)
-        kslow = zeros(length(integrator.u), alg.NumStages)
-  
-        # k1
-        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        kfast[:, 1] = integrator.du * integrator.dt
-        kslow[:, 1] = integrator.du * integrator.dt
-
-        # k2
-        integrator.f(integrator.du, integrator.u + alg.c[2] * kfast[:, 1], prob.p, integrator.t)
-        kfast[:, 2] = integrator.du * integrator.dt
-        kslow[:, 2] = integrator.du * integrator.dt
-  
-        for stage = 1:alg.NumStages - 2
-          tmp = copy(integrator.u)
-
-          # Fine region
-          tmp[level_u_indices_elements[1]] += (alg.c[stage+2] - alg.ACoeffs[stage, 1]) *
-                                                 kfast[level_u_indices_elements[1], 1] +
-                                                 alg.ACoeffs[stage, 1] * kfast[level_u_indices_elements[1], stage + 1]
-
-          # Coarse region
-          tmp[level_u_indices_elements[2]] += (alg.c[stage+2] - alg.ACoeffs[stage, 2]) *
-                                              kslow[level_u_indices_elements[2], 1] +
-                                              alg.ACoeffs[stage, 2] .* kslow[level_u_indices_elements[2], stage + 1]
-
-          if stage == 1                         
-            #println(norm(integrator.u))
-
-            #println(norm(kfast[level_u_indices_elements[1], 1]))
-            #println(norm(kfast[level_u_indices_elements[1], stage + 1]))
-
-            #println((alg.c[stage+2] - alg.ACoeffs[stage, 1]))
-            #println(alg.ACoeffs[stage, 1])
-
-            println(norm(tmp[level_u_indices_elements[1]]))
-
-            #println(norm(tmp[level_u_indices_elements[2]]))
-            #println(norm(tmp)) 
-          end
-          integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
-          kfast[:, stage+2] = integrator.du * integrator.dt
-
-          integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
-          kslow[:, stage+2] = integrator.du * integrator.dt
-        end
-        integrator.u += kslow[:, alg.NumStages]
-        =#
+        integrator.u += integrator.k_higher
       end # PERK step
   
       integrator.iter += 1
@@ -299,6 +380,7 @@
       if callbacks isa CallbackSet
         for cb in callbacks.discrete_callbacks
           if cb.condition(integrator.u, integrator.t, integrator)
+            #println(typeof(cb))
             cb.affect!(integrator)
           end
         end

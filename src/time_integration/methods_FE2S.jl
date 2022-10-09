@@ -132,7 +132,7 @@ function ComputeFE2S_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoE
 
   # Compatibility condition (https://link.springer.com/article/10.1007/BF01395956)
   println("Sum of ForwardEuleWeight and b1, b2 pairs:")
-  display(transpose(ForwardEulerWeights) .+ sum(b1, dims=1) .+ sum(b2, dims=1)); println()
+  display(transpose(ForwardEulerWeights) + sum(b1, dims=1) + sum(b2, dims=1)); println()
 
   return ForwardEulerWeights, a, b1, b2, c
 end
@@ -399,8 +399,8 @@ function solve!(integrator::FE2S_Integrator,
 
         # Partitioned Runge-Kutta approach: One state that contains updates from all levels
         for j = 1:i-1
-          tmp += alg.A[1, i, j] .* kfast[:, j] + alg.A[2, i, j] .* kslow[:, j]
-          #tmp += alg.A[1, i, j] .* kfast[:, j] + alg.A[1, i, j] .* kslow[:, j]
+          tmp += alg.A[1, i, j] * kfast[:, j] + alg.A[2, i, j] * kslow[:, j]
+          #tmp += alg.A[1, i, j] * kfast[:, j] + alg.A[1, i, j] * kslow[:, j]
         end
 
         if i in alg.CommonStages
