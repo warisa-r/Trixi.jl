@@ -107,17 +107,12 @@
   function PERK_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
     PERK_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
   end
-
-  # Define this to be able to have a general base-class from which the actual PERK Integrator is derived.
-  # The reason for this are the 7 "type-arguments (?)" required for PERK-Integrator, which are unknown at compile time.
-  # To be able to call a specialized version of ARM, we define this base class.
-  abstract type PERK_IntegratorBase end
   
   # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
   # This implements the interface components described at
   # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
   # which are used in Trixi.
-  mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions} <: PERK_IntegratorBase
+  mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
     u::uType
     du::uType
     u_tmp::uType
@@ -278,7 +273,6 @@
     @unpack equations, solver = ode.p
     u = wrap_array(u0, mesh, equations, solver, cache)
 
-    n_levels = length(level_info_elements)
     level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
     for level in 1:n_levels
       for element_id in level_info_elements[level]
@@ -295,8 +289,6 @@
                   k1, k_higher, 
                   level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
                   level_u_indices_elements)
-
-    println(typeof(integrator))
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -358,6 +350,9 @@
           end
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
+
+          # TODO: "ActiveLevels" cannot be static any longer, has to be checked with 
+          # available levels
           CoarsestLevel = maximum(alg.ActiveLevels[stage])
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
@@ -380,8 +375,9 @@
       if callbacks isa CallbackSet
         for cb in callbacks.discrete_callbacks
           if cb.condition(integrator.u, integrator.t, integrator)
-            #println(typeof(cb))
+            println("Callback true")
             cb.affect!(integrator)
+            display(integrator.level_u_indices_elements); println()
           end
         end
       end
@@ -421,6 +417,9 @@
     resize!(integrator.u, new_size)
     resize!(integrator.du, new_size)
     resize!(integrator.u_tmp, new_size)
+
+    resize!(integrator.k1, new_size)
+    resize!(integrator.k_higher, new_size)
   end
   
   end # @muladd

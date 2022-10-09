@@ -479,7 +479,7 @@ end
 
 function prolong2interfaces!(cache, u,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG, 
-                            level_info_interfaces_acc::Vector{Int64})
+                             level_info_interfaces_acc::Vector{Int64})
   @unpack interfaces = cache
 
   # TODO: Not sure if you can do this that easy for multiple levels
