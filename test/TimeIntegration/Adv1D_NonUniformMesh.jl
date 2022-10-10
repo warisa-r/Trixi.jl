@@ -12,8 +12,8 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 PolyDegree = 3
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max =  1.0 # maximum coordinate
+coordinates_min = -5.0 # minimum coordinate
+coordinates_max =  5.0 # maximum coordinate
 
 InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
@@ -21,7 +21,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
-
+#=
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -50,16 +50,19 @@ num_leafs = length(LLID)
 # Refine right eight of mesh
 @assert num_leafs % 8 == 0 "Assume even number of leaf nodes/cells"
 Trixi.refine!(mesh.tree, LLID[Int(7*num_leafs/8)+1 : end])
+=#
 
+#initial_condition = initial_condition_convergence_test
+initial_condition = initial_condition_gauss
 
 # A semidiscretization collects data structures and functions for the spatial discretization
-semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
+semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 10
+EndTime = 100
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -72,15 +75,24 @@ summary_callback = SummaryCallback()
 analysis_callback = AnalysisCallback(semi, interval=100, extra_analysis_errors=(:conservation_error,))
 
 # The SaveSolutionCallback allows to save the solution to a file in regular intervals
+#=
 save_solution = SaveSolutionCallback(interval=100,
                                      solution_variables=cons2prim)
-
+=#
 # The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl=1.0)
+#stepsize_callback = StepsizeCallback(cfl=1.0)
+
+amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable=first),
+                                      base_level=4,
+                                      med_level=5, med_threshold=0.1,
+                                      max_level=6, max_threshold=0.6)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=5,
+                           adapt_initial_condition=false) # Adaption of initial condition not yet supported
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-#callbacks = CallbackSet(summary_callback, analysis_callback, save_solution, stepsize_callback)
-callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
+#callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback, stepsize_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
 
 ###############################################################################
 # run the simulation
@@ -88,7 +100,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
 # Timestep for positive eigenvalue (arises for completely refined mesh) kept
-dtOptMin = 0.05/2
+dtOptMin = 0.05/2 * 5
 
 #=
 #A = jacobian_ad_forward(semi)

@@ -351,9 +351,9 @@
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
 
-          # TODO: "ActiveLevels" cannot be static any longer, has to be checked with 
-          # available levels
-          CoarsestLevel = maximum(alg.ActiveLevels[stage])
+          # "ActiveLevels" cannot be static any longer, has to be checked with available levels
+          CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
+                                  length(integrator.level_info_elements_acc)])
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
                        integrator.level_info_elements_acc[CoarsestLevel],
@@ -361,7 +361,7 @@
                        integrator.level_info_boundaries_acc[CoarsestLevel])
 
           # Update k_higher of relevant levels
-          for level in alg.ActiveLevels[stage]
+          for level in 1:CoarsestLevel
             integrator.k_higher[integrator.level_u_indices_elements[level]] = integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
           end
         end
@@ -375,9 +375,7 @@
       if callbacks isa CallbackSet
         for cb in callbacks.discrete_callbacks
           if cb.condition(integrator.u, integrator.t, integrator)
-            println("Callback true")
             cb.affect!(integrator)
-            display(integrator.level_u_indices_elements); println()
           end
         end
       end

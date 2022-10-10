@@ -16,7 +16,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
       resize!(integrator, length(u_ode))
       u_modified!(integrator, true)
 
-      println("AMR Call")
       mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
       @unpack elements, interfaces, boundaries = cache
 
@@ -123,16 +122,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
   end
 
   return has_changed
-end
-
-
-# Custom implementation for PERK integrator
-@inline function (amr_callback::AMRCallback)(u_ode::AbstractVector,
-                                             semi::SemidiscretizationHyperbolic,
-                                             t, iter; kwargs...)                                            
-  # Note that we don't `wrap_array` the vector `u_ode` to be able to `resize!`
-  # it when doing AMR while still dispatching on the `mesh` etc.
-  amr_callback(u_ode, mesh_equations_solver_cache(semi)..., semi, t, iter; kwargs...)
 end
 
 end # @muladd
