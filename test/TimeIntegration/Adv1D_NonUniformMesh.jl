@@ -12,8 +12,8 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 PolyDegree = 3
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
-coordinates_min = -5.0 # minimum coordinate
-coordinates_max =  5.0 # maximum coordinate
+coordinates_min = -1.0 # minimum coordinate
+coordinates_max =  1.0 # maximum coordinate
 
 InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
@@ -21,15 +21,15 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
-#=
+
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
-# Refine right half of mesh
-@assert num_leafs % 2 == 0 "Assume even number of leaf nodes/cells"
-Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
+# Refine right 3 quarters of mesh
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : end])
 
 
 # Second refinement
@@ -37,23 +37,22 @@ Trixi.refine!(mesh.tree, LLID[Int(num_leafs/2)+1 : end])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
-# Refine right quarter of mesh
-@assert num_leafs % 4 == 0 "Assume even number of leaf nodes/cells"
-Trixi.refine!(mesh.tree, LLID[Int(3*num_leafs/4) : end])
+# Refine third quarter to ensure we have only transitions from coarse->medium->fine
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 
-
+#=
 # Third refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
-# Refine right eight of mesh
-@assert num_leafs % 8 == 0 "Assume even number of leaf nodes/cells"
-Trixi.refine!(mesh.tree, LLID[Int(7*num_leafs/8)+1 : end])
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 =#
 
-#initial_condition = initial_condition_convergence_test
-initial_condition = initial_condition_gauss
+initial_condition = initial_condition_convergence_test
+#initial_condition = initial_condition_gauss
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -62,7 +61,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 100
+#EndTime = 0.0
+EndTime = 1
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -82,6 +82,7 @@ save_solution = SaveSolutionCallback(interval=100,
 # The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
 #stepsize_callback = StepsizeCallback(cfl=1.0)
 
+#=
 amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable=first),
                                       base_level=4,
                                       med_level=5, med_threshold=0.1,
@@ -89,40 +90,36 @@ amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable=first),
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
                            adapt_initial_condition=false) # Adaption of initial condition not yet supported
+=#
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 #callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback, stepsize_callback)
-callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+#callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-# Timestep for positive eigenvalue (arises for completely refined mesh) kept
-dtOptMin = 0.05/2 * 5
+#dtOptMin = 0.05
+dtOptMin = 1
 
-#=
 #A = jacobian_ad_forward(semi)
 A, = linear_structure(semi)
 A = Matrix(A)
 
-#EigVals = eigvals(Matrix(A))
-EigVals = eigvals(Matrix(A), sortby=nothing)
+Eigenvalues = eigvals(Matrix(A))
 # Complex conjugate eigenvalues have same modulus
-EigVals = EigVals[imag(EigVals) .>= 0]
-
+Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
 
 # Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-if findfirst(x -> real(x) > 0, EigVals) != nothing
-  println("Somewhat erronous spectrum (eigenvalue with positive real part)!")
-end
-EigVals = EigVals[real(EigVals) .< 0]
-=#
-
+#Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
 
 #ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-ode_algorithm = Trixi.PERK(4, 3, 32, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+ode_algorithm = Trixi.PERK(4, 2, 2, dtOptMin, 
+                           "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/", 
+                           A, Eigenvalues)
 
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
