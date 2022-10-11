@@ -56,20 +56,21 @@
     ActiveLevels[1] = 1:NumDoublings+1
 
     for level = 1:NumDoublings + 1
+      #=
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
-      # TODO: Not sure if I not rather want to read-in values from Ipopt...
-      #=
+      =#
+
+
+      # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      =#
+
 
       ACoeffs[CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, level] = A
-
       # Add refinement levels to stages
       for stage = NumStages:-1:NumStages-NumMonCoeffs
         push!(ActiveLevels[stage], level)
@@ -81,100 +82,6 @@
     return ACoeffs, c, ActiveLevels
   end
 
-  # TODO: Probably not correct, see e.g. this https://epubs.siam.org/doi/pdf/10.1137/100787234 paper
-  function ComputeAmpMatrix(NumStages::Int64,
-                            level_u_indices_elements::Vector{Vector{Int64}},
-                            c::Vector{<:Real}, ACoeffs::Matrix{<:Real},
-                            A::Matrix{<:Real}, dt::Real)
-    dtA = dt * A                       
-    AmpMat = I + dtA
-
-    dtA *= dt * A
-    AmpMat += 0.5 * dtA
-
-    for level in 1:length(level_u_indices_elements)
-      LevelInds = level_u_indices_elements[level] # Create shortcut
-
-      dtA_ACoeff = dtA
-      LevelAmpMat = zeros(size(AmpMat, 1), size(AmpMat, 2))
-      for stage in NumStages - 2:-1:Int(NumStages - NumStages / (2^(level - 1)) + 1)
-        SEFactor = c[stage + 1]
-
-        # Perform matrix multiplication "as a whole" (no splitting with sub-steps)
-        dtA_ACoeff *= dt * A
-
-        # Multiply A now with coefficients "on-the-fly" to stay at moderate magnitudes
-        dtA_ACoeff *= ACoeffs[stage, level]
-
-        # Effectively add monomial
-        LevelAmpMat[:, LevelInds] += SEFactor * dtA[:, LevelInds]
-      end
-      AmpMat[:, LevelInds] = LevelAmpMat[:, LevelInds]
-    end
-
-    eigs = eigvals(AmpMat)
-    SpectralRadius = maximum(abs.(eigs))
-
-    return SpectralRadius
-  end
-
-    # Not useful - too unstable in itself to be used
-  function ComputeStabPnom(NumStages::Int64, level::Int,
-                           c::Vector{<:Real}, ACoeffs::Matrix{<:Real},
-                           EigenValues::Vector{<:Complex}, dt::Real)
-    
-    MAP = 0.0                            
-    for EigenValue in EigenValues
-      EigenValueScaled = dt * EigenValue
-
-      StabPnom  = 1 + EigenValueScaled 
-
-      EigenValueScaled *= dt * EigenValue
-      StabPnom += 0.5 * EigenValueScaled
-
-      for stage in NumStages - 2:-1:Int(NumStages - NumStages / (2^(level - 1)) + 1)
-        SEFactor = c[stage + 1]
-
-        EigenValueScaled *= dt * EigenValue * ACoeffs[stage, level]
-
-        StabPnom += SEFactor * EigenValueScaled
-      end
-
-      if abs(StabPnom) > MAP
-        MAP = abs(StabPnom)
-      end
-    end
-
-    return MAP
-  end
-
-  function CheckStabilityPartitionedMethod(NumStages::Int64, 
-                                           level_u_indices_elements::Vector{Vector{Int64}},
-                                           c::Vector{<:Real}, ACoeffs::Matrix{<:Real},
-                                           A::Matrix{<:Real}, EigenValues::Vector{Complex},
-                                           dtMax_::Real)
-   
-    dtMax = dtMax_
-    dtMin = 0
-    dtEps = 1e-9
-    while dtMax - dtMin > dtEps
-      dt = 0.5 * (dtMax + dtMin)
-  
-      Criterion = ComputeAmpMatrix(NumStages, level_u_indices_elements,
-                                   c, ACoeffs, A, dt)
-
-      #Criterion = ComputeStabPnom(NumStages, 1, c, ACoeffs, EigenValues, dt)
-
-      #if Criterion > 1
-      if Criterion - 1.0 >= eps(Float64)
-        dtMax = dt
-      else
-        dtMin = dt
-      end
-    end
-  
-    return dtMin
-  end
 
   """
       PERK()
@@ -196,18 +103,11 @@
     ACoeffs::Matrix{Real}
     c::Vector{Real}
     ActiveLevels::Vector{Vector{Int64}}
-  
-    # Maximum actually stable (for partitioned Runge-Kutta) timestep
-    dtOpt::Real
 
-    # For testing stability of partitioned method
-    A::Matrix{Real}
-    EigenValues::Vector{Complex}
   
     # Constructor for previously computed A Coeffs
     function PERK(NumStageEvalsMin_::Int, NumDoublings_::Int, ConsOrder_::Int,
-                  dtOptMin_::Real, BasePathMonCoeffs_::AbstractString,
-                  A_::Matrix{<:Real}, EigenValues_::Vector{<:Complex})
+                  dtOptMin_::Real, BasePathMonCoeffs_::AbstractString)
 
       newPERK = new(NumStageEvalsMin_, NumDoublings_,
                     # Current convention: NumStages = MaxStages = S;
@@ -216,9 +116,6 @@
   
       newPERK.ACoeffs, newPERK.c, newPERK.ActiveLevels = 
         ComputePERK_ButcherTableau(NumDoublings_, newPERK.NumStages, ConsOrder_, BasePathMonCoeffs_)
-  
-      newPERK.A = A_
-      newPERK.EigenValues = EigenValues_
 
       return newPERK
     end
@@ -297,10 +194,10 @@
     n_interfaces = length(interfaces.orientations)
     n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
 
+
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
     n_levels = max_level - min_level + 1
-
 
     # Initialize storage for level-wise information
     # Set-like datastructures more suited then vectors (Especially for interfaces)
@@ -360,7 +257,7 @@
     for boundary_id in 1:n_boundaries
       # Get element ids
       element_id_left  = boundaries.neighbor_ids[1, boundary_id]
-      element_id_right = interfaces.neighbor_ids[2, interface_id]
+      element_id_right = boundaries.neighbor_ids[2, boundary_id]
 
       # Determine level
       level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
@@ -372,10 +269,10 @@
 
       # Add to accumulated container
       for l in level_id_left:n_levels
-        push!(level_info_boundaries_set_acc[l], surface_id)
+        push!(level_info_boundaries_set_acc[l], boundary_id)
       end
       for l in level_id_right:n_levels
-        push!(level_info_boundaries_set_acc[l], surface_id)
+        push!(level_info_boundaries_set_acc[l], boundary_id)
       end
     end
 
@@ -384,6 +281,7 @@
     for level in 1:n_levels
       level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
     end
+
 
     println("n_elements: ", n_elements)
     println("\nn_interfaces: ", n_interfaces)
@@ -398,7 +296,7 @@
   
     println("level_info_boundaries_acc:")
     display(level_info_boundaries_acc); println()
-  
+    
     
     # Set initial distribution of DG Base function coefficients 
     @unpack equations, solver = ode.p
@@ -413,14 +311,80 @@
     end
     display(level_u_indices_elements); println()
 
+
+    #=
+    # CARE: Hard-coded "artificial" mesh splitting in two halves
+    @assert n_elements % 2 == 0
+    level_info_elements = [Vector(1:Int(n_elements/2)), Vector(Int(n_elements/2)+1:n_elements)]
+    level_info_elements_acc = [Vector(1:Int(n_elements/2)), Vector(1:n_elements)]
+
+    level_info_interfaces_acc = [Vector(1:Int(n_elements/2)), Vector(1:n_elements)]
+    append!(level_info_interfaces_acc[1], n_elements)
+
+    level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+
+    println("level_info_elements:")
+    display(level_info_elements); println()
+    println("level_info_elements_acc:")
+    display(level_info_elements_acc); println()
+  
+    println("level_info_interfaces_acc:")
+    display(level_info_interfaces_acc); println()
+  
+    println("level_info_boundaries_acc:")
+    display(level_info_boundaries_acc); println()
+
+    # Set initial distribution of DG Base function coefficients 
+    @unpack equations, solver = ode.p
+    u = wrap_array(u0, mesh, equations, solver, cache)
+    level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+    for level in 1:length(level_info_elements)
+      for element_id in level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+    display(level_u_indices_elements); println()
+    =#
+
+    #=
+    # CARE: Hard-coded "artificial" mesh splitting to check 
+    # whether integrating slow elements on boundaries to fast region helps 
+    @assert n_elements % 2 == 0
+    level_info_elements = [Vector(4:n_elements), [2, 3]]
+    append!(level_info_elements[1], 1)
+    level_info_elements_acc = [level_info_elements[1], Vector(1:n_elements)]
+
+    level_info_interfaces_acc = [Vector(3:n_elements), Vector(1:n_elements)]
+    append!(level_info_interfaces_acc[1], 1)
+
+    level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+
+    println("level_info_elements:")
+    display(level_info_elements); println()
+    println("level_info_elements_acc:")
+    display(level_info_elements_acc); println()
+  
+    println("level_info_interfaces_acc:")
+    display(level_info_interfaces_acc); println()
+  
+    println("level_info_boundaries_acc:")
+    display(level_info_boundaries_acc); println()
+
+    # Set initial distribution of DG Base function coefficients 
+    @unpack equations, solver = ode.p
+    u = wrap_array(u0, mesh, equations, solver, cache)
+    level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+    for level in 1:length(level_info_elements)
+      for element_id in level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+    display(level_u_indices_elements); println()
+    =#
+
     ### Done with setting up for handling of level-dependent integration ###
-    
-    # Check maximum stable dt
-    println("Maximum supplied timestep for partitioned RK is: ", dt)
-    dt = CheckStabilityPartitionedMethod(alg.NumStages, level_u_indices_elements,
-                                         alg.c, alg.ACoeffs, alg.A, alg.EigenValues, dt)
-                                         
-    println("Maximum stable timestep for partitioned RK is: ", dt)
 
     integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                   (prob=ode,), ode.f, alg,
@@ -481,6 +445,7 @@
 
           # Construct current state
           integrator.u_tmp = copy(integrator.u)
+
           for level in eachindex(integrator.level_u_indices_elements)
              integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
               (alg.c[stage] - alg.ACoeffs[stage - 2, level]) *
@@ -507,6 +472,33 @@
           end
         end
         integrator.u += integrator.k_higher
+
+        #TODO: Implement fall-back for case where there are more levels, but only one integrator!
+
+        #=
+        # k1: Evaluated on entire domain / all levels
+        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+        integrator.k1 = integrator.du * integrator.dt
+
+        tstage = integrator.t + alg.c[2] * integrator.dt
+        # k2: Usually required for finest level [1]
+        # (Although possible that no scheme has full stage evaluations)
+        integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage)
+        integrator.k_higher = integrator.du * integrator.dt
+
+        for stage = 3:alg.NumStages
+          # Construct current state
+          integrator.u_tmp = integrator.u + (alg.c[stage] - alg.ACoeffs[stage - 2, 1]) * 
+                              integrator.k1 + alg.ACoeffs[stage - 2, 1] * integrator.k_higher
+
+          tstage = integrator.t + alg.c[stage] * integrator.dt
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage)
+
+          # Update k_higher of relevant levels
+          integrator.k_higher = integrator.du * integrator.dt
+        end
+        integrator.u += integrator.k_higher
+        =#
       end # PERK step
   
       integrator.iter += 1
