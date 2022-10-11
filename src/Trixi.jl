@@ -156,7 +156,9 @@ export initial_condition_constant,
        initial_condition_weak_blast_wave,
        initial_condition_entropy_wave,
        initial_condition_acoustic_wave,
-       initial_condition_rest
+       initial_condition_rest,
+       initial_condition_shock,
+       initial_condition_rarefaction
 
 export boundary_condition_periodic,
        BoundaryConditionDirichlet,

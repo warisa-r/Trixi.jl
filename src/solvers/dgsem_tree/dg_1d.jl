@@ -31,6 +31,14 @@ function create_cache(mesh::TreeMesh{1}, equations,
 end
 
 
+# The methods below are specialized on the volume integral type
+# and called from the basic `create_cache` method at the top.
+function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}}, equations,
+                      volume_integral::VolumeIntegralFluxDifferencing, dg::DG, uEltype)
+  NamedTuple()
+end
+
+
 # TODO: Adapt for adaptive / staged ODE solvers
 function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}}, equations,
                       volume_integral::VolumeIntegralShockCapturingHG, dg::DG, uEltype)
@@ -57,13 +65,6 @@ function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}},
   fstar1_R_threaded = A2dp1_x[A2dp1_x(undef, nvariables(equations), nnodes(dg)+1) for _ in 1:Threads.nthreads()]
 
   return (; fstar1_L_threaded, fstar1_R_threaded)
-end
-
-
-# The methods below are specialized on the mortar type
-# and called from the basic `create_cache` method at the top.
-function create_cache(mesh::Union{TreeMesh{1}, StructuredMesh{1}, P4estMesh{1}}, equations, mortar_l2::LobattoLegendreMortarL2, uEltype)
-  NamedTuple()
 end
 
 
