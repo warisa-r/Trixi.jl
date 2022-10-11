@@ -84,7 +84,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
       for boundary_id in 1:n_boundaries
         # Get element ids
         element_id_left  = boundaries.neighbor_ids[1, boundary_id]
-        element_id_right = interfaces.neighbor_ids[2, interface_id]
+        element_id_right = boundaries.neighbor_ids[2, boundary_id]
   
         # Determine level
         level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
@@ -96,10 +96,10 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
   
         # Add to accumulated container
         for l in level_id_left:n_levels
-          push!(level_info_boundaries_set_acc[l], surface_id)
+          push!(level_info_boundaries_set_acc[l], boundary_id)
         end
         for l in level_id_right:n_levels
-          push!(level_info_boundaries_set_acc[l], surface_id)
+          push!(level_info_boundaries_set_acc[l], boundary_id)
         end
       end
   

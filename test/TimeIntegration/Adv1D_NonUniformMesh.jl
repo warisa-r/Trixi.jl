@@ -10,7 +10,9 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
 PolyDegree = 3
-solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
+
+surface_flux = flux_lax_friedrichs
+solver = DGSEM(polydeg=PolyDegree, surface_flux=surface_flux)
 
 coordinates_min = -1.0 # minimum coordinate
 coordinates_max =  1.0 # maximum coordinate
@@ -22,6 +24,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
+      
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -31,7 +34,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : end])
 
-
+#=
 # Second refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -41,7 +44,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 
-#=
+
 # Third refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -61,8 +64,12 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 0.0
-EndTime = 1
+#EndTime = 25 * rand()
+#=
+EndTime  = 100 * 0.057 * 2.0
+EndTime += 0.5 * 0.057 * 2.0
+=#
+EndTime  = 100 * rand() * 0.057 * 2.0
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -76,7 +83,7 @@ analysis_callback = AnalysisCallback(semi, interval=100, extra_analysis_errors=(
 
 # The SaveSolutionCallback allows to save the solution to a file in regular intervals
 #=
-save_solution = SaveSolutionCallback(interval=100,
+save_solution = SaveSolutionCallback(interval=1,
                                      solution_variables=cons2prim)
 =#
 # The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
@@ -95,6 +102,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 #callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback, stepsize_callback)
 #callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
@@ -102,28 +110,16 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-#dtOptMin = 0.05
-dtOptMin = 1
+dtOptMin = 0.057 * 2.0
 
-#A = jacobian_ad_forward(semi)
-A, = linear_structure(semi)
-A = Matrix(A)
-
-Eigenvalues = eigvals(Matrix(A))
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-#Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/", A)
-ode_algorithm = Trixi.PERK(4, 2, 2, dtOptMin, 
-                           "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/", 
-                           A, Eigenvalues)
+#ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
+ode_algorithm = Trixi.PERK(16, 1, 2, dtOptMin, 
+                           "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
 
 #exit()
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
+
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   dt = dtOptMin,
