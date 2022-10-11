@@ -213,9 +213,8 @@ mutable struct FE2S
   A::Array{Float64} # Butcher Tableaus
 
   # Constructor for previously computed A Coeffs
-  function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, PathPseudoExtrema_::AbstractString, 
-                # TODO: A: Only for testing
-                A_::Matrix{Float64})
+  function FE2S(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, 
+                PathPseudoExtrema_::AbstractString)
     newFE2S = new(StagesMin_, NumDoublings_, StagesMin_ * 2^NumDoublings_, 
                   Int((StagesMin_ * 2^NumDoublings_ - 2)/2), dtOptMin_)
 
@@ -287,6 +286,11 @@ mutable struct FE2S_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, FE2S_Int
   alg::Alg # This is our own class written above; Abbreviation for ALGorithm
   opts::FE2S_IntegratorOptions
   finalstep::Bool # added for convenience
+  # Variables managing level-depending integration
+  level_info_elements_acc::Vector{Vector{Int64}}
+  level_info_interfaces_acc::Vector{Vector{Int64}}
+  level_info_boundaries_acc::Vector{Vector{Int64}}
+  level_u_indices_elements::Vector{Vector{Int64}}
 end
 
 # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
@@ -304,33 +308,144 @@ function solve(ode::ODEProblem, alg::FE2S;
   u0 = copy(ode.u0) # Initial value
   du = similar(u0)
   u_tmp = similar(u0)
-  t0 = first(ode.tspan) # Initial time
-  iter = 0 # We are in first iteration
+
+  t0 = first(ode.tspan)
+  iter = 0
+
+  ### Set datastructures for handling of level-dependent integration ###
+  @unpack mesh, cache = ode.p
+  @unpack elements, interfaces, boundaries = cache
+
+  n_elements   = length(elements.cell_ids)
+  n_interfaces = length(interfaces.orientations)
+  n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
+
+
+  min_level = minimum_level(mesh.tree)
+  max_level = maximum_level(mesh.tree)
+  n_levels = max_level - min_level + 1
+
+  # Initialize storage for level-wise information
+  # Set-like datastructures more suited then vectors (Especially for interfaces)
+  level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+
+  # Determine level for each element
+  for element_id in 1:n_elements
+    # Determine level
+    level = mesh.tree.levels[elements.cell_ids[element_id]]
+    # Convert to level id
+    level_id = max_level + 1 - level
+
+    push!(level_info_elements[level_id], element_id)
+    # Add to accumulated container
+    for l in level_id:n_levels
+      push!(level_info_elements_acc[l], element_id)
+    end
+  end
+
+
+  # Use sets first to avoid double storage of interfaces
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # Determine level for each interface
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Determine level
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+    # Convert to level id
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
+
+    # Add to accumulated container
+    for l in level_id_left:n_levels
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+    for l in level_id_right:n_levels
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+  end
+
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+
+
+  # Use sets first to avoid double storage of boundaries
+  level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # Determine level for each boundary
+  for boundary_id in 1:n_boundaries
+    # Get element ids
+    element_id_left  = boundaries.neighbor_ids[1, boundary_id]
+    element_id_right = boundaries.neighbor_ids[2, boundary_id]
+
+    # Determine level
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+    # Convert to level id
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
+
+    # Add to accumulated container
+    for l in level_id_left:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+    for l in level_id_right:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+  end
+
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
+  end
+
+
+  println("n_elements: ", n_elements)
+  println("\nn_interfaces: ", n_interfaces)
+
+  println("level_info_elements:")
+  display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
+
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
+
+  println("level_info_boundaries_acc:")
+  display(level_info_boundaries_acc); println()
+  
+  
+  # Set initial distribution of DG Base function coefficients 
+  @unpack equations, solver = ode.p
+  u = wrap_array(u0, mesh, equations, solver, cache)
+
+  level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    for element_id in level_info_elements[level]
+      indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+      append!(level_u_indices_elements[level], indices)
+    end
+  end
+  display(level_u_indices_elements); println()
+
+
   integrator = FE2S_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, 
                  ode.p, # the semidiscretization
                  (prob=ode,), # Not really sure whats going on here
                  ode.f, # the right-hand-side of the ODE u' = f(u, p, t)
                  alg, # The ODE integration algorithm/method
-                 FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false)
-
-  # Get indices in u of DoF of elements on different levels
-  # TODO: Move into solve! when doing AMR, since we have to update this               
-  @unpack mesh, equations, solver, cache = ode.p
-  u = wrap_array(u0, mesh, equations, solver, cache)
-
-  n_levels = length(cache.level_info_elements)
-  level_u_indices_elements     = [Vector{Int}() for _ in 1:n_levels]
-  level_u_indices_elements_acc = [Vector{Int}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    for element_id in cache.level_info_elements[level]
-      indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
-      append!(level_u_indices_elements[level], indices)
-    end
-    for element_id in cache.level_info_elements_acc[level]
-      indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
-      append!(level_u_indices_elements_acc[level], indices)
-    end
-  end
+                 FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                 level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
+                 level_u_indices_elements)
 
   # initialize callbacks
   if callback isa CallbackSet
@@ -345,12 +460,11 @@ function solve(ode::ODEProblem, alg::FE2S;
   end
 
   # TODO: Not really elegant way, maybe try to bundle 'indices' datastructures into 'integrator' 
-  solve!(integrator, level_u_indices_elements, level_u_indices_elements_acc)
+  solve!(integrator, level_u_indices_elements)
 end
 
 function solve!(integrator::FE2S_Integrator,
-                level_u_indices_elements::Vector{Vector{Int64}}, 
-                level_u_indices_elements_acc::Vector{Vector{Int64}})
+                level_u_indices_elements::Vector{Vector{Int64}})
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan) # Final time
@@ -410,7 +524,10 @@ function solve!(integrator::FE2S_Integrator,
           kslow[level_u_indices_elements[2], i] = integrator.du[level_u_indices_elements[2]] * integrator.dt
         else
           # Evaluate only fine level
-          integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
+          integrator.f(integrator.du, tmp, prob.p, integrator.t,
+                       integrator.level_info_elements_acc[1],
+                       integrator.level_info_interfaces_acc[1],
+                       integrator.level_info_boundaries_acc[1])
           kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
         end
 
