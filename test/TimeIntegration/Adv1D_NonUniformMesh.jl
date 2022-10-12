@@ -11,8 +11,7 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
 PolyDegree = 3
 
-surface_flux = flux_lax_friedrichs
-solver = DGSEM(polydeg=PolyDegree, surface_flux=surface_flux)
+solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
 coordinates_min = -1.0 # minimum coordinate
 coordinates_max =  1.0 # maximum coordinate
@@ -24,7 +23,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-      
+#=  
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -34,7 +33,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : end])
 
-#=
+  
 # Second refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -64,12 +63,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 25 * rand()
-#=
-EndTime  = 100 * 0.057 * 2.0
-EndTime += 0.5 * 0.057 * 2.0
-=#
-EndTime  = 100 * rand() * 0.057 * 2.0
+EndTime = 100
+
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -110,10 +105,12 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.057 * 2.0
+dtOptMin = 0.057 * 8
+# For s = 4
+#dtOptMin = 0.0545
 
 #ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
-ode_algorithm = Trixi.PERK(16, 1, 2, dtOptMin, 
+ode_algorithm = Trixi.PERK(32, 0, 2, dtOptMin, 
                            "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
 
 #exit()
@@ -126,9 +123,14 @@ sol = Trixi.solve(ode, ode_algorithm,
                   #dt = ode_algorithm.dtOptMin,
                   save_everystep=false, callback=callbacks);
 
-pd = PlotData1D(sol)
-plot(sol)
 # Print the timer summary
 summary_callback()
+
+pd = PlotData1D(sol)
+plot(sol)
+
+x = range(-1, 1; length = 100)
+y = 1 .+ 0.5*sinpi.(x)
+plot!(x, y)
 
 plot(getmesh(pd))

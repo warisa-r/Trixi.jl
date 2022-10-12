@@ -56,6 +56,7 @@
     ActiveLevels[1] = 1:NumDoublings+1
 
     for level = 1:NumDoublings + 1
+      
       #=
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
@@ -63,12 +64,12 @@
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
       =#
 
-
+      
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-
+      
 
       ACoeffs[CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, level] = A
       # Add refinement levels to stages
@@ -194,7 +195,7 @@
     n_interfaces = length(interfaces.orientations)
     n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
 
-
+    
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
     n_levels = max_level - min_level + 1
@@ -310,7 +311,7 @@
       end
     end
     display(level_u_indices_elements); println()
-
+    
 
     #=
     # CARE: Hard-coded "artificial" mesh splitting in two halves
@@ -415,6 +416,7 @@
     callbacks = integrator.opts.callback
   
     integrator.finalstep = false
+
     @trixi_timeit timer() "main loop" while !integrator.finalstep
       if isnan(integrator.dt)
         error("time step size `dt` is NaN")
@@ -436,18 +438,18 @@
         # k2: Usually required for finest level [1]
         # (Although possible that no scheme has full stage evaluations)
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
-                     integrator.level_info_elements_acc[1],
-                     integrator.level_info_interfaces_acc[1],
-                     integrator.level_info_boundaries_acc[1])
+                    integrator.level_info_elements_acc[1],
+                    integrator.level_info_interfaces_acc[1],
+                    integrator.level_info_boundaries_acc[1])
         integrator.k_higher = integrator.du * integrator.dt
 
         for stage = 3:alg.NumStages
-
           # Construct current state
           integrator.u_tmp = copy(integrator.u)
 
+          #TODO: Implement fall-back for case where there are more levels, but only one integrator!
           for level in eachindex(integrator.level_u_indices_elements)
-             integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
+            integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
               (alg.c[stage] - alg.ACoeffs[stage - 2, level]) *
                 integrator.k1[integrator.level_u_indices_elements[level]] + 
               alg.ACoeffs[stage - 2, level] * 
@@ -461,9 +463,9 @@
                                   length(integrator.level_info_elements_acc)])
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
-                       integrator.level_info_elements_acc[CoarsestLevel],
-                       integrator.level_info_interfaces_acc[CoarsestLevel],
-                       integrator.level_info_boundaries_acc[CoarsestLevel])
+                      integrator.level_info_elements_acc[CoarsestLevel],
+                      integrator.level_info_interfaces_acc[CoarsestLevel],
+                      integrator.level_info_boundaries_acc[CoarsestLevel])
 
           # Update k_higher of relevant levels
           for level in 1:CoarsestLevel
@@ -472,33 +474,6 @@
           end
         end
         integrator.u += integrator.k_higher
-
-        #TODO: Implement fall-back for case where there are more levels, but only one integrator!
-
-        #=
-        # k1: Evaluated on entire domain / all levels
-        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        integrator.k1 = integrator.du * integrator.dt
-
-        tstage = integrator.t + alg.c[2] * integrator.dt
-        # k2: Usually required for finest level [1]
-        # (Although possible that no scheme has full stage evaluations)
-        integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage)
-        integrator.k_higher = integrator.du * integrator.dt
-
-        for stage = 3:alg.NumStages
-          # Construct current state
-          integrator.u_tmp = integrator.u + (alg.c[stage] - alg.ACoeffs[stage - 2, 1]) * 
-                              integrator.k1 + alg.ACoeffs[stage - 2, 1] * integrator.k_higher
-
-          tstage = integrator.t + alg.c[stage] * integrator.dt
-          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage)
-
-          # Update k_higher of relevant levels
-          integrator.k_higher = integrator.du * integrator.dt
-        end
-        integrator.u += integrator.k_higher
-        =#
       end # PERK step
   
       integrator.iter += 1
