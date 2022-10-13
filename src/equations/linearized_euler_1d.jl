@@ -33,7 +33,7 @@ mutable struct LinearizedEulerEquations1D{RealT<:Real} <: LinearizedEulerEquatio
 
     newLinEuler1D = new{typeof(rho_0)}(rho_0, v_0, c_0)
 
-    # Compute solution (numerically)
+    # Compute analytical solution (numerically)
     EigDecomp = eigen([v_0 rho_0 0; 0 v_0 1.0/rho_0; 0 c_0^2*rho_0 v_0])
     newLinEuler1D.EigVals   = EigDecomp.values
     newLinEuler1D.EigVecMat = EigDecomp.vectors
@@ -73,6 +73,11 @@ end
 @inline have_constant_speed(::LinearizedEulerEquations1D) = Val(true) # I see no reason why they should not have constant speed
 
 @inline function max_abs_speed_naive(u_ll, u_rr, orientation::Integer, equations::LinearizedEulerEquations1D)
+  (; v_0, c_0) = equations
+  return abs(v_0) + c_0 # Maximum eigenvalue in absolute sense
+end
+
+@inline function max_abs_speeds(equations::LinearizedEulerEquations1D)
   (; v_0, c_0) = equations
   return abs(v_0) + c_0 # Maximum eigenvalue in absolute sense
 end
@@ -121,7 +126,7 @@ function initial_condition_entropy_wave(x, t, equations::LinearizedEulerEquation
   # Parameters
   alpha = 1.0
   beta  = 250.0
-  center = 1.0
+  center = 0.5
 
   rho_prime = alpha * exp(-beta * (x[1] - center)^2)
   v_prime   = 0.0
@@ -134,7 +139,7 @@ function initial_condition_char_vars_entropy_wave(x, p::Int, equations::Lineariz
   # Parameters
   alpha = 1.0
   beta  = 250.0
-  center = 1.0
+  center = 0.5
 
   return equations.EigVecMatInv[p,:]' * [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))]
 end
@@ -143,7 +148,7 @@ function initial_condition_acoustic_wave(x, t, equations::LinearizedEulerEquatio
   # Parameters
   alpha     = 1.0
   beta      = 250.0
-  center    = 1.0
+  center    = 0.5
   Direction = -1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp(-beta * (x[1] - center)^2)
@@ -159,7 +164,7 @@ function initial_condition_char_vars_acoustic_wave(x, p::Int, equations::Lineari
   # Parameters
   alpha = 1.0
   beta  = 250.0
-  center = 1.0
+  center = 0.5
   Direction = -1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp.(-beta * (x .- center).^2)
@@ -173,7 +178,7 @@ function initial_condition_custom(x, t, equations::LinearizedEulerEquations1D)
   # Parameters
   alpha     = 1.0
   beta      = 250.0
-  center    = 1.0
+  center    = 0.5
   Direction = 1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp(-beta * (x[1] - center)^2)
@@ -189,7 +194,7 @@ function initial_condition_char_vars_custom(x, p::Int, equations::LinearizedEule
   # Parameters
   alpha = 1.0
   beta  = 250.0
-  center = 1.0
+  center = 0.5
   Direction = 1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp.(-beta * (x .- center).^2)

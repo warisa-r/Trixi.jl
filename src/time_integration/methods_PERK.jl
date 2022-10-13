@@ -7,7 +7,7 @@
 @muladd begin
 
   function ReadInFile(FilePath::AbstractString, DataType::Type)
-    @assert isfile(FilePath)
+    @assert isfile(FilePath) "Couldn't find file"
     Data = zeros(DataType, 0)
     open(FilePath, "r") do File
       while !eof(File)     
@@ -57,19 +57,18 @@
 
     for level = 1:NumDoublings + 1
       
-      #=
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
-      =#
-
       
+
+      #=
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
-      PathMonCoeffs = BasePathMonCoeffs * "a" * string(Int(NumStages / 2^(level - 1))) * ".txt"
+      PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      
+      =#
 
       ACoeffs[CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, level] = A
       # Add refinement levels to stages
