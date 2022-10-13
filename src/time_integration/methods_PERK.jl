@@ -160,6 +160,7 @@
     level_info_elements_acc::Vector{Vector{Int64}}
     level_info_interfaces_acc::Vector{Vector{Int64}}
     level_info_boundaries_acc::Vector{Vector{Int64}}
+    level_info_mortars_acc::Vector{Vector{Int64}}
     level_u_indices_elements::Vector{Vector{Int64}}
   end
   
@@ -217,6 +218,7 @@
         push!(level_info_elements_acc[l], element_id)
       end
     end
+    @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
 
 
     # Use sets first to avoid double storage of interfaces
@@ -249,6 +251,7 @@
     for level in 1:n_levels
       level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
     end
+    @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
 
     # Use sets first to avoid double storage of boundaries
@@ -281,6 +284,40 @@
     for level in 1:n_levels
       level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
     end
+    @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
+
+    level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+
+    dimensions = ndims(mesh.tree) # Spatial dimension
+
+    if dimensions > 1
+      # Determine level for each mortar
+      # Since mortars belong by definition to two levels, theoretically we have to
+      # add them twice: Once for each level of its neighboring elements. However,
+      # as we store the accumulated mortar ids, we only need to consider the one of
+      # the small neighbors (here: the lower one), is it has the higher level and
+      # thus the lower level id.
+
+      @unpack mortars = cache
+      n_mortars = length(mortars.orientations)
+
+      for mortar_id in 1:n_mortars
+        # Get element ids
+        element_id_lower = mortars.neighbor_ids[1, mortar_id]
+
+        # Determine level
+        level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+
+        # Convert to level id
+        level_id_lower = max_level + 1 - level_lower
+
+        # Add to accumulated container
+        for l in level_id_lower:n_levels
+          push!(level_info_mortars_acc[l], mortar_id)
+        end
+      end
+      @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
+    end
 
 
     println("n_elements: ", n_elements)
@@ -296,6 +333,9 @@
   
     println("level_info_boundaries_acc:")
     display(level_info_boundaries_acc); println()
+
+    println("level_info_mortars_acc:")
+    display(level_info_mortars_acc); println()
     
     
     # Set initial distribution of DG Base function coefficients 
@@ -303,10 +343,21 @@
     u = wrap_array(u0, mesh, equations, solver, cache)
 
     level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
-    for level in 1:n_levels
-      for element_id in level_info_elements[level]
-        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
-        append!(level_u_indices_elements[level], indices)
+
+    # Have if outside for performance reasons (this is also used in the AMR calls)
+    if dimensions == 1
+      for level in 1:n_levels
+        for element_id in level_info_elements[level]
+          indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+          append!(level_u_indices_elements[level], indices)
+        end
+      end
+    elseif dimensions == 2
+      for level in 1:n_levels
+        for element_id in level_info_elements[level]
+          indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
+          append!(level_u_indices_elements[level], indices)
+        end
       end
     end
     display(level_u_indices_elements); println()
@@ -391,7 +442,7 @@
                   PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
                   k1, k_higher, 
                   level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
-                  level_u_indices_elements)
+                  level_info_mortars_acc, level_u_indices_elements)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -439,7 +490,8 @@
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
                     integrator.level_info_elements_acc[1],
                     integrator.level_info_interfaces_acc[1],
-                    integrator.level_info_boundaries_acc[1])
+                    integrator.level_info_boundaries_acc[1],
+                    integrator.level_info_mortars_acc[1])
         integrator.k_higher = integrator.du * integrator.dt
 
         for stage = 3:alg.NumStages
@@ -464,7 +516,8 @@
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
                       integrator.level_info_elements_acc[CoarsestLevel],
                       integrator.level_info_interfaces_acc[CoarsestLevel],
-                      integrator.level_info_boundaries_acc[CoarsestLevel])
+                      integrator.level_info_boundaries_acc[CoarsestLevel],
+                      integrator.level_info_mortars_acc[CoarsestLevel])
 
           # Update k_higher of relevant levels
           for level in 1:CoarsestLevel

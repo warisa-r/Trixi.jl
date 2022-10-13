@@ -124,7 +124,8 @@ function rhs!(du, u, t,
               #= solver =# dg::DG, cache, 
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
-              level_info_boundaries_acc::Vector{Int64})     
+              level_info_boundaries_acc::Vector{Int64},
+              level_info_mortars_acc::Vector{Int64})
   # Reset du
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 
@@ -188,7 +189,8 @@ function calc_volume_integral!(du, u,
                                mesh::TreeMesh{1},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralWeakForm,
-                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64})
+                               dg::DGSEM, cache, 
+                               level_info_elements_acc::Vector{Int64})
 
   @threaded for element in level_info_elements_acc
     weak_form_kernel!(du, u, element, mesh,
@@ -236,7 +238,8 @@ function calc_volume_integral!(du, u,
                                mesh::TreeMesh{1},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralFluxDifferencing,
-                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64})
+                               dg::DGSEM, cache, 
+                               level_info_elements_acc::Vector{Int64})
                     
   @threaded for element in level_info_elements_acc
     split_form_kernel!(du, u, element, mesh, nonconservative_terms, equations,
@@ -304,7 +307,7 @@ end
 end
 
 
-# TODO: Adapt for adaptive / staged ODE solvers
+# TODO: Adapt for adaptive / staged ODE solvers (PERK)
 # TODO: Taal dimension agnostic
 function calc_volume_integral!(du, u,
                                mesh::Union{TreeMesh{1}, StructuredMesh{1}},
@@ -479,7 +482,7 @@ function prolong2interfaces!(cache, u,
 end
 
 function prolong2interfaces!(cache, u,
-                             mesh::TreeMesh{1}, equations, surface_integral, dg::DG, 
+                             mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
                              level_info_interfaces_acc::Vector{Int64})
   @unpack interfaces = cache
 
@@ -530,12 +533,13 @@ end
 function calc_interface_flux!(surface_flux_values,
                               mesh::TreeMesh{1},
                               nonconservative_terms::Val{false}, equations,
-                              surface_integral, dg::DG, cache, level_info_interfaces_acc::Vector{Int64})
+                              surface_integral, dg::DG, cache, 
+                              level_info_interfaces_acc::Vector{Int64})
   @unpack surface_flux = surface_integral
   @unpack u, neighbor_ids, orientations = cache.interfaces
 
   @threaded for interface in level_info_interfaces_acc
-    # TODO: Not sure if this can be done for multiple levels - maybe check if elements are of same level...
+    # TODO: Not sure if this can be done for multiple levels
     # Get neighboring elements
     left_id  = neighbor_ids[1, interface]
     right_id = neighbor_ids[2, interface]
@@ -601,7 +605,8 @@ end
 function calc_interface_flux!(surface_flux_values,
                               mesh::TreeMesh{1},
                               nonconservative_terms::Val{true}, equations,
-                              surface_integral, dg::DG, cache, level_info_interfaces_acc::Vector{Int64})
+                              surface_integral, dg::DG, cache, 
+                              level_info_interfaces_acc::Vector{Int64})
   surface_flux, nonconservative_flux = surface_integral.surface_flux
   @unpack u, neighbor_ids, orientations = cache.interfaces
 
@@ -663,6 +668,7 @@ function prolong2boundaries!(cache, u,
   return nothing
 end
 
+# TODO: Probably not working yet (never tested)
 function prolong2boundaries!(cache, u,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG, 
                              level_info_boundaries_acc::Vector{Int64})
@@ -696,6 +702,7 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
 end
 
 # TODO: Taal dimension agnostic
+# TODO: Probably not working yet
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
                              level_info_elements_acc::Vector{Int64}, 
@@ -883,11 +890,11 @@ function apply_jacobian!(du, mesh::Union{TreeMesh{1}, StructuredMesh{1}},
 end
 
 function apply_jacobian!(du, mesh::Union{TreeMesh{1}, StructuredMesh{1}},
-                         equations, dg::DG, cache, level_info_elements_acc::Vector{Int64})
+                         equations, dg::DG, cache, 
+                         level_info_elements_acc::Vector{Int64})
 
   @threaded for element in level_info_elements_acc
     factor = -cache.elements.inverse_jacobian[element]
-
     for i in eachnode(dg)
       for v in eachvariable(equations)
         du[v, i, element] *= factor
@@ -907,7 +914,8 @@ end
 
 # TODO: Taal dimension agnostic
 function calc_sources!(du, u, t, source_terms::Nothing,
-                       equations::AbstractEquations{1}, dg::DG, cache, level_info_elements_acc::Vector{Int64})
+                       equations::AbstractEquations{1}, dg::DG, cache, 
+                       level_info_elements_acc::Vector{Int64})
   return nothing
 end
 
@@ -927,7 +935,8 @@ function calc_sources!(du, u, t, source_terms,
 end
 
 function calc_sources!(du, u, t, source_terms,
-                       equations::AbstractEquations{1}, dg::DG, cache, level_info_elements_acc::Vector{Int64})
+                       equations::AbstractEquations{1}, dg::DG, cache, 
+                       level_info_elements_acc::Vector{Int64})
 
   @threaded for element in level_info_elements_acc
     for i in eachnode(dg)

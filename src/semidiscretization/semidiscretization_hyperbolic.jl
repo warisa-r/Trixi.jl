@@ -308,7 +308,8 @@ end
 function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t, 
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
-              level_info_boundaries_acc::Vector{Int64})
+              level_info_boundaries_acc::Vector{Int64},
+              level_info_mortars_acc::Vector{Int64})
   @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
 
   u  = wrap_array(u_ode,  mesh, equations, solver, cache)
@@ -319,7 +320,8 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t,
   # Call "rhs!" of the corresponding solver
   @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, 
                                     source_terms, solver, cache, 
-                                    level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc)
+                                    level_info_elements_acc, level_info_interfaces_acc, 
+                                    level_info_boundaries_acc, level_info_mortars_acc)
   runtime = time_ns() - time_start
   put!(semi.performance_counter, runtime)
 

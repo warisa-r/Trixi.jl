@@ -272,6 +272,7 @@ const MeshesDGSEM = Union{TreeMesh, StructuredMesh, UnstructuredMesh2D, P4estMes
 @inline ndofs(mesh::MeshesDGSEM, dg::DG, cache) = nelements(cache.elements) * nnodes(dg)^ndims(mesh)
 
 # TODO: Taal performance, 1:nnodes(dg) vs. Base.OneTo(nnodes(dg)) vs. SOneTo(nnodes(dg)) for DGSEM
+# Returns number of nodes per element, not of entire simulation
 @inline eachnode(dg::DG) = Base.OneTo(nnodes(dg)) # Returns range of indices, not the objects itself!
 @inline nnodes(dg::DG)   = nnodes(dg.basis)
 
