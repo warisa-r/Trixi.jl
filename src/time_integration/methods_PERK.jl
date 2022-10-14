@@ -233,6 +233,8 @@
       level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
       level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
+      # TODO: Here one could try to add neighbors of fine cells to also fine integrator
+
       # Convert to level id
       level_id_left  = max_level + 1 - level_left
       level_id_right = max_level + 1 - level_right
@@ -256,7 +258,6 @@
 
     # Use sets first to avoid double storage of boundaries
     level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
-    level_info_boundaries_set = [Set{Int}() for _ in 1:n_levels]
     # Determine level for each boundary
     for boundary_id in 1:n_boundaries
       # Get element ids
@@ -471,8 +472,6 @@
   
     integrator.finalstep = false
 
-    SSPStep = false
-
     @trixi_timeit timer() "main loop" while !integrator.finalstep
       if isnan(integrator.dt)
         error("time step size `dt` is NaN")
@@ -513,80 +512,57 @@
         end
         integrator.u += integrator.k_higher
         =#
-        #=
-        if SSPStep
-          println("SSP step")
-          SSPStep = false
 
-          # Heuristic to ensure this is a stable timestep. 
-          # If Heun where optimal, one could multiply with a factor 2 here - but it is most likely not.
-          dt = integrator.dt / (2 * alg.NumStages)
-          
-          # k1
-          integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-          integrator.k1 = integrator.du * dt
+        # k1: Evaluated on entire domain / all levels
+        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+        integrator.k1 = integrator.du * integrator.dt
 
-          # k2
-          integrator.f(integrator.du, integrator.u + integrator.k1, prob.p, integrator.t + dt)
-          integrator.k_higher = integrator.du * dt
+        tstage = integrator.t + alg.c[2] * integrator.dt
+        # k2: Usually required for finest level [1]
+        # (Although possible that no scheme has full stage evaluations)
+        integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
+                    integrator.level_info_elements_acc[1],
+                    integrator.level_info_interfaces_acc[1],
+                    integrator.level_info_boundaries_acc[1],
+                    integrator.level_info_mortars_acc[1])
 
-          integrator.u += 0.5 * (integrator.k1 + integrator.k_higher)
-          integrator.t += dt
-        else
-          println("PERK step")
-          SSPStep = true
-          =#
-          # k1: Evaluated on entire domain / all levels
-          integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-          integrator.k1 = integrator.du * integrator.dt
+        integrator.k_higher = integrator.du * integrator.dt
+        
+        for stage = 3:alg.NumStages
+          # Construct current state
+          integrator.u_tmp = copy(integrator.u)
 
-          tstage = integrator.t + alg.c[2] * integrator.dt
-          # k2: Usually required for finest level [1]
-          # (Although possible that no scheme has full stage evaluations)
-          integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
-                      integrator.level_info_elements_acc[1],
-                      integrator.level_info_interfaces_acc[1],
-                      integrator.level_info_boundaries_acc[1],
-                      integrator.level_info_mortars_acc[1])
-
-          integrator.k_higher = integrator.du * integrator.dt
-          
-          for stage = 3:alg.NumStages
-            # Construct current state
-            integrator.u_tmp = copy(integrator.u)
-
-            #TODO: Implement fall-back for case when number of available integrators and mesh-partitions not match
-            for level in eachindex(integrator.level_u_indices_elements)
-              integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
-                (alg.c[stage] - alg.ACoeffs[stage - 2, level]) *
-                  integrator.k1[integrator.level_u_indices_elements[level]] + 
-                alg.ACoeffs[stage - 2, level] * 
-                  integrator.k_higher[integrator.level_u_indices_elements[level]] 
-            end
-
-            tstage = integrator.t + alg.c[stage] * integrator.dt
-
-            # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
-            CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
-                                    length(integrator.level_info_elements_acc)])
-                                  
-            # Joint RHS evaluation with all elements sharing this timestep
-            integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
-                        integrator.level_info_elements_acc[CoarsestLevel],
-                        integrator.level_info_interfaces_acc[CoarsestLevel],
-                        integrator.level_info_boundaries_acc[CoarsestLevel],
-                        integrator.level_info_mortars_acc[CoarsestLevel])
-
-            # Update k_higher of relevant levels
-            for level in 1:CoarsestLevel
-              integrator.k_higher[integrator.level_u_indices_elements[level]] = 
-                integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
-            end
+          #TODO: Implement fall-back for case when number of available integrators and mesh-partitions not match
+          for level in eachindex(integrator.level_u_indices_elements)
+            integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
+              (alg.c[stage] - alg.ACoeffs[stage - 2, level]) *
+                integrator.k1[integrator.level_u_indices_elements[level]] + 
+              alg.ACoeffs[stage - 2, level] * 
+                integrator.k_higher[integrator.level_u_indices_elements[level]] 
           end
-          
-          integrator.u += integrator.k_higher
-          integrator.t += integrator.dt
-        #end
+
+          tstage = integrator.t + alg.c[stage] * integrator.dt
+
+          # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
+          CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
+                                  length(integrator.level_info_elements_acc)])
+                                
+          # Joint RHS evaluation with all elements sharing this timestep
+          integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
+                      integrator.level_info_elements_acc[CoarsestLevel],
+                      integrator.level_info_interfaces_acc[CoarsestLevel],
+                      integrator.level_info_boundaries_acc[CoarsestLevel],
+                      integrator.level_info_mortars_acc[CoarsestLevel])
+
+          # Update k_higher of relevant levels
+          for level in 1:CoarsestLevel
+            integrator.k_higher[integrator.level_u_indices_elements[level]] = 
+              integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
+          end
+        end
+        
+        integrator.u += integrator.k_higher
+        integrator.t += integrator.dt
       end # PERK step
   
       integrator.iter += 1
