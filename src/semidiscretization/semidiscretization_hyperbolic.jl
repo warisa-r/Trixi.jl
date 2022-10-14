@@ -318,10 +318,10 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t,
   # TODO: Taal decide, do we need to pass the mesh?
   time_start = time_ns()
   # Call "rhs!" of the corresponding solver
-  @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, 
-                                    source_terms, solver, cache, 
-                                    level_info_elements_acc, level_info_interfaces_acc, 
-                                    level_info_boundaries_acc, level_info_mortars_acc)
+  @trixi_timeit timer() "rhs! level dependent" rhs!(du, u, t, mesh, equations, initial_condition, boundary_conditions, 
+                                                    source_terms, solver, cache, 
+                                                    level_info_elements_acc, level_info_interfaces_acc, 
+                                                    level_info_boundaries_acc, level_info_mortars_acc)
   runtime = time_ns() - time_start
   put!(semi.performance_counter, runtime)
 
