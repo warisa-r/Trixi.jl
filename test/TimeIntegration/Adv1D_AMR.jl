@@ -13,8 +13,8 @@ PolyDegree = 3
 
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max =  1.0 # maximum coordinate
+coordinates_min = -5.0 # minimum coordinate
+coordinates_max =  5.0 # maximum coordinate
 
 InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
@@ -23,40 +23,9 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-#=
-# First refinement
-# Refine mesh locally 
-LLID = Trixi.local_leaf_cells(mesh.tree)
-num_leafs = length(LLID)
-
-# Refine right 3 quarters of mesh
-@assert num_leafs % 4 == 0
-Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
 
 
-# Second refinement
-# Refine mesh locally
-LLID = Trixi.local_leaf_cells(mesh.tree)
-num_leafs = length(LLID)
-
-@assert num_leafs % 4 == 0
-# Refine third quarter to ensure we have only transitions from coarse->medium->fine
-Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
-
-# For testing: Have transition: Coarse -> Fine (without medium in between - bot supported by Trixi)
-#Trixi.refine!(mesh.tree, LLID[5 : Int(3*num_leafs/4)])
-
-
-# Third refinement
-# Refine mesh locally
-LLID = Trixi.local_leaf_cells(mesh.tree)
-num_leafs = length(LLID)
-
-Trixi.refine!(mesh.tree, LLID[18 : 22])
-=#
-
-initial_condition = initial_condition_convergence_test
-#initial_condition = initial_condition_gauss
+initial_condition = initial_condition_gauss
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -65,7 +34,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 100
+EndTime = 10
+EndTime = 10 + rand() * 5
 
 
 # Create ODEProblem
@@ -78,33 +48,42 @@ summary_callback = SummaryCallback()
 # The AnalysisCallback allows to analyse the solution in regular intervals and prints the results
 analysis_callback = AnalysisCallback(semi, interval=100, extra_analysis_errors=(:conservation_error,))
 
-# The SaveSolutionCallback allows to save the solution to a file in regular intervals
-#=
-save_solution = SaveSolutionCallback(interval=1,
-                                     solution_variables=cons2prim)
-=#
 # The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
 #stepsize_callback = StepsizeCallback(cfl=1.0)
 
-# Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-#callbacks = CallbackSet(summary_callback, analysis_callback, stepsize_callback)
-#callbacks = CallbackSet(summary_callback, analysis_callback)
 
-callbacks = CallbackSet(summary_callback, analysis_callback)
+amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable=first),
+                                      base_level=4,
+                                      med_level=4, med_threshold=0.1,
+                                      max_level=6, max_threshold=0.6)
+
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=5,
+                           adapt_initial_condition=false) # Adaption of initial condition not yet supported
+
+# Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
+callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+
+
+#callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
 
-dtOptMin = 0.05 * 1
+#ode_algorithm = Trixi.CarpenterKennedy2N54()
+
+dtOptMin = 0.05 * 5
 # For s = 4
 #dtOptMin = 0.0545
+# For s > 4
+#dtOptMin = 0.0577
 
-#ode_algorithm = FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
-ode_algorithm = PERK(4, 0, 2, dtOptMin, 
+#dtOptMin = 2.73437500e-02 / 2 * 5
+
+
+ode_algorithm = Trixi.PERK(4, 2, 2, dtOptMin, 
                            "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
                            #"/home/daniel/Desktop/git/MA/Optim_Roots/IpOPT_dco/Feas_Reals/")
-
-
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   dt = dtOptMin,
@@ -113,13 +92,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
-#plot(sol)
-
 pd = PlotData1D(sol)
-plot(getmesh(pd))
-plot!(sol)
+plot(sol, plot_title = EndTime)
 
-# Analytical solution at T = 100
-x = range(-1, 1; length = 100)
-y = 1 .+ 0.5*sinpi.(x)
-plot!(x, y)
+plot!(getmesh(pd))

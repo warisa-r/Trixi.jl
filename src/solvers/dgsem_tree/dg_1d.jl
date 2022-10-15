@@ -127,7 +127,7 @@ function rhs!(du, u, t,
               level_info_boundaries_acc::Vector{Int64},
               level_info_mortars_acc::Vector{Int64})
   # Reset du
-  @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
+  @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
 
   # Calculate volume integral
   @trixi_timeit timer() "volume integral" calc_volume_integral!(
@@ -486,7 +486,6 @@ function prolong2interfaces!(cache, u,
                              level_info_interfaces_acc::Vector{Int64})
   @unpack interfaces = cache
 
-  # TODO: Not sure if you can do this that easy for multiple levels
   @threaded for interface in level_info_interfaces_acc
     left_element  = interfaces.neighbor_ids[1, interface]
     right_element = interfaces.neighbor_ids[2, interface]
@@ -535,6 +534,7 @@ function calc_interface_flux!(surface_flux_values,
                               nonconservative_terms::Val{false}, equations,
                               surface_integral, dg::DG, cache, 
                               level_info_interfaces_acc::Vector{Int64})
+
   @unpack surface_flux = surface_integral
   @unpack u, neighbor_ids, orientations = cache.interfaces
 

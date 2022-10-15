@@ -87,7 +87,8 @@ CharVars = zeros(3, N_plot)
 visnodes = range(StartTime, EndTime, length=400)
 
 
-ode_algorithm = SSPRK22()
+#ode_algorithm = SSPRK22()
+ode_algorithm = CarpenterKennedy2N54(williamson_condition=false)
 sol = solve(ode, ode_algorithm,
             dt=42, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, saveat=visnodes, callback=callbacks);
