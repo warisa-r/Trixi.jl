@@ -5,7 +5,7 @@ using Trixi
 ###############################################################################
 # semidiscretization of the linear advection equation
 
-advection_velocity = 1.0
+advection_velocity = 1
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -23,7 +23,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-#=
+
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -33,7 +33,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
 
-
+#=
 # Second refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -66,6 +66,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 StartTime = 0.0
 EndTime = 100
+#EndTime = 0.05 * 1
+#EndTime = 2.240154147148132e-04 * 2.0
 
 
 # Create ODEProblem
@@ -95,15 +97,21 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 ###############################################################################
 # run the simulation
 
-dtOptMin = 0.05 * 1
+dtOptMin = 0.05
 # For s = 4
 #dtOptMin = 0.0545
 
-#ode_algorithm = FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
-ode_algorithm = PERK(4, 0, 2, dtOptMin, 
+dtOptMin = 2.240154147148132e-04 * 2.0
+
+
+ode_algorithm = FE2S(4, 1, dtOptMin, 
+                     "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
+
+#=
+ode_algorithm = PERK(4, 1, 2, dtOptMin, 
                            "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
                            #"/home/daniel/Desktop/git/MA/Optim_Roots/IpOPT_dco/Feas_Reals/")
-
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
@@ -113,7 +121,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
-#plot(sol)
+plot(sol)
 
 pd = PlotData1D(sol)
 plot(getmesh(pd))
@@ -121,5 +129,5 @@ plot!(sol)
 
 # Analytical solution at T = 100
 x = range(-1, 1; length = 100)
-y = 1 .+ 0.5*sinpi.(x)
+y = 1 .+ 0.5*sinpi.(x .- advection_velocity * EndTime)
 plot!(x, y)

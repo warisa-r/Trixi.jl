@@ -322,7 +322,7 @@ function solve(ode::ODEProblem, alg::FE2S;
   n_levels = max_level - min_level + 1
 
 
-  #=
+  
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
   level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
@@ -441,8 +441,10 @@ function solve(ode::ODEProblem, alg::FE2S;
     end
     @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
-  =#
+  
 
+
+  #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors
   level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -595,7 +597,7 @@ function solve(ode::ODEProblem, alg::FE2S;
     end
     @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
-
+  =#
 
   println("n_elements: ", n_elements)
   println("\nn_interfaces: ", n_interfaces)
@@ -648,11 +650,10 @@ function solve(ode::ODEProblem, alg::FE2S;
   end
 
   # TODO: Not really elegant way, maybe try to bundle 'indices' datastructures into 'integrator' 
-  solve!(integrator, level_u_indices_elements)
+  solve!(integrator)
 end
 
-function solve!(integrator::FE2S_Integrator,
-                level_u_indices_elements::Vector{Vector{Int64}})
+function solve!(integrator::FE2S_Integrator)
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan) # Final time
@@ -672,16 +673,31 @@ function solve!(integrator::FE2S_Integrator,
       terminate!(integrator)
     end
 
-    # Hard-code consistent, but not conservative RK
-    #=
+    # Hard-code consistent, but not conservative RK (Tang & Warnecke)
+    
     alg.StagesMax = 2
+    alg.CommonStages = [1]
+
     alg.A = zeros(2, 2, 2)
     alg.A[1, :, :] = [0 0
                       0.5 0]
 
     alg.A[2, :, :] = [0 0
                       0.5 0]
-    =#          
+    
+
+    # Osher & Sanders: Conservative, but not internally consistent
+    #=
+    alg.StagesMax = 2
+    alg.CommonStages = [2]
+
+    alg.A = zeros(2, 2, 2)
+    alg.A[1, :, :] = [0 0
+                      0 0]
+
+    alg.A[2, :, :] = [0 0
+                      0.5 0]
+    =#
 
     # TODO: Use this not in the multilevel context, but only throughout the entire domain to showcase optimization
 
@@ -693,8 +709,8 @@ function solve!(integrator::FE2S_Integrator,
       
       # k1: Computed on all levels simultaneously
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      kfast[level_u_indices_elements[1], 1] = integrator.du[level_u_indices_elements[1]] * integrator.dt
-      kslow[level_u_indices_elements[2], 1] = integrator.du[level_u_indices_elements[2]] * integrator.dt
+      kfast[integrator.level_u_indices_elements[1], 1] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
+      kslow[integrator.level_u_indices_elements[2], 1] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
 
       for i = 2:alg.StagesMax
         tmp = integrator.u
@@ -702,14 +718,13 @@ function solve!(integrator::FE2S_Integrator,
         # Partitioned Runge-Kutta approach: One state that contains updates from all levels
         for j = 1:i-1
           tmp += alg.A[1, i, j] * kfast[:, j] + alg.A[2, i, j] * kslow[:, j]
-          #tmp += alg.A[1, i, j] * kfast[:, j] + alg.A[1, i, j] * kslow[:, j]
         end
 
         if i in alg.CommonStages
           # Evaluate f with all elements
           integrator.f(integrator.du, tmp, prob.p, integrator.t)
-          kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
-          kslow[level_u_indices_elements[2], i] = integrator.du[level_u_indices_elements[2]] * integrator.dt
+          kfast[integrator.level_u_indices_elements[1], i] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
+          kslow[integrator.level_u_indices_elements[2], i] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
         else
           # Evaluate only fine level
           integrator.f(integrator.du, tmp, prob.p, integrator.t,
@@ -717,25 +732,18 @@ function solve!(integrator::FE2S_Integrator,
                        integrator.level_info_interfaces_acc[1],
                        integrator.level_info_boundaries_acc[1],
                        integrator.level_info_mortars_acc[1])
-          kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
+
+          kfast[integrator.level_u_indices_elements[1], i] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
         end
-
-        #=
-        # For hard-coded partitioned RK
-        integrator.f(integrator.du, tmp, prob.p, integrator.t, 1)
-        kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
-
-        integrator.f(integrator.du, tmp, prob.p, integrator.t, 2)
-        kslow[level_u_indices_elements[2], i] = integrator.du[level_u_indices_elements[2]] * integrator.dt
-        =#
       end
-      #display(kfast[:, alg.StagesMax]); println()
-      #display(kslow[:, alg.StagesMax]); println()
 
-      integrator.u += kfast[:, alg.StagesMax] + kslow[:, alg.StagesMax]
+      #integrator.u += kfast[:, alg.StagesMax] + kslow[:, alg.StagesMax]
 
-      # For hard-coded partitioned RK
-      #integrator.u += kslow[:, 1] + 0.5 *(kfast[:, 1] + kfast[:, 2])
+      # For Tang & Warneke
+      integrator.u += kslow[:, 1] + 0.5 *(kfast[:, 1] + kfast[:, 2])
+
+      # For Osher & Sanders
+      #integrator.u += 0.5 *(kslow[:, 1] + kslow[:, 2]) + 0.5 *(kfast[:, 1] + kfast[:, 2])
       
       #=
       integrator.u_tmp = integrator.u

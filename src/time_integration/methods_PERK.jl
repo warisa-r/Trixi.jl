@@ -59,19 +59,19 @@
     ActiveLevels[1] = 1:NumDoublings+1
 
     for level = 1:NumDoublings + 1
-      #=
+      
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
-      =#
-
       
+
+      #=
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      
+      =#
 
       AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
       AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2] = A
@@ -85,6 +85,11 @@
     for i = 1:NumDoublings
       display(AMatrices[i, :, :]); println()
     end
+
+    for i = 1:CoeffsMax
+      println(AMatrices[1, i, 1] + AMatrices[1, i, 2] - (AMatrices[2, i, 1] + AMatrices[2, i, 2]))
+    end
+
     display(ActiveLevels); println()
 
     return AMatrices, c, ActiveLevels
@@ -681,23 +686,23 @@
         end
         integrator.u += integrator.k_higher
         =#
-
+        
         
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         integrator.k1 = integrator.du * integrator.dt
 
         tstage = integrator.t + alg.c[2] * integrator.dt
-        # k2: Usually required for finest level [1]
-        # (Although possible that no scheme has full stage evaluations)
+        # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
                     integrator.level_info_elements_acc[1],
                     integrator.level_info_interfaces_acc[1],
                     integrator.level_info_boundaries_acc[1],
                     integrator.level_info_mortars_acc[1])
+              
+        integrator.k_higher[integrator.level_u_indices_elements[1]] = 
+          integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
 
-        integrator.k_higher = integrator.du * integrator.dt
-        
         for stage = 3:alg.NumStages
           # Construct current state
           integrator.u_tmp = copy(integrator.u)
@@ -716,7 +721,7 @@
           # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
           CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
                                   length(integrator.level_info_elements_acc)])
-                                
+                                         
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
                       integrator.level_info_elements_acc[CoarsestLevel],
