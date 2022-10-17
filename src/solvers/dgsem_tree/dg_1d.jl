@@ -169,7 +169,6 @@ function rhs!(du, u, t,
   return nothing
 end
 
-
 function calc_volume_integral!(du, u,
                                mesh::Union{TreeMesh{1}, StructuredMesh{1}},
                                nonconservative_terms, equations,

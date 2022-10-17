@@ -32,7 +32,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
         n_levels = max_level - min_level + 1
 
 
-        #=
+        
         # Initialize storage for level-wise information
         # Set-like datastructures more suited then vectors (Especially for interfaces)
         level_info_elements                = [Vector{Int}() for _ in 1:n_levels]
@@ -156,9 +156,9 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
           @assert length(integrator.level_info_mortars_acc[end]) == 
             n_mortars "highest level should contain all mortars"
         end
-        =#
-
         
+
+        #=
         # Initialize storage for level-wise information
         # Set-like datastructures more suited then vectors (Especially for interfaces)
         level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -307,7 +307,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
           @assert length(integrator.level_info_mortars_acc[end]) == 
             n_mortars "highest level should contain all mortars"
         end
-        
+        =#
     
         u = wrap_array(u_ode, mesh, equations, solver, cache)
     
@@ -329,7 +329,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Integrator; kwargs...)
             end
           end
         end
-
+        
       end # "PERK stage identifiers update" timing
     end # if has changed
   end # "AMR" timing

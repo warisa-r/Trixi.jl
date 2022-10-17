@@ -232,18 +232,14 @@ mutable struct FE2S
 
     # TODO: Generalize this!
     newFE2S.ActiveLevels = [Vector{Int}() for _ in 1:newFE2S.StagesMax]
-    newFE2S.ActiveLevels[1]  = [1, 2]
-    newFE2S.ActiveLevels[2]  = [1]
-    newFE2S.ActiveLevels[3]  = [1]
-    newFE2S.ActiveLevels[4]  = [1, 2]
-    newFE2S.ActiveLevels[5]  = [1]
-    newFE2S.ActiveLevels[6]  = [1]
-    newFE2S.ActiveLevels[7]  = [1, 2]
-    newFE2S.ActiveLevels[8]  = [1, 2]
-    newFE2S.ActiveLevels[9]  = [1]
-    newFE2S.ActiveLevels[10] = [1]
-    newFE2S.ActiveLevels[11] = [1, 2]
-    newFE2S.ActiveLevels[12] = [1, 2]
+    newFE2S.ActiveLevels[1] = Vector(1:newFE2S.NumDoublings+1)
+    newFE2S.ActiveLevels[2] = [1]
+    newFE2S.ActiveLevels[3] = [1]
+    newFE2S.ActiveLevels[4] = [1, 2]
+    newFE2S.ActiveLevels[5] = [1]
+    newFE2S.ActiveLevels[6] = [1]
+    newFE2S.ActiveLevels[7] = [1, 2]
+    newFE2S.ActiveLevels[8] = [1, 2]
 
 
     newFE2S.A = BuildButcherTableaus(newFE2S.ForwardEulerWeights, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c, 
@@ -290,6 +286,7 @@ mutable struct FE2S_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, FE2S_Int
   level_info_elements_acc::Vector{Vector{Int64}}
   level_info_interfaces_acc::Vector{Vector{Int64}}
   level_info_boundaries_acc::Vector{Vector{Int64}}
+  level_info_mortars_acc::Vector{Vector{Int64}}
   level_u_indices_elements::Vector{Vector{Int64}}
 end
 
@@ -320,11 +317,12 @@ function solve(ode::ODEProblem, alg::FE2S;
   n_interfaces = length(interfaces.orientations)
   n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
 
-
   min_level = minimum_level(mesh.tree)
   max_level = maximum_level(mesh.tree)
   n_levels = max_level - min_level + 1
 
+
+  #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
   level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
@@ -343,6 +341,7 @@ function solve(ode::ODEProblem, alg::FE2S;
       push!(level_info_elements_acc[l], element_id)
     end
   end
+  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
 
 
   # Use sets first to avoid double storage of interfaces
@@ -375,6 +374,7 @@ function solve(ode::ODEProblem, alg::FE2S;
   for level in 1:n_levels
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
 
   # Use sets first to avoid double storage of boundaries
@@ -406,6 +406,194 @@ function solve(ode::ODEProblem, alg::FE2S;
   level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
+  end
+  @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
+
+  level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+
+  dimensions = ndims(mesh.tree) # Spatial dimension
+
+  if dimensions > 1
+    # Determine level for each mortar
+    # Since mortars belong by definition to two levels, theoretically we have to
+    # add them twice: Once for each level of its neighboring elements. However,
+    # as we store the accumulated mortar ids, we only need to consider the one of
+    # the small neighbors (here: the lower one), is it has the higher level and
+    # thus the lower level id.
+
+    @unpack mortars = cache
+    n_mortars = length(mortars.orientations)
+
+    for mortar_id in 1:n_mortars
+      # Get element ids
+      element_id_lower = mortars.neighbor_ids[1, mortar_id]
+
+      # Determine level
+      level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+
+      # Convert to level id
+      level_id_lower = max_level + 1 - level_lower
+
+      # Add to accumulated container
+      for l in level_id_lower:n_levels
+        push!(level_info_mortars_acc[l], mortar_id)
+      end
+    end
+    @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
+  end
+  =#
+
+  # Initialize storage for level-wise information
+  # Set-like datastructures more suited then vectors
+  level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
+  level_info_elements_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # Loop over interfaces to have access to its neighbors
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Determine level
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+    # Neighbors of finer cells should be integrated with same integrator
+    ode_level = max(level_left, level_right)
+
+    # Convert to level id
+    level_id = max_level + 1 - ode_level
+
+    # Assign elements according to their neighbors
+    push!(level_info_elements_set[level_id], element_id_left)
+    push!(level_info_elements_set[level_id], element_id_right)
+    # Add to accumulated container
+    for l in level_id:n_levels
+      push!(level_info_elements_set_acc[l], element_id_left)
+      push!(level_info_elements_set_acc[l], element_id_right)
+    end
+  end
+  # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_elements = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    # Make sure elements are only stored once: In the finest level
+    for fine_level in 1:level-1
+      level_info_elements_set[level] = setdiff(level_info_elements_set[level], level_info_elements_set[fine_level])
+    end
+
+    level_info_elements[level] = sort(collect(level_info_elements_set[level]))
+  end
+
+  # Set up dictionary to set later ODE level for interfaces
+  element_ODE_level_dict = Dict{Int, Int}()
+  for level in 1:n_levels
+    for element_id in level_info_elements[level]
+      push!(element_ODE_level_dict, element_id=>level)
+    end
+  end
+  display(element_ODE_level_dict); println()
+
+  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
+  end
+  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
+
+  # Use sets first to avoid double storage of interfaces
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # Determine ODE level for each interface
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Interface neighboring two distinct ODE levels belong to fines one
+    
+    ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
+                    get(element_ODE_level_dict, element_id_right, -1))
+    
+    #=
+    ode_level = max(get(element_ODE_level_dict, element_id_left, -1), 
+                    get(element_ODE_level_dict, element_id_right, -1))                              
+    =#
+
+    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+
+    # Add to accumulated container
+    for l in ode_level:n_levels
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+  end
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+
+
+  # Use sets first to avoid double storage of boundaries
+  level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # Determine level for each boundary
+  for boundary_id in 1:n_boundaries
+    # Get element ids
+    element_id_left  = boundaries.neighbor_ids[1, boundary_id]
+    element_id_right = boundaries.neighbor_ids[2, boundary_id]
+
+    # Determine level
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+    # Convert to level id
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
+
+    # Add to accumulated container
+    for l in level_id_left:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+    for l in level_id_right:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+  end
+
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
+  end
+  @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
+
+
+  # TODO: Mortars need probably to be reconsidered! (sets, level-assignment, ...)
+  level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+  dimensions = ndims(mesh.tree) # Spatial dimension
+  if dimensions > 1
+    # Determine level for each mortar
+    # Since mortars belong by definition to two levels, theoretically we have to
+    # add them twice: Once for each level of its neighboring elements. However,
+    # as we store the accumulated mortar ids, we only need to consider the one of
+    # the small neighbors (here: the lower one), is it has the higher level and
+    # thus the lower level id.
+
+    @unpack mortars = cache
+    n_mortars = length(mortars.orientations)
+
+    for mortar_id in 1:n_mortars
+      # Get element ids
+      element_id_lower = mortars.neighbor_ids[1, mortar_id]
+
+      # Determine level
+      level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+
+      # Convert to level id
+      level_id_lower = max_level + 1 - level_lower
+
+      # Add to accumulated container
+      for l in level_id_lower:n_levels
+        push!(level_info_mortars_acc[l], mortar_id)
+      end
+    end
+    @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
 
 
@@ -445,7 +633,7 @@ function solve(ode::ODEProblem, alg::FE2S;
                  alg, # The ODE integration algorithm/method
                  FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false,
                  level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
-                 level_u_indices_elements)
+                 level_info_mortars_acc, level_u_indices_elements)
 
   # initialize callbacks
   if callback isa CallbackSet
@@ -527,7 +715,8 @@ function solve!(integrator::FE2S_Integrator,
           integrator.f(integrator.du, tmp, prob.p, integrator.t,
                        integrator.level_info_elements_acc[1],
                        integrator.level_info_interfaces_acc[1],
-                       integrator.level_info_boundaries_acc[1])
+                       integrator.level_info_boundaries_acc[1],
+                       integrator.level_info_mortars_acc[1])
           kfast[level_u_indices_elements[1], i] = integrator.du[level_u_indices_elements[1]] * integrator.dt
         end
 

@@ -49,37 +49,45 @@
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK specific)
     CoeffsMax = NumStages - 2
   
-    ACoeffs = zeros(CoeffsMax, NumDoublings+1)
+    AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
+    for i = 1:NumDoublings+1
+      AMatrices[i, :, 1] = c[3:end]
+    end
   
     ActiveLevels = [Vector{Int}() for _ in 1:NumStages]
     # k1 is evaluated at all levels
     ActiveLevels[1] = 1:NumDoublings+1
 
     for level = 1:NumDoublings + 1
-      
+      #=
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
-      
+      =#
 
-      #=
+      
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      =#
+      
 
-      ACoeffs[CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, level] = A
+      AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
+      AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2] = A
+      
       # Add refinement levels to stages
       for stage = NumStages:-1:NumStages-NumMonCoeffs
         push!(ActiveLevels[stage], level)
       end
     end
-    display(ACoeffs); println()
+
+    for i = 1:NumDoublings
+      display(AMatrices[i, :, :]); println()
+    end
     display(ActiveLevels); println()
 
-    return ACoeffs, c, ActiveLevels
+    return AMatrices, c, ActiveLevels
   end
 
 
@@ -100,10 +108,9 @@
     const NumStages::Int
     const dtOptMin::Real
   
-    ACoeffs::Matrix{Real}
+    AMatrices::Array{Float64, 3}
     c::Vector{Real}
     ActiveLevels::Vector{Vector{Int64}}
-
   
     # Constructor for previously computed A Coeffs
     function PERK(NumStageEvalsMin_::Int, NumDoublings_::Int, ConsOrder_::Int,
@@ -114,7 +121,7 @@
                     # TODO: Allow for different S >= Max {Stage Evals}
                     NumStageEvalsMin_ * 2^NumDoublings_, dtOptMin_)
   
-      newPERK.ACoeffs, newPERK.c, newPERK.ActiveLevels = 
+      newPERK.AMatrices, newPERK.c, newPERK.ActiveLevels = 
         ComputePERK_ButcherTableau(NumDoublings_, newPERK.NumStages, ConsOrder_, BasePathMonCoeffs_)
 
       return newPERK
@@ -200,7 +207,7 @@
     max_level = maximum_level(mesh.tree)
     n_levels = max_level - min_level + 1
 
-    #=
+    
     # Initialize storage for level-wise information
     # Set-like datastructures more suited then vectors (Especially for interfaces)
     level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
@@ -319,7 +326,7 @@
       end
       @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
-    =#
+    
     
     #=
     # Initialize storage for level-wise information
@@ -474,8 +481,9 @@
       end
       @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
-    
+    =#
 
+    
     println("n_elements: ", n_elements)
     println("\nn_interfaces: ", n_interfaces)
   
@@ -492,7 +500,7 @@
 
     println("level_info_mortars_acc:")
     display(level_info_mortars_acc); println()
-    
+
     
     # Set initial distribution of DG Base function coefficients 
     @unpack equations, solver = ode.p
@@ -517,9 +525,9 @@
       end
     end
     display(level_u_indices_elements); println()
-    =#
-
     
+
+    #=
     # CARE: Hard-coded "artificial" mesh splitting in two halves
     @assert n_elements % 4 == 0
     level_info_elements = [Vector(Int(n_elements/2) + 1:Int(3*n_elements/4)),
@@ -545,16 +553,10 @@
       element_id_left  = interfaces.neighbor_ids[1, interface_id]
       element_id_right = interfaces.neighbor_ids[2, interface_id]
 
-      # Interface neighboring two distinct ODE levels belong to fines one
-      
+      # Interface neighboring two distinct ODE levels belong to finest one
       ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
-                      get(element_ODE_level_dict, element_id_right, -1))
+                      get(element_ODE_level_dict, element_id_right, -1))                           
       
-      #=
-      ode_level = max(get(element_ODE_level_dict, element_id_left, -1), 
-                      get(element_ODE_level_dict, element_id_right, -1))                              
-      =#
-
       @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
 
       # Add to accumulated container
@@ -594,7 +596,7 @@
       end
     end
     display(level_u_indices_elements); println()
-    
+    =#
 
     ### Done with setting up for handling of level-dependent integration ###
 
@@ -644,7 +646,7 @@
       @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
 
         # One scheme for whole domain (primarily for tests)
-        
+        #=
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         integrator.k1 = integrator.du * integrator.dt
@@ -678,8 +680,9 @@
           integrator.k_higher = integrator.du * integrator.dt
         end
         integrator.u += integrator.k_higher
+        =#
+
         
-        #=
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         integrator.k1 = integrator.du * integrator.dt
@@ -700,12 +703,12 @@
           integrator.u_tmp = copy(integrator.u)
 
           #TODO: Implement fall-back for case when number of available integrators and mesh-partitions not match
-          for level in eachindex(integrator.level_u_indices_elements)
+          for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
             integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
-              (alg.c[stage] - alg.ACoeffs[stage - 2, level]) *
+              alg.AMatrices[level, stage - 2, 1] *
                 integrator.k1[integrator.level_u_indices_elements[level]] + 
-              alg.ACoeffs[stage - 2, level] * 
-                integrator.k_higher[integrator.level_u_indices_elements[level]] 
+              alg.AMatrices[level, stage - 2, 2] * 
+                integrator.k_higher[integrator.level_u_indices_elements[level]]
           end
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
@@ -719,7 +722,7 @@
                       integrator.level_info_elements_acc[CoarsestLevel],
                       integrator.level_info_interfaces_acc[CoarsestLevel],
                       integrator.level_info_boundaries_acc[CoarsestLevel],
-                      integrator.level_info_mortars_acc[CoarsestLevel])
+                      integrator.level_info_mortars_acc[CoarsestLevel])                    
 
           # Update k_higher of relevant levels
           for level in 1:CoarsestLevel
@@ -729,7 +732,7 @@
         end
         
         integrator.u += integrator.k_higher
-        =#
+        
       end # PERK step
   
       integrator.iter += 1
