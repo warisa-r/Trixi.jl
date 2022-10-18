@@ -82,12 +82,8 @@
       end
     end
 
-    for i = 1:NumDoublings
+    for i = 1:NumDoublings+1
       display(AMatrices[i, :, :]); println()
-    end
-
-    for i = 1:CoeffsMax
-      println(AMatrices[1, i, 1] + AMatrices[1, i, 2] - (AMatrices[2, i, 1] + AMatrices[2, i, 2]))
     end
 
     display(ActiveLevels); println()
@@ -212,7 +208,7 @@
     max_level = maximum_level(mesh.tree)
     n_levels = max_level - min_level + 1
 
-    
+    #=
     # Initialize storage for level-wise information
     # Set-like datastructures more suited then vectors (Especially for interfaces)
     level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
@@ -235,6 +231,7 @@
 
 
     # Use sets first to avoid double storage of interfaces
+    level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
     level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
     # Determine level for each interface
     for interface_id in 1:n_interfaces
@@ -250,6 +247,9 @@
       level_id_left  = max_level + 1 - level_left
       level_id_right = max_level + 1 - level_right
 
+      push!(level_info_interfaces_set[level_id_left], interface_id)
+      push!(level_info_interfaces_set[level_id_right], interface_id)
+
       # Add to accumulated container
       for l in level_id_left:n_levels
         push!(level_info_interfaces_set_acc[l], interface_id)
@@ -257,6 +257,11 @@
       for l in level_id_right:n_levels
         push!(level_info_interfaces_set_acc[l], interface_id)
       end
+    end
+
+    level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
     end
 
     # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
@@ -331,9 +336,9 @@
       end
       @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
+    =#
     
     
-    #=
     # Initialize storage for level-wise information
     # Set-like datastructures more suited then vectors
     level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -390,6 +395,7 @@
     @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
 
     # Use sets first to avoid double storage of interfaces
+    level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
     level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
     # Determine ODE level for each interface
     for interface_id in 1:n_interfaces
@@ -398,7 +404,6 @@
       element_id_right = interfaces.neighbor_ids[2, interface_id]
 
       # Interface neighboring two distinct ODE levels belong to fines one
-      
       ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
                       get(element_ODE_level_dict, element_id_right, -1))
       
@@ -407,21 +412,51 @@
                       get(element_ODE_level_dict, element_id_right, -1))                              
       =#
 
-      @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+      @assert ode_level != -1 "Errors in datastructures for ODE level assignment"
+      
+      push!(level_info_interfaces_set[ode_level], interface_id)
+
+      #=
+      # TODO: Not sure if correct in this setting
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+      level_id_left  = max_level + 1 - level_left
+      level_id_right = max_level + 1 - level_right
+      push!(level_info_interfaces_set[level_id_left], interface_id)
+      push!(level_info_interfaces_set[level_id_right], interface_id)
+      =#
 
       # Add to accumulated container
       for l in ode_level:n_levels
         push!(level_info_interfaces_set_acc[l], interface_id)
       end
     end
+
     # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      # Make sure elements are only stored once: In the finest level
+      for fine_level in 1:level-1
+        level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], level_info_interfaces_set[fine_level])
+      end
+
+      level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+    end
+
+    #=
+    level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+    end 
+    =#
+
     level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
     for level in 1:n_levels
       level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
     end
     @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
-
+    
     # Use sets first to avoid double storage of boundaries
     level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
     # Determine level for each boundary
@@ -486,8 +521,7 @@
       end
       @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
-    =#
-
+    
     
     println("n_elements: ", n_elements)
     println("\nn_interfaces: ", n_interfaces)
@@ -497,6 +531,8 @@
     println("level_info_elements_acc:")
     display(level_info_elements_acc); println()
   
+    println("level_info_interfaces:")
+    display(level_info_interfaces); println()
     println("level_info_interfaces_acc:")
     display(level_info_interfaces_acc); println()
   
@@ -608,11 +644,10 @@
     integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                   (prob=ode,), ode.f, alg,
                   PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
-                  k1, k_higher,                
+                  k1, k_higher,   
                   level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
                   level_info_mortars_acc, level_u_indices_elements)
               
-
     # initialize callbacks
     if callback isa CallbackSet
       for cb in callback.continuous_callbacks
@@ -667,8 +702,8 @@
 
           # Use highest level
           
-          integrator.u_tmp = integrator.u + (alg.c[stage] - alg.ACoeffs[stage - 2, 1]) * integrator.k1 + 
-              alg.ACoeffs[stage - 2, 1] * integrator.k_higher
+          integrator.u_tmp = integrator.u + alg.AMatrices[1, stage - 2, 1] * integrator.k1 + 
+            alg.AMatrices[1, stage - 2, 2] * integrator.k_higher
           
 
           # Use lowest level
@@ -702,7 +737,7 @@
               
         integrator.k_higher[integrator.level_u_indices_elements[1]] = 
           integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
-
+        
         for stage = 3:alg.NumStages
           # Construct current state
           integrator.u_tmp = copy(integrator.u)
@@ -711,9 +746,14 @@
           for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
             integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
               alg.AMatrices[level, stage - 2, 1] *
-                integrator.k1[integrator.level_u_indices_elements[level]] + 
-              alg.AMatrices[level, stage - 2, 2] * 
-                integrator.k_higher[integrator.level_u_indices_elements[level]]
+                integrator.k1[integrator.level_u_indices_elements[level]]
+
+            # First try to be more effective
+            if alg.AMatrices[level, stage - 2, 2] > 0
+              integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
+                alg.AMatrices[level, stage - 2, 2] * 
+                  integrator.k_higher[integrator.level_u_indices_elements[level]]
+            end
           end
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
@@ -721,22 +761,22 @@
           # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
           CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
                                   length(integrator.level_info_elements_acc)])
-                                         
+                   
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
                       integrator.level_info_elements_acc[CoarsestLevel],
                       integrator.level_info_interfaces_acc[CoarsestLevel],
                       integrator.level_info_boundaries_acc[CoarsestLevel],
-                      integrator.level_info_mortars_acc[CoarsestLevel])                    
-
+                      integrator.level_info_mortars_acc[CoarsestLevel])
+          
           # Update k_higher of relevant levels
           for level in 1:CoarsestLevel
             integrator.k_higher[integrator.level_u_indices_elements[level]] = 
               integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
           end
         end
-        
-        integrator.u += integrator.k_higher
+       
+        integrator.u += integrator.k_higher 
         
       end # PERK step
   
