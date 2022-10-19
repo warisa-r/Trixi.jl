@@ -91,6 +91,128 @@
     return AMatrices, c, ActiveLevels
   end
 
+  function minmod(a::Vector{Float64})
+    if all(>=(0), a)
+      return minimum(abs.(a))
+    elseif all(<(0), a)
+      -minimum(abs.(a))
+    else
+      return 0
+    end
+  end
+
+  function Limiter!(integrator::PERK_Integrator)
+    @unpack solver = integrator.p
+    Weights = solver.basis.weights
+    Nodes   = solver.basis.nodes
+    NumNodes = length(Nodes)
+
+    NumElements = Int(length(integrator.u_tmp)/NumNodes)
+
+    TroubledElements = [14, 15]
+
+    u_avg = zeros(NumElements, 1)
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      for j = 1:NumNodes
+        u_avg[i] += Weights[j] * integrator.u_tmp[NumNodes * (i-1) + j]
+      end
+      u_avg[i] *= 0.5 # For 1D
+    end
+
+    # Deltas
+    u_Delta = zeros(NumElements, 2)
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      # Left
+      # Assume periodicity
+      if i == 1
+        u_Delta[i, 1] = u_avg[i, 1] - u_avg[NumElements, 1]
+      else
+        u_Delta[i, 1] = u_avg[i, 1] - u_avg[i-1, 1]
+      end
+
+      # Right
+      # Assume periodicity
+      if i == NumElements
+        u_Delta[i, 2] = u_avg[1, 1] - u_avg[NumElements, 1]
+      else
+        u_Delta[i, 2] = u_avg[i+1, 1] - u_avg[i, 1]
+      end
+    end
+
+    trace_values = zeros(NumElements, 2)
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      # Left
+      trace_values[i, 1] = integrator.u_tmp[NumNodes * (i-1) + 1]
+      # Right
+      trace_values[i, 2] = integrator.u_tmp[NumNodes * i]
+    end
+
+    # Bar-quantities
+    u_bar = zeros(NumElements, 2)
+
+    #=
+    # p = 1
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      # Left
+      u_bar[i, 1] = 0.5 *(integrator.u[NumNodes * (i-1) + 1] - integrator.u[NumNodes * i])
+
+      # Right
+      u_bar[i, 2] = 0.5 *(integrator.u[NumNodes * i] - integrator.u[NumNodes * (i-1) + 1])
+    end
+    =#
+
+    ALegendre = [1 Nodes[1] 0.5 * (3*Nodes[1]^2 - 1)
+                 1 Nodes[2] 0.5 * (3*Nodes[2]^2 - 1)
+                 1 Nodes[3] 0.5 * (3*Nodes[3]^2 - 1)]
+    
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      ULegendre = ALegendre\integrator.u_tmp[NumNodes * (i-1) + 1:NumNodes * i]
+
+      # Left
+      u_bar[i, 1] = ULegendre[2] * (-1) + ULegendre[3] * 0.5 *(3*1 - 1)
+
+      # Right
+      u_bar[i, 2] = ULegendre[2] *   1 + ULegendre[3] * 0.5 *(3*1 - 1)
+    end 
+
+    # Tilde-quantities
+    u_tilde = zeros(NumElements, 2)
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      # Left
+      u_tilde[i, 1] = minmod([u_bar[i, 1], u_Delta[i, 1], u_Delta[i, 2]])
+      # Right
+      u_tilde[i, 2] = minmod([u_bar[i, 2], u_Delta[i, 1], u_Delta[i, 2]])
+    end
+
+    
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      integrator.u_tmp[NumNodes * (i-1) + 1] = -u_tilde[i, 1] + u_avg[i]
+      integrator.u_tmp[NumNodes * i]         =  u_tilde[i, 2] + u_avg[i]
+    end
+    
+    # For p = 2 also required
+    #for i in 1:NumElements
+    #for i in integrator.level_info_elements_acc[1]
+    for i in TroubledElements
+      # Conservation of Mass
+      integrator.u_tmp[NumNodes * (i-1) + 2] = (2*u_avg[i] - Weights[1] * integrator.u_tmp[NumNodes * (i-1) + 1] 
+                                                           - Weights[3] * integrator.u_tmp[NumNodes * i]) / Weights[2]
+    end
+  end
 
   """
       PERK()
@@ -684,19 +806,19 @@
   
       # TODO: Try multi-threaded execution as implemented for other integrators!
       @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-
-        # One scheme for whole domain (primarily for tests)
-        #=
+        
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         integrator.k1 = integrator.du * integrator.dt
 
+        #=
+        # One scheme for whole domain (primarily for tests)
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2: Usually required for finest level [1]
         # (Although possible that no scheme has full stage evaluations)
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage)
         integrator.k_higher = integrator.du * integrator.dt
-
+        
         for stage = 3:alg.NumStages
           # Construct current state
 
@@ -723,12 +845,9 @@
         =#
         
         
-        # k1: Evaluated on entire domain / all levels
-        integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        integrator.k1 = integrator.du * integrator.dt
-
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
+        
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
                     integrator.level_info_elements_acc[1],
                     integrator.level_info_interfaces_acc[1],
@@ -756,11 +875,15 @@
             end
           end
 
+          #Limiter!(integrator)
+
           tstage = integrator.t + alg.c[stage] * integrator.dt
 
           # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
           CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
                                   length(integrator.level_info_elements_acc)])
+
+          CoarsestLevel = length(integrator.level_info_elements_acc)                   
                    
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
@@ -776,8 +899,127 @@
           end
         end
        
-        integrator.u += integrator.k_higher 
+        integrator.u += integrator.k_higher
         
+
+
+        #=
+        @unpack solver = integrator.p
+        Weights = solver.basis.weights
+        Nodes   =solver.basis.nodes
+        NumNodes = length(Nodes)
+    
+        NumElements = Int(length(integrator.u)/NumNodes)
+
+        TroubledElements = [14, 15]
+    
+        u_avg = zeros(NumElements, 1)
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          for j = 1:NumNodes
+            u_avg[i] += Weights[j] * integrator.u[NumNodes * (i-1) + j]
+          end
+          u_avg[i] *= 0.5 # For 1D
+        end
+    
+        # Deltas
+        u_Delta = zeros(NumElements, 2)
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          # Left
+          # Assume periodicity
+          if i == 1
+            u_Delta[i, 1] = u_avg[i, 1] - u_avg[NumElements, 1]
+          else
+            u_Delta[i, 1] = u_avg[i, 1] - u_avg[i-1, 1]
+          end
+    
+          # Right
+          # Assume periodicity
+          if i == NumElements
+            u_Delta[i, 2] = u_avg[1, 1] - u_avg[NumElements, 1]
+          else
+            u_Delta[i, 2] = u_avg[i+1, 1] - u_avg[i, 1]
+          end
+        end
+    
+        trace_values = zeros(NumElements, 2)
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          # Left
+          trace_values[i, 1] = integrator.u[NumNodes * (i-1) + 1]
+          # Right
+          trace_values[i, 2] = integrator.u[NumNodes * i]
+        end
+    
+        # Bar-quantities
+        u_bar = zeros(NumElements, 2)
+    
+        #=
+        # p = 1
+        for i in 1:NumElements
+          # Left
+          u_bar[i, 1] = 0.5 *(integrator.u[NumNodes * (i-1) + 1] - integrator.u[NumNodes * i])
+    
+          # Right
+          u_bar[i, 2] = 0.5 *(integrator.u[NumNodes * i] - integrator.u[NumNodes * (i-1) + 1])
+        end
+        =#
+    
+        ALegendre = [1 Nodes[1] 0.5 * (3*Nodes[1]^2 - 1)
+                     1 Nodes[2] 0.5 * (3*Nodes[2]^2 - 1)
+                     1 Nodes[3] 0.5 * (3*Nodes[3]^2 - 1)]
+        
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          ULegendre = ALegendre\integrator.u[NumNodes * (i-1) + 1:NumNodes * i]
+    
+          # Left
+          u_bar[i, 1] = ULegendre[2] * (-1) + ULegendre[3] * 0.5 *(3*1 - 1)
+    
+          # Right
+          u_bar[i, 2] = ULegendre[2] *   1 + ULegendre[3] * 0.5 *(3*1 - 1)
+        end 
+    
+        # Tilde-quantities
+        u_tilde = zeros(NumElements, 2)
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          # Left
+          u_tilde[i, 1] = minmod([u_bar[i, 1], u_Delta[i, 1], u_Delta[i, 2]])
+          # Right
+          u_tilde[i, 2] = minmod([u_bar[i, 2], u_Delta[i, 1], u_Delta[i, 2]])
+        end
+    
+        
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          integrator.u[NumNodes * (i-1) + 1] = -u_tilde[i, 1] + u_avg[i]
+          integrator.u[NumNodes * i]         =  u_tilde[i, 2] + u_avg[i]
+        end
+        
+        # For p = 2 also required
+        #for i in 1:NumElements
+        #for i in integrator.level_info_elements_acc[1]
+        for i in TroubledElements
+          # Conservation of Mass
+          
+          integrator.u[NumNodes * (i-1) + 2] = (2*u_avg[i] - Weights[1] * integrator.u[NumNodes * (i-1) + 1] 
+                                                           - Weights[3] * integrator.u[NumNodes * i]) / Weights[2]
+          
+          # Linear interpolation
+          #=
+          integrator.u[NumNodes * (i-1) + 2] = 0.5 * (integrator.u[NumNodes * (i-1) + 1] + 
+                                                      integrator.u[NumNodes * i])
+          =#                                                                                                
+        end
+        =#
       end # PERK step
   
       integrator.iter += 1
@@ -798,7 +1040,7 @@
         terminate!(integrator)
       end
     end # "main loop" timer
-  
+    
     return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
                                   integrator.sol.prob)
