@@ -34,7 +34,7 @@
     return reverse(ACoeffs)
   end
   
-  function ComputePERK_ButcherTableau(NumDoublings::Int, NumStages::Int, 
+  function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, 
                                       ConsOrder::Int, BasePathMonCoeffs::AbstractString)
   
     # c Vector form Butcher Tableau (defines timestep per stage)
@@ -46,7 +46,7 @@
     # TODO: Not sure if valid for general ConsOrder (not 2)!
     SE_Factors = reverse(c[2:end-1])
   
-    # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK specific)
+    # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK_Multi specific)
     CoeffsMax = NumStages - 2
   
     AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
@@ -59,19 +59,19 @@
     ActiveLevels[1] = 1:NumDoublings+1
 
     for level = 1:NumDoublings + 1
-      #=
+      
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
       A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
-      =#
-
       
+
+      #=
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
       NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      
+      =#
 
       AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
       AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2] = A
@@ -93,7 +93,7 @@
 
 
   """
-      PERK()
+      PERK_Multi()
   
   The following structures and methods provide a minimal implementation of
   the paired explicit Runge-Kutta method (https://doi.org/10.1016/j.jcp.2019.05.014)
@@ -103,7 +103,7 @@
   CarpenterKennedy2N{54, 43} methods.
   """
   
-  mutable struct PERK
+  mutable struct PERK_Multi
     const NumStageEvalsMin::Int
     const NumDoublings::Int
     const NumStages::Int
@@ -113,24 +113,24 @@
     ActiveLevels::Vector{Vector{Int64}}
   
     # Constructor for previously computed A Coeffs
-    function PERK(NumStageEvalsMin_::Int, NumDoublings_::Int, ConsOrder_::Int,
-                  BasePathMonCoeffs_::AbstractString)
+    function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int, ConsOrder_::Int,
+                        BasePathMonCoeffs_::AbstractString)
 
-      newPERK = new(NumStageEvalsMin_, NumDoublings_,
-                    # Current convention: NumStages = MaxStages = S;
-                    # TODO: Allow for different S >= Max {Stage Evals}
-                    NumStageEvalsMin_ * 2^NumDoublings_)
+      newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
+                          # Current convention: NumStages = MaxStages = S;
+                          # TODO: Allow for different S >= Max {Stage Evals}
+                          NumStageEvalsMin_ * 2^NumDoublings_)
   
-      newPERK.AMatrices, newPERK.c, newPERK.ActiveLevels = 
-        ComputePERK_ButcherTableau(NumDoublings_, newPERK.NumStages, ConsOrder_, BasePathMonCoeffs_)
+      newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
+        ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, ConsOrder_, BasePathMonCoeffs_)
 
-      return newPERK
+      return newPERK_Multi
     end
-  end # struct PERK
+  end # struct PERK_Multi
   
   
   # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
-  mutable struct PERK_IntegratorOptions{Callback}
+  mutable struct PERK_Multi_IntegratorOptions{Callback}
     callback::Callback # callbacks; used in Trixi
     adaptive::Bool # whether the algorithm is adaptive; ignored
     dtmax::Float64 # ignored
@@ -138,15 +138,15 @@
     tstops::Vector{Float64} # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
   end
   
-  function PERK_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
-    PERK_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
+  function PERK_Multi_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
+    PERK_Multi_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
   end
   
   # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
   # This implements the interface components described at
   # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
   # which are used in Trixi.
-  mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
+  mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_Multi_IntegratorOptions}
     u::uType
     du::uType
     u_tmp::uType
@@ -158,9 +158,9 @@
     sol::Sol # faked
     f::F
     alg::Alg # This is our own class written above; Abbreviation for ALGorithm
-    opts::PERK_IntegratorOptions
+    opts::PERK_Multi_IntegratorOptions
     finalstep::Bool # added for convenience
-    # PERK stages:
+    # PERK_Multi stages:
     k1::uType
     k_higher::uType
     # Variables managing level-depending integration
@@ -172,7 +172,7 @@
   end
   
   # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
-  function Base.getproperty(integrator::PERK_Integrator, field::Symbol)
+  function Base.getproperty(integrator::PERK_Multi_Integrator, field::Symbol)
     if field === :destats
       return (naccept = getfield(integrator, :iter),)
     end
@@ -181,14 +181,14 @@
   end
   
   # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-  function solve(ode::ODEProblem, alg::PERK;
+  function solve(ode::ODEProblem, alg::PERK_Multi;
                  dt, callback=nothing, kwargs...)
 
     u0 = copy(ode.u0)
     du = similar(u0)
     u_tmp = similar(u0)
 
-    # PERK stages
+    # PERK_Multi stages
     k1       = similar(u0)
     k_higher = similar(u0)
 
@@ -641,9 +641,9 @@
 
     ### Done with setting up for handling of level-dependent integration ###
 
-    integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+    integrator = PERK_Multi_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                   (prob=ode,), ode.f, alg,
-                  PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                  PERK_Multi_IntegratorOptions(callback, ode.tspan; kwargs...), false,
                   k1, k_higher,   
                   level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
                   level_info_mortars_acc, level_u_indices_elements)
@@ -663,7 +663,7 @@
     solve!(integrator)
   end
   
-  function solve!(integrator::PERK_Integrator)
+  function solve!(integrator::PERK_Multi_Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -744,7 +744,7 @@
               alg.AMatrices[level, stage - 2, 1] *
                 integrator.k1[integrator.level_u_indices_elements[level]]
 
-            # First try to be more effective
+            # First attempt to be more effective
             if alg.AMatrices[level, stage - 2, 2] > 0
               integrator.u_tmp[integrator.level_u_indices_elements[level]] += 
                 alg.AMatrices[level, stage - 2, 2] * 
@@ -758,8 +758,6 @@
           CoarsestLevel = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
                                   length(integrator.level_info_elements_acc)])
 
-          CoarsestLevel = length(integrator.level_info_elements_acc)                   
-                   
           # Joint RHS evaluation with all elements sharing this timestep
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage, 
                       integrator.level_info_elements_acc[CoarsestLevel],
@@ -775,7 +773,7 @@
         end
         # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
         integrator.u += integrator.k_higher
-      end # PERK step
+      end # PERK_Multi step
   
       integrator.iter += 1
       integrator.t += integrator.dt
@@ -802,25 +800,25 @@
   end
   
   # get a cache where the RHS can be stored
-  get_du(integrator::PERK_Integrator) = integrator.du
-  get_tmp_cache(integrator::PERK_Integrator) = (integrator.u_tmp,)
+  get_du(integrator::PERK_Multi_Integrator) = integrator.du
+  get_tmp_cache(integrator::PERK_Multi_Integrator) = (integrator.u_tmp,)
   
   # some algorithms from DiffEq like FSAL-ones need to be informed when a callback has modified u
-  u_modified!(integrator::PERK_Integrator, ::Bool) = false
+  u_modified!(integrator::PERK_Multi_Integrator, ::Bool) = false
   
   # used by adaptive timestepping algorithms in DiffEq
-  function set_proposed_dt!(integrator::PERK_Integrator, dt)
+  function set_proposed_dt!(integrator::PERK_Multi_Integrator, dt)
     integrator.dt = dt
   end
   
   # stop the time integration
-  function terminate!(integrator::PERK_Integrator)
+  function terminate!(integrator::PERK_Multi_Integrator)
     integrator.finalstep = true
     empty!(integrator.opts.tstops)
   end
   
   # used for AMR (Adaptive Mesh Refinement)
-  function Base.resize!(integrator::PERK_Integrator, new_size)
+  function Base.resize!(integrator::PERK_Multi_Integrator, new_size)
     resize!(integrator.u, new_size)
     resize!(integrator.du, new_size)
     resize!(integrator.u_tmp, new_size)
