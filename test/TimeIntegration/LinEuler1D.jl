@@ -102,7 +102,7 @@ dtOptMin = 1.8046855181455613e-05
 
 # 32 Stage, Mach = 10
 #dtOptMin = 1.5296e-05
-ode_algorithm = PERK(4, 0, 2, dtOptMin,
+ode_algorithm = PERK(4, 0, dtOptMin,
                      "/home/daniel/Desktop/git/MA/Optim_Monomials/Cpp/Results/LinEuler1D_Mach01/")
 sol = Trixi.solve(ode, ode_algorithm,
                   dt=dtOptMin, # solve needs some value here but it will be overwritten by the stepsize_callback

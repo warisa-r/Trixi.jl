@@ -6,25 +6,11 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-  function ReadInFile(FilePath::AbstractString, DataType::Type)
-    @assert isfile(FilePath) "Couldn't find file"
-    Data = zeros(DataType, 0)
-    open(FilePath, "r") do File
-      while !eof(File)     
-        LineContent = readline(File)     
-        append!(Data, parse(DataType, LineContent))
-      end
-    end
-    NumLines = length(Data)
-  
-    return NumLines, Data
-  end
-
-  function ComputeACoeffs(NumStageEvals::Int, ConsOrder::Int,
+  function ComputeACoeffs(NumStageEvals::Int,
                           SE_Factors::Vector{Float64}, MonCoeffs::Vector{Float64})
     ACoeffs = MonCoeffs
 
-    for stage in 1:NumStageEvals - ConsOrder
+    for stage in 1:NumStageEvals - 2
       ACoeffs[stage] /= SE_Factors[stage]
       for prev_stage in 1:stage-1
         ACoeffs[stage] /= ACoeffs[prev_stage]
@@ -34,7 +20,7 @@
     return reverse(ACoeffs)
   end
   
-  function ComputePERK_ButcherTableau(NumStages::Int, ConsOrder::Int, BasePathMonCoeffs::AbstractString)
+  function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString)
   
     # c Vector form Butcher Tableau (defines timestep per stage)
     c = zeros(NumStages)
@@ -42,7 +28,6 @@
       c[k] = (k - 1)/(2.0*(NumStages - 1))
     end
     println("Timestep-split: "); display(c); println("\n")
-    # TODO: Not sure if valid for general ConsOrder (not 2)!
     SE_Factors = reverse(c[2:end-1])
   
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK specific)
@@ -53,15 +38,15 @@
 
     #=
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(NumStages) * ".txt"
-    NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
+    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == CoeffsMax
-    A = ComputeACoeffs(NumStages, ConsOrder, SE_Factors, MonCoeffs)
+    A = ComputeACoeffs(NumStages, SE_Factors, MonCoeffs)
     =#
 
     
     # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
     PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
-    NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
+    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == CoeffsMax
     
     AMatrix[:, 1] -= A
@@ -85,18 +70,17 @@
   
   mutable struct PERK
     const NumStages::Int
-    const ConsOrder::Int
   
     AMatrix::Matrix{Float64}
     c::Vector{Real}
   
     # Constructor for previously computed A Coeffs
-    function PERK(NumStages_::Int, ConsOrder_::Int, BasePathMonCoeffs_::AbstractString)
+    function PERK(NumStages_::Int, BasePathMonCoeffs_::AbstractString)
 
       newPERK = new(NumStages_)
   
       newPERK.AMatrix, newPERK.c = 
-        ComputePERK_ButcherTableau(NumStages_, ConsOrder_, BasePathMonCoeffs_)
+        ComputePERK_ButcherTableau(NumStages_, BasePathMonCoeffs_)
 
       return newPERK
     end

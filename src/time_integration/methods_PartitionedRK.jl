@@ -6,19 +6,6 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-function ReadInFile(FilePath::AbstractString, DataType::Type)
-  @assert isfile(FilePath)
-  Data = zeros(DataType, 0)
-  open(FilePath, "r") do File
-    while !eof(File)     
-      LineContent = readline(File)     
-      append!(Data, parse(DataType, LineContent))
-    end
-  end
-  NumLines = length(Data)
-
-  return NumLines, Data
-end
 
 function ComputePRK_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString,
                                   TrueComplexPEMax::Int)
@@ -31,14 +18,14 @@ function ComputePRK_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoEx
   ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
 
   PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
-  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+  NumPureReal, PureReal = read_file(PathPureReal, Float64)
 
   @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
   @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
   ForwardEulerWeights[1] = -1.0 / PureReal[1]
 
   PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  NumTrueComplex, TrueComplex = read_file(PathTrueComplex, ComplexF64)
   @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
 
   # Sort ascending => ascending timesteps (real part is always negative)
@@ -79,14 +66,14 @@ function ComputePRK_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoEx
     Degree = StagesMin * 2^i
 
     PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
-    NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+    NumPureReal, PureReal = read_file(PathPureReal, Float64)
 
     @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
     @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
     ForwardEulerWeights[i+1] = -1.0 / PureReal[1]
 
     PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
-    NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, Complex{Float64})
+    NumTrueComplex, TrueComplex = read_file(PathTrueComplex, Complex{Float64})
     @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
 
     # Sort ascending => ascending timesteps (real part is always negative)

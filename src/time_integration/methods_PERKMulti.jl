@@ -6,25 +6,11 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-  function ReadInFile(FilePath::AbstractString, DataType::Type)
-    @assert isfile(FilePath) "Couldn't find file"
-    Data = zeros(DataType, 0)
-    open(FilePath, "r") do File
-      while !eof(File)     
-        LineContent = readline(File)     
-        append!(Data, parse(DataType, LineContent))
-      end
-    end
-    NumLines = length(Data)
-  
-    return NumLines, Data
-  end
-
-  function ComputeACoeffs(NumStageEvals::Int, ConsOrder::Int,
+  function ComputeACoeffs(NumStageEvals::Int,
                           SE_Factors::Vector{Float64}, MonCoeffs::Vector{Float64})
     ACoeffs = MonCoeffs
 
-    for stage in 1:NumStageEvals - ConsOrder
+    for stage in 1:NumStageEvals - 2
       ACoeffs[stage] /= SE_Factors[stage]
       for prev_stage in 1:stage-1
         ACoeffs[stage] /= ACoeffs[prev_stage]
@@ -34,8 +20,7 @@
     return reverse(ACoeffs)
   end
   
-  function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, 
-                                      ConsOrder::Int, BasePathMonCoeffs::AbstractString)
+  function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString)
   
     # c Vector form Butcher Tableau (defines timestep per stage)
     c = zeros(Float64, NumStages)
@@ -61,20 +46,20 @@
     for level = 1:NumDoublings + 1
       
       PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
-      NumMonCoeffs, MonCoeffs = ReadInFile(PathMonCoeffs, Float64)
+      NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-      A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), ConsOrder, SE_Factors, MonCoeffs)
+      A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), SE_Factors, MonCoeffs)
       
 
       #=
       # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
       PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
-      NumMonCoeffs, A = ReadInFile(PathMonCoeffs, Float64)
+      NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
       @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
       =#
 
       AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
-      AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2] = A
+      AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
       
       # Add refinement levels to stages
       for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -113,7 +98,7 @@
     ActiveLevels::Vector{Vector{Int64}}
   
     # Constructor for previously computed A Coeffs
-    function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int, ConsOrder_::Int,
+    function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                         BasePathMonCoeffs_::AbstractString)
 
       newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
@@ -122,7 +107,7 @@
                           NumStageEvalsMin_ * 2^NumDoublings_)
   
       newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
-        ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, ConsOrder_, BasePathMonCoeffs_)
+        ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_)
 
       return newPERK_Multi
     end
@@ -719,7 +704,6 @@
 
           integrator.k_higher = integrator.du * integrator.dt
         end
-        integrator.u += integrator.k_higher
         =#
         
         
@@ -771,6 +755,8 @@
               integrator.du[integrator.level_u_indices_elements[level]] * integrator.dt
           end
         end
+        
+
         # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
         integrator.u += integrator.k_higher
       end # PERK_Multi step

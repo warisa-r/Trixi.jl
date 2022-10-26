@@ -217,4 +217,19 @@ macro trixi_timeit(timer_output, label, expr)
 end
 
 
+# Required for adaptive time integrators which read-in optimized Runge-Kutta quantities
+function read_file(FilePath::AbstractString, DataType::Type)
+  @assert isfile(FilePath) "Couldn't find file"
+  Data = zeros(DataType, 0)
+  open(FilePath, "r") do File
+    while !eof(File)     
+      LineContent = readline(File)     
+      append!(Data, parse(DataType, LineContent))
+    end
+  end
+  NumLines = length(Data)
+
+  return NumLines, Data
+end
+
 end # @muladd

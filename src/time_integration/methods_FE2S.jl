@@ -3,21 +3,7 @@
 # we need to opt-in explicitly.
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
-
-function ReadInFile(FilePath::AbstractString, DataType::Type)
-  @assert isfile(FilePath)
-  Data = zeros(DataType, 0)
-  open(FilePath, "r") do File
-    while !eof(File)     
-      LineContent = readline(File)     
-      append!(Data, parse(DataType, LineContent))
-    end
-  end
-  NumLines = length(Data)
-
-  return NumLines, Data
-end
-
+  
 function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString,
                                   NumTrueComplex_::Int)
 
@@ -29,7 +15,7 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
 
   PathPureReal = PathPseudoExtrema * "PureReal" * string(Stages) * ".txt"
-  NumPureReal, PureReal = ReadInFile(PathPureReal, Float64)
+  NumPureReal, PureReal = read_file(PathPureReal, Float64)
 
   @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
   @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
@@ -38,7 +24,7 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   c[2] = ForwardEulerWeight
 
   PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Stages) * ".txt"
-  NumTrueComplex, TrueComplex = ReadInFile(PathTrueComplex, ComplexF64)
+  NumTrueComplex, TrueComplex = read_file(PathTrueComplex, ComplexF64)
   @assert NumTrueComplex == NumTrueComplex_ "Assume that all but one pseudo-extremum are complex"
 
   # Sort ascending => ascending timesteps (real part is always negative)
@@ -257,7 +243,8 @@ function solve!(integrator::FE2S_Integrator)
         integrator.u_tmp += integrator.dt * alg.b2[i] * integrator.du
         =#
         
-        # Another version
+        # Another version, "directly read-off"
+        # TODO: Do timesteps c for this!
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
         k1 = integrator.dt * integrator.du
 
@@ -265,8 +252,7 @@ function solve!(integrator::FE2S_Integrator)
         integrator.f(integrator.du, integrator.u_tmp * (-2 * real(alg.TrueComplex[i]) / AbsValSqaured) + 
                                     k1 / AbsValSqaured, prob.p, integrator.t)
 
-        integrator.u_tmp += integrator.du * integrator.dt                               
-        
+        integrator.u_tmp += integrator.du * integrator.dt
       end
 
       t_stage = integrator.t + alg.c[end] * integrator.dt

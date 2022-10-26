@@ -92,7 +92,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 dtOptMin = 0.057 * 0.5
 
 #ode_algorithm = Trixi.FE2S(6, 1, dtOptMin, "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/")
-ode_algorithm = Trixi.PERK(8, 2, 2, dtOptMin, 
+ode_algorithm = Trixi.PERK(8, 2, dtOptMin, 
                            "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
 
 #exit()

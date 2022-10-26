@@ -16,7 +16,7 @@ solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 coordinates_min = -5.0 # minimum coordinate
 coordinates_max =  5.0 # maximum coordinate
 
-InitialRefinement = 4
+InitialRefinement = 6
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
@@ -53,9 +53,9 @@ analysis_callback = AnalysisCallback(semi, interval=100, extra_analysis_errors=(
 
 
 amr_controller = ControllerThreeLevel(semi, IndicatorMax(semi, variable=first),
-                                      base_level=4,
-                                      med_level=4, med_threshold=0.1,
-                                      max_level=6, max_threshold=0.6)
+                                      base_level=6,
+                                      med_level=7, med_threshold=0.1,
+                                      max_level=8, max_threshold=0.6)
 
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
@@ -64,7 +64,6 @@ amr_callback = AMRCallback(semi, amr_controller,
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
 
-
 #callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
@@ -72,7 +71,7 @@ callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
 
 #ode_algorithm = Trixi.CarpenterKennedy2N54()
 
-dtOptMin = 0.05 * 5
+dtOptMin = 0.05 * 5 / (4 * 1)
 # For s = 4
 #dtOptMin = 0.0545
 # For s > 4
@@ -81,7 +80,7 @@ dtOptMin = 0.05 * 5
 #dtOptMin = 2.73437500e-02 / 2 * 5
 
 
-ode_algorithm = Trixi.PERK(4, 2, 2, dtOptMin, 
+ode_algorithm = PERK_Multi(4, 2,
                            "/home/daniel/Desktop/git/MA/Optim_Monomials/Matlab/Results/1D_Adv_ConvergenceTest/")
                            #"/home/daniel/Desktop/git/MA/Optim_Roots/IpOPT_dco/Feas_Reals/")
 sol = Trixi.solve(ode, ode_algorithm,
@@ -92,7 +91,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
-pd = PlotData1D(sol)
 plot(sol, plot_title = EndTime)
 
+pd = PlotData1D(sol)
 plot!(getmesh(pd))
