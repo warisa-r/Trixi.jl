@@ -7,21 +7,12 @@
 function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString,
                                   NumTrueComplex_::Int)
 
-  c  = zeros(Stages)                                  
-  a  = zeros(NumTrueComplex_)
-  b1 = zeros(NumTrueComplex_)
-  b2 = zeros(NumTrueComplex_)
-
-  ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
-
   PathPureReal = PathPseudoExtrema * "PureReal" * string(Stages) * ".txt"
   NumPureReal, PureReal = read_file(PathPureReal, Float64)
 
   @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
   @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
   ForwardEulerWeight = -1.0 / PureReal[1]
-  # Set timestep to previous forward euler step
-  c[2] = ForwardEulerWeight
 
   PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Stages) * ".txt"
   NumTrueComplex, TrueComplex = read_file(PathTrueComplex, ComplexF64)
@@ -31,60 +22,43 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   perm = sortperm(real.(TrueComplex))
   TrueComplex = TrueComplex[perm]
 
-  
+  InvAbsValsSquared = zeros(NumTrueComplex_ + 1)
+  TwoRealOverAbsSquared = zeros(NumTrueComplex_ + 1)
+  TimeSteps = zeros(NumTrueComplex_ + 1)
+  TimeSteps[1] = ForwardEulerWeight
+  # Dummy to fill position of ForwardEulerWeight
+  InvAbsValsSquared[1]     = 42.0
+  TwoRealOverAbsSquared[1] = 42.0
+
   for i = 1:NumTrueComplex
-    AbsSquared = abs(TrueComplex[i]) * abs(TrueComplex[i])
+    InvAbsValsSquared[i+1] = 1.0/(abs(TrueComplex[i])^2)
+    TwoRealOverAbsSquared[i+1] = -2 * real(TrueComplex[i]) * InvAbsValsSquared[i+1]
 
-    # Relevant Coefficients of (1 - 1/(Re + i * Im)) * (1 - 1/(Re - i * Im))
-    a_1 = -2.0 * real(TrueComplex[i]) / AbsSquared
-    a_2 = 1.0 / AbsSquared
-
-
-    # Set a, b1, b2 such that they are all evaluated at the same timestep.
-    a[i] = a_1
-
-    b2[i] = a_2 / a[i]
-    b1[i] = a_1 - b2[i]
-
-    c[2*i + 1] = c[2*i] + a_1
-    c[2*i + 2] = c[2*i + 1]
+    TimeSteps[i+1] = InvAbsValsSquared[i+1] + TwoRealOverAbsSquared[i+1]
   end
-  
 
   println("ForwardEulerWeight:\n"); display(ForwardEulerWeight); println("\n")
-  println("a:\n"); display(a); println("\n")
-  println("b1:\n"); display(b1); println("\n")
-  println("b2:\n"); display(b2); println("\n")
 
-  println("c:\n"); display(c); println("\n")
+  # Sort in ascending manner
+  perm = sortperm(TimeSteps)
+  TimeSteps = TimeSteps[perm]
 
-  return ForwardEulerWeight, a, b1, b2, c, TrueComplex
+  IndexForwardEuler = findfirst(x -> x==ForwardEulerWeight, TimeSteps)
+  println(IndexForwardEuler)
+
+
+  InvAbsValsSquared     = InvAbsValsSquared[perm]
+  TwoRealOverAbsSquared = TwoRealOverAbsSquared[perm]
+
+  println("InvAbsValsSquared:\n"); display(InvAbsValsSquared); println("\n")
+  println("TwoRealOverAbsSquared:\n"); display(TwoRealOverAbsSquared); println("\n")
+
+  println("TimeSteps:\n"); display(TimeSteps); println("\n")
+  println(sum(TimeSteps))
+
+  return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler
 end
 
-function BuildButcherTableau(ForwardEulerWeight::Float64, a::Vector{Float64}, 
-                             b1::Vector{Float64}, b2::Vector{Float64},
-                             Stages::Int, NumTrueComplex::Int)
-
-  A = zeros(Stages, Stages)
-
-  # Forward Euler contribution
-  A[2:end, 1] .= ForwardEulerWeight
-
-  # Intermediate two-step submethods
-  for j = 1:NumTrueComplex
-    A[2*j + 1, 2*j] = a[j]
-
-    A[(2 + 2 * j):end, 2*j]     .= b1[j]
-    A[(2 + 2 * j):end, 2*j + 1] .= b2[j]
-  end
-
-  println("Butcher Tableau matrix A:\n"); display(A); println()
-
-  c = sum(A, dims = 2)
-  println("Timesteps set as c_i = sum_j a_{ij}:\n"); display(c); println()
-
-  return A
-end
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
@@ -104,24 +78,19 @@ mutable struct FE2S
   const NumTrueComplex::Int
 
   ForwardEulerWeight::Float64
-  a::Vector{Float64}
-  b1::Vector{Float64}
-  b2::Vector{Float64}
-  c::Vector{Float64}
-  TrueComplex::Vector{ComplexF64}
-
-  A::Matrix{Float64} # Butcher Tableau (Not used)
+  InvAbsValsSquared::Vector{Float64}
+  TwoRealOverAbsSquared::Vector{Float64}
+  TimeSteps::Vector{Float64}
+  IndexForwardEuler::Int
 
   # Constructor for previously computed A Coeffs
   function FE2S(Stages_::Int, PathPseudoExtrema_::AbstractString)
     @assert Stages_ % 2 == 0 "Support only even number of stages for the moment"
     newFE2S = new(Stages_, Int(Stages_ / 2 - 1))
 
-    newFE2S.ForwardEulerWeight, newFE2S.a, newFE2S.b1, newFE2S.b2, newFE2S.c, newFE2S.TrueComplex = 
+    newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared, 
+    newFE2S.TimeSteps, newFE2S.IndexForwardEuler = 
       ComputeFE2S_Coefficients(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
-
-    newFE2S.A = BuildButcherTableau(newFE2S.ForwardEulerWeight, newFE2S.a, newFE2S.b1, newFE2S.b2, 
-                                    Stages_, newFE2S.NumTrueComplex)
 
     return newFE2S
   end
@@ -223,64 +192,43 @@ function solve!(integrator::FE2S_Integrator)
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-      
-      # First Forward Euler step
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t) # du = k1
-      integrator.u_tmp = integrator.u + alg.ForwardEulerWeight * integrator.dt * integrator.du
-      t_stage = integrator.t + alg.c[2] * integrator.dt
+      integrator.u_tmp = copy(integrator.u) # Used for incremental stage update
 
-      # Intermediate "two-step" sub methods
-      for i in eachindex(alg.a)
-        #=
-        # Low-storage implementation (only one k = du):
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # du = k1
-
-        integrator.u_tmp += integrator.dt * alg.b1[i] * integrator.du
-
-        t_stage = integrator.t + alg.c[2*i + 1] * integrator.dt
-        integrator.f(integrator.du, integrator.u_tmp + integrator.dt *(alg.a[i] - alg.b1[i]) * integrator.du, 
-                     prob.p, t_stage) # du = k2
-        integrator.u_tmp += integrator.dt * alg.b2[i] * integrator.du
-        =#
-        
-        # Another version, "directly read-off"
-        # TODO: Do timesteps c for this!
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+      t_stage = integrator.t
+      # Two-stage substeps with smaller timestep than ForwardEuler
+      for i = 1:alg.IndexForwardEuler-1
+        if i > 1
+          t_stage += integrator.dt * alg.TimeSteps[i-1]
+        end
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
         k1 = integrator.dt * integrator.du
 
-        AbsValSqaured = abs(alg.TrueComplex[i]) * abs(alg.TrueComplex[i])
-        integrator.f(integrator.du, integrator.u_tmp * (-2 * real(alg.TrueComplex[i]) / AbsValSqaured) + 
-                                    k1 / AbsValSqaured, prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u_tmp * alg.TwoRealOverAbsSquared[i] + 
+                                    k1 * alg.InvAbsValsSquared[i], prob.p, t_stage)
 
         integrator.u_tmp += integrator.du * integrator.dt
       end
 
-      t_stage = integrator.t + alg.c[end] * integrator.dt
+      # Forward Euler step
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t) # du = k1
+      integrator.u_tmp += alg.ForwardEulerWeight * integrator.dt * integrator.du
+
+      # Two-stage substeps with bigger timestep than ForwardEuler
+      for i = alg.IndexForwardEuler+1:length(alg.InvAbsValsSquared)
+        t_stage += integrator.dt * alg.TimeSteps[i-1]
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+        k1 = integrator.dt * integrator.du
+
+        integrator.f(integrator.du, integrator.u_tmp * alg.TwoRealOverAbsSquared[i] + 
+                                    k1 * alg.InvAbsValsSquared[i], prob.p, t_stage)
+
+        integrator.u_tmp += integrator.du * integrator.dt
+      end
+
+      t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
       # Final Euler step with step length of dt (Due to form of stability polynomial)
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # k1
       integrator.u += integrator.dt * integrator.du
-      
-
-      #=
-      k = zeros(length(integrator.u), alg.Stages)      
-      # k1
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      k[:, 1] = integrator.du * integrator.dt
-
-      for i = 2:alg.Stages
-        tmp = copy(integrator.u)
-
-        # Partitioned Runge-Kutta approach: One state that contains updates from all levels
-        for j = 1:i-1
-          tmp += alg.A[i, j] * k[:, j]
-        end
-
-        integrator.f(integrator.du, tmp, prob.p, integrator.t)
-
-        k[:, i] = integrator.du * integrator.dt
-      end
-      integrator.u += k[:, end]
-      =#
     end # FE2S step
 
     integrator.iter += 1
