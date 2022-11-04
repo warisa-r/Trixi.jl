@@ -306,7 +306,6 @@ end
 end
 
 
-# TODO: Adapt for adaptive / staged ODE solvers (PERK)
 # TODO: Taal dimension agnostic
 function calc_volume_integral!(du, u,
                                mesh::Union{TreeMesh{1}, StructuredMesh{1}},
@@ -347,6 +346,49 @@ function calc_volume_integral!(du, u,
   return nothing
 end
 
+
+# TODO: Taal dimension agnostic
+function calc_volume_integral!(du, u,
+                               mesh::Union{TreeMesh{1}, StructuredMesh{1}},
+                               nonconservative_terms, equations,
+                               volume_integral::VolumeIntegralShockCapturingHG,
+                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64})
+
+  @unpack element_ids_dg, element_ids_dgfv = cache
+  @unpack volume_flux_dg, volume_flux_fv, indicator = volume_integral
+
+  # Calculate blending factors α: u = u_DG * (1 - α) + u_FV * α
+  alpha = @trixi_timeit timer() "blending factors" indicator(u, mesh, equations, dg, cache)
+
+  # Determine element ids for DG-only and blended DG-FV volume integral
+  pure_and_blended_element_ids!(element_ids_dg, element_ids_dgfv, alpha, dg, cache,
+                                level_info_elements_acc)
+
+  # Loop over pure DG elements
+  @trixi_timeit timer() "pure DG" @threaded for idx_element in eachindex(element_ids_dg)
+    element = element_ids_dg[idx_element]
+    split_form_kernel!(du, u, element, mesh, nonconservative_terms, equations,
+                       volume_flux_dg, dg, cache)
+  end
+
+  # Loop over blended DG-FV elements
+  @trixi_timeit timer() "blended DG-FV" @threaded for idx_element in eachindex(element_ids_dgfv)
+    element = element_ids_dgfv[idx_element]
+    alpha_element = alpha[element]
+
+    # Calculate DG volume integral contribution
+    split_form_kernel!(du, u, element, mesh, nonconservative_terms, equations,
+                       volume_flux_dg, dg, cache, 1 - alpha_element)
+
+    # Calculate FV volume integral contribution
+    fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
+               dg, cache, element, alpha_element)
+  end
+
+  return nothing
+end
+
+
 # TODO: Taal dimension agnostic
 function calc_volume_integral!(du, u,
                                mesh::TreeMesh{1},
@@ -355,11 +397,13 @@ function calc_volume_integral!(du, u,
                                dg::DGSEM, cache)
   @unpack volume_flux_fv = volume_integral
 
-  # Calculate LGL FV volume integral
-  @threaded for element in eachelement(dg, cache)
-    fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
-               dg, cache, element, true)
-  end
+  #if length(dg.basis.nodes) > 1
+    # Calculate LGL FV volume integral
+    @threaded for element in eachelement(dg, cache)
+      fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
+                dg, cache, element, true)
+    end
+  #end
 
   return nothing
 end
@@ -379,6 +423,7 @@ function calc_volume_integral!(du, u,
 
   return nothing
 end
+
 
 @inline function fv_kernel!(du, u,
                             mesh::Union{TreeMesh{1}, StructuredMesh{1}},
@@ -458,7 +503,7 @@ end
     set_node_vars!(fstar1_R, f1_R, equations, dg, i)
   end
 
-   return nothing
+  return nothing
 end
 
 
