@@ -350,4 +350,8 @@ include("acoustic_perturbation_2d.jl")
 
 abstract type AbstractEquationsParabolic{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
 
+# Lighthill-Witham-Richards traffic flow model
+abstract type AbstractTrafficFlowLWR{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
+include("traffic_flow_lwr_1d.jl")
+
 end # @muladd
