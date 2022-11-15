@@ -22,16 +22,17 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   perm = sortperm(real.(TrueComplex))
   TrueComplex = TrueComplex[perm]
 
-  InvAbsValsSquared = zeros(NumTrueComplex_ + 1)
-  TwoRealOverAbsSquared = zeros(NumTrueComplex_ + 1)
-  TimeSteps = zeros(NumTrueComplex_ + 1)
+  InvAbsValsSquared     = zeros(NumTrueComplex_ + 1) # 1 / (|r_i|^2)
+  TwoRealOverAbsSquared = zeros(NumTrueComplex_ + 1) # -2 * Re(r_i)/(|r_i|^2)
+  TimeSteps             = zeros(NumTrueComplex_ + 1) # 1 / (|r_i|^2) + -2 * Re(r_i)/(|r_i|^2)
+
   TimeSteps[1] = ForwardEulerWeight
   # Dummy to fill position of ForwardEulerWeight
   InvAbsValsSquared[1]     = 42.0
   TwoRealOverAbsSquared[1] = 42.0
 
   for i = 1:NumTrueComplex
-    InvAbsValsSquared[i+1] = 1.0/(abs(TrueComplex[i])^2)
+    InvAbsValsSquared[i+1]     = 1.0/(abs(TrueComplex[i])^2)
     TwoRealOverAbsSquared[i+1] = -2 * real(TrueComplex[i]) * InvAbsValsSquared[i+1]
 
     TimeSteps[i+1] = InvAbsValsSquared[i+1] + TwoRealOverAbsSquared[i+1]
@@ -43,9 +44,8 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   perm = sortperm(TimeSteps)
   TimeSteps = TimeSteps[perm]
 
+  # Find position of ForwardEulerWeight after sorting, required to do steps in correct order
   IndexForwardEuler = findfirst(x -> x==ForwardEulerWeight, TimeSteps)
-  println(IndexForwardEuler)
-
 
   InvAbsValsSquared     = InvAbsValsSquared[perm]
   TwoRealOverAbsSquared = TwoRealOverAbsSquared[perm]
@@ -54,7 +54,7 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   println("TwoRealOverAbsSquared:\n"); display(TwoRealOverAbsSquared); println("\n")
 
   println("TimeSteps:\n"); display(TimeSteps); println("\n")
-  println(sum(TimeSteps))
+  println("Sum of Timesteps:\n");  println(sum(TimeSteps))
 
   return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler
 end
@@ -203,10 +203,12 @@ function solve!(integrator::FE2S_Integrator)
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
         k1 = integrator.dt * integrator.du
 
+        t_stage += alg.InvAbsValsSquared[i]
         integrator.f(integrator.du, integrator.u_tmp * alg.TwoRealOverAbsSquared[i] + 
                                     k1 * alg.InvAbsValsSquared[i], prob.p, t_stage)
 
         integrator.u_tmp += integrator.du * integrator.dt
+        t_stage += alg.TwoRealOverAbsSquared[i]
       end
 
       # Forward Euler step
@@ -219,10 +221,12 @@ function solve!(integrator::FE2S_Integrator)
         integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
         k1 = integrator.dt * integrator.du
 
+        t_stage += alg.InvAbsValsSquared[i]
         integrator.f(integrator.du, integrator.u_tmp * alg.TwoRealOverAbsSquared[i] + 
                                     k1 * alg.InvAbsValsSquared[i], prob.p, t_stage)
 
         integrator.u_tmp += integrator.du * integrator.dt
+        t_stage += alg.TwoRealOverAbsSquared[i]
       end
 
       t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
