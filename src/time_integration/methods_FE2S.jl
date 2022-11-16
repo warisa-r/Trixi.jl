@@ -3,7 +3,7 @@
 # we need to opt-in explicitly.
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
-
+  
 function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString,
                                   NumTrueComplex_::Int)
 
@@ -146,7 +146,7 @@ end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
 function solve(ode::ODEProblem, alg::FE2S;
-                dt::Real, callback=nothing, kwargs...)
+               dt::Real, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0) # Initial value
   du    = similar(u0)
@@ -158,11 +158,11 @@ function solve(ode::ODEProblem, alg::FE2S;
   iter = 0
 
   integrator = FE2S_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, 
-                  ode.p, # the semidiscretization
-                  (prob=ode,), # Not really sure whats going on here
-                  ode.f, # the right-hand-side of the ODE u' = f(u, p, t)
-                  alg, # The ODE integration algorithm/method
-                  FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false, k1)
+                 ode.p, # the semidiscretization
+                 (prob=ode,), # Not really sure whats going on here
+                 ode.f, # the right-hand-side of the ODE u' = f(u, p, t)
+                 alg, # The ODE integration algorithm/method
+                 FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false, k1)
 
   # initialize callbacks
   if callback isa CallbackSet
@@ -212,8 +212,8 @@ function solve!(integrator::FE2S_Integrator)
 
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
 
-      @threaded for i in eachindex(integrator.du)
-        integrator.k1[i] = integrator.dt * integrator.du[i]
+      @threaded for j in eachindex(integrator.du)
+        integrator.k1[j] = integrator.dt * integrator.du[j]
       end
 
       t_stage += alg.InvAbsValsSquared[i]
@@ -222,8 +222,8 @@ function solve!(integrator::FE2S_Integrator)
                                   integrator.k1 .* alg.InvAbsValsSquared[i], prob.p, t_stage)
       end
                                 
-      @threaded for i in eachindex(integrator.du)
-        integrator.u_tmp[i] += integrator.dt * integrator.du[i]
+      @threaded for j in eachindex(integrator.du)
+        integrator.u_tmp[j] += integrator.dt * integrator.du[j]
       end
       t_stage += alg.TwoRealOverAbsSquared[i]
     end
@@ -231,8 +231,8 @@ function solve!(integrator::FE2S_Integrator)
     # Forward Euler step
     integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t) # du = k1
     
-    @threaded for i in eachindex(integrator.du)
-      integrator.u_tmp[i] += alg.ForwardEulerWeight * integrator.dt * integrator.du[i]
+    @threaded for j in eachindex(integrator.du)
+      integrator.u_tmp[j] += alg.ForwardEulerWeight * integrator.dt * integrator.du[j]
     end
 
     # Two-stage substeps with bigger timestep than ForwardEuler
@@ -240,8 +240,12 @@ function solve!(integrator::FE2S_Integrator)
       t_stage += integrator.dt * alg.TimeSteps[i-1]
 
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
-      @threaded for i in eachindex(integrator.du)
-        integrator.k1[i] = integrator.dt * integrator.du[i]
+      @threaded for j in eachindex(integrator.du)
+        integrator.k1[j] = integrator.dt * integrator.du[j]
+        #=
+        integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[j] + 
+                           integrator.u_tmp .* alg.TwoRealOverAbsSquared[j]
+        =#
       end
 
       t_stage += alg.InvAbsValsSquared[i]
@@ -250,8 +254,8 @@ function solve!(integrator::FE2S_Integrator)
                                   integrator.k1 .* alg.InvAbsValsSquared[i], prob.p, t_stage)
       end
 
-      @threaded for i in eachindex(integrator.du)                                  
-        integrator.u_tmp[i] += integrator.dt * integrator.du[i]
+      @threaded for j in eachindex(integrator.du)                                  
+        integrator.u_tmp[j] += integrator.dt * integrator.du[j]
       end
       t_stage += alg.TwoRealOverAbsSquared[i]
     end
@@ -259,8 +263,8 @@ function solve!(integrator::FE2S_Integrator)
     t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
     # Final Euler step with step length of dt (Due to form of stability polynomial)
     integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
-    @threaded for i in eachindex(integrator.du)
-      integrator.u[i] += integrator.dt * integrator.du[i]
+    @threaded for j in eachindex(integrator.du)
+      integrator.u[j] += integrator.dt * integrator.du[j]
     end
   end # FE2S step
 
@@ -312,6 +316,5 @@ function Base.resize!(integrator::FE2S_Integrator, new_size)
   resize!(integrator.du, new_size)
   resize!(integrator.u_tmp, new_size)
 end
-  
+
 end # @muladd
-  
