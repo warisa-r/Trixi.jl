@@ -132,7 +132,8 @@ mutable struct FE2S_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, FE2S_Int
   alg::Alg # This is our own class written above; Abbreviation for ALGorithm
   opts::FE2S_IntegratorOptions
   finalstep::Bool # added for convenience
-  k1::uType # Intermediate stage 
+  k1::uType # Intermediate stage
+  t_stage::RealT
 end
 
 # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
@@ -162,7 +163,7 @@ function solve(ode::ODEProblem, alg::FE2S;
                  (prob=ode,), # Not really sure whats going on here
                  ode.f, # the right-hand-side of the ODE u' = f(u, p, t)
                  alg, # The ODE integration algorithm/method
-                 FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false, k1)
+                 FE2S_IntegratorOptions(callback, ode.tspan; kwargs...), false, k1, t0)
 
   # initialize callbacks
   if callback isa CallbackSet
@@ -203,31 +204,30 @@ function solve!(integrator::FE2S_Integrator)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
 
-      t_stage = integrator.t
       # Two-stage substeps with smaller timestep than ForwardEuler
       for i = 1:alg.IndexForwardEuler-1
         if i > 1
-          t_stage += integrator.dt * alg.TimeSteps[i-1]
+          integrator.t_stage += integrator.dt * alg.TimeSteps[i-1]
         end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
         end
 
-        t_stage += alg.InvAbsValsSquared[i]
-        integrator.f(integrator.du, integrator.k1, prob.p, t_stage)
+        integrator.t_stage += alg.InvAbsValsSquared[i]
+        integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
                                   
         @threaded for j in eachindex(integrator.du)
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
         end
-        t_stage += alg.TwoRealOverAbsSquared[i]
+        integrator.t_stage += alg.TwoRealOverAbsSquared[i]
       end
 
       # Forward Euler step
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t) # du = k1
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage) # du = k1
       
       @threaded for j in eachindex(integrator.du)
         integrator.u_tmp[j] += alg.ForwardEulerWeight * integrator.dt * integrator.du[j]
@@ -235,26 +235,26 @@ function solve!(integrator::FE2S_Integrator)
 
       # Two-stage substeps with bigger timestep than ForwardEuler
       for i = alg.IndexForwardEuler+1:length(alg.InvAbsValsSquared)
-        t_stage += integrator.dt * alg.TimeSteps[i-1]
+        integrator.t_stage += integrator.dt * alg.TimeSteps[i-1]
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
         end
 
-        t_stage += alg.InvAbsValsSquared[i]
-        integrator.f(integrator.du, integrator.k1, prob.p, t_stage)
+        integrator.t_stage += alg.InvAbsValsSquared[i]
+        integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
 
         @threaded for j in eachindex(integrator.du)                                  
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
         end
-        t_stage += alg.TwoRealOverAbsSquared[i]
+        integrator.t_stage += alg.TwoRealOverAbsSquared[i]
       end
 
-      t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
+      integrator.t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
       # Final Euler step with step length of dt (Due to form of stability polynomial)
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
       @threaded for j in eachindex(integrator.du)
         integrator.u[j] += integrator.dt * integrator.du[j]
       end
