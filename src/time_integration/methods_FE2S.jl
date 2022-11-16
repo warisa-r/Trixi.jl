@@ -199,74 +199,66 @@ function solve!(integrator::FE2S_Integrator)
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-      @trixi_timeit timer() "Measure copy" begin
-        integrator.u_tmp = copy(integrator.u) # Used for incremental stage update
+      @threaded for j in eachindex(integrator.u)
+        integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
 
-    t_stage = integrator.t
-    # Two-stage substeps with smaller timestep than ForwardEuler
-    for i = 1:alg.IndexForwardEuler-1
-      if i > 1
+      t_stage = integrator.t
+      # Two-stage substeps with smaller timestep than ForwardEuler
+      for i = 1:alg.IndexForwardEuler-1
+        if i > 1
+          t_stage += integrator.dt * alg.TimeSteps[i-1]
+        end
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+
+        @threaded for j in eachindex(integrator.du)
+          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
+                            integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+        end
+
+        t_stage += alg.InvAbsValsSquared[i]
+        integrator.f(integrator.du, integrator.k1, prob.p, t_stage)
+                                  
+        @threaded for j in eachindex(integrator.du)
+          integrator.u_tmp[j] += integrator.dt * integrator.du[j]
+        end
+        t_stage += alg.TwoRealOverAbsSquared[i]
+      end
+
+      # Forward Euler step
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t) # du = k1
+      
+      @threaded for j in eachindex(integrator.du)
+        integrator.u_tmp[j] += alg.ForwardEulerWeight * integrator.dt * integrator.du[j]
+      end
+
+      # Two-stage substeps with bigger timestep than ForwardEuler
+      for i = alg.IndexForwardEuler+1:length(alg.InvAbsValsSquared)
         t_stage += integrator.dt * alg.TimeSteps[i-1]
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
+        @threaded for j in eachindex(integrator.du)
+          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
+                            integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+        end
+
+        t_stage += alg.InvAbsValsSquared[i]
+        integrator.f(integrator.du, integrator.k1, prob.p, t_stage)
+
+        @threaded for j in eachindex(integrator.du)                                  
+          integrator.u_tmp[j] += integrator.dt * integrator.du[j]
+        end
+        t_stage += alg.TwoRealOverAbsSquared[i]
       end
 
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
-
-      @threaded for j in eachindex(integrator.du)
-        integrator.k1[j] = integrator.dt * integrator.du[j]
-      end
-
-      t_stage += alg.InvAbsValsSquared[i]
-      @trixi_timeit timer() "Second rhs" begin
-      integrator.f(integrator.du, integrator.u_tmp .* alg.TwoRealOverAbsSquared[i] .+ 
-                                  integrator.k1 .* alg.InvAbsValsSquared[i], prob.p, t_stage)
-      end
-                                
-      @threaded for j in eachindex(integrator.du)
-        integrator.u_tmp[j] += integrator.dt * integrator.du[j]
-      end
-      t_stage += alg.TwoRealOverAbsSquared[i]
-    end
-
-    # Forward Euler step
-    integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t) # du = k1
-    
-    @threaded for j in eachindex(integrator.du)
-      integrator.u_tmp[j] += alg.ForwardEulerWeight * integrator.dt * integrator.du[j]
-    end
-
-    # Two-stage substeps with bigger timestep than ForwardEuler
-    for i = alg.IndexForwardEuler+1:length(alg.InvAbsValsSquared)
-      t_stage += integrator.dt * alg.TimeSteps[i-1]
-
+      t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
+      # Final Euler step with step length of dt (Due to form of stability polynomial)
       integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
       @threaded for j in eachindex(integrator.du)
-        integrator.k1[j] = integrator.dt * integrator.du[j]
-        #=
-        integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[j] + 
-                           integrator.u_tmp .* alg.TwoRealOverAbsSquared[j]
-        =#
+        integrator.u[j] += integrator.dt * integrator.du[j]
       end
-
-      t_stage += alg.InvAbsValsSquared[i]
-      @trixi_timeit timer() "Second rhs" begin
-      integrator.f(integrator.du, integrator.u_tmp .* alg.TwoRealOverAbsSquared[i] .+ 
-                                  integrator.k1 .* alg.InvAbsValsSquared[i], prob.p, t_stage)
-      end
-
-      @threaded for j in eachindex(integrator.du)                                  
-        integrator.u_tmp[j] += integrator.dt * integrator.du[j]
-      end
-      t_stage += alg.TwoRealOverAbsSquared[i]
-    end
-
-    t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
-    # Final Euler step with step length of dt (Due to form of stability polynomial)
-    integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage)
-    @threaded for j in eachindex(integrator.du)
-      integrator.u[j] += integrator.dt * integrator.du[j]
-    end
-  end # FE2S step
+    end # FE2S step
 
     integrator.iter += 1
     integrator.t += integrator.dt
