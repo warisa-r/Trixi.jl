@@ -59,11 +59,18 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler
 end
 
-function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64}, 
-                           EigenValuesScaled::Vector{ComplexF64})
 
-  for i in eachindex(InvAbsValsSquared)
-    for j in eachindex(EigenValuesScaled)
+function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64},
+                           ForwardEulerWeight::Float64, EigenValuesScaled::Vector{ComplexF64})
+
+  for j in eachindex(EigenValuesScaled)                           
+    # Forward Euler step:
+    if abs(1 + ForwardEulerWeight * EigenValuesScaled[j]) > 1
+      println("Non-internally stable forward euler step!")
+    end
+
+    #=
+    for i in eachindex(InvAbsValsSquared)
       # Intermediate stage:
 
       # mu = -2 Re, \tilde mu = 1
@@ -72,7 +79,7 @@ function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSqu
       #if abs(TwoRealOverAbsSquared[i] - EigenValuesScaled[j]*InvAbsValsSquared[i]) > 1
       # mu = -2 Re/|r|, \tilde mu = 1/|r|
       if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
-        println("Non-internal stable Intermediate update at timestep " * string(i))
+        println("Non-internally stable Intermediate update at timestep " * string(i))
       end
 
       # Second stage
@@ -83,12 +90,77 @@ function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSqu
       #if abs(1 - EigenValuesScaled[j]) > 1
       # mu = 1, \tilde mu = 1/|r|
       if abs(1 - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
-        println("Non-internal stable Second update at timestep " * string(i))
+        println("Non-internally stable Second update at timestep " * string(i))
       end
 
     end
+    =#
   end
+end
 
+function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64},
+                           ForwardEulerWeight::Float64, IndexForwardEuler::Int, 
+                           EigenValues::Vector{ComplexF64}, dt1::Float64, )
+
+  for j in eachindex(EigenValues)
+    for i = 1:IndexForwardEuler-1
+      EigValScaled = i * dt1 * EigenValues[j]
+
+      # Intermediate stage:
+
+      # mu = -2 Re, \tilde mu = 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigValScaled) > 1
+      # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
+      if abs(TwoRealOverAbsSquared[i] - EigValScaled*InvAbsValsSquared[i]) > 1
+      # mu = -2 Re/|r|, \tilde mu = 1/|r|
+      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internally stable Intermediate update at timestep " * string(i))
+      end
+
+      # Second stage
+
+      # mu = 1, \tilde mu = 1/|r|^2
+      #if abs(1 - InvAbsValsSquared[i] * EigValScaled) > 1
+      # mu = 1, \tilde mu = 1
+      if abs(1 - EigValScaled) > 1
+      # mu = 1, \tilde mu = 1/|r|
+      #if abs(1 - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internally stable Second update at timestep " * string(i))
+      end
+    end
+
+    EigValScaled = IndexForwardEuler * dt1 * EigenValues[j]
+    # Forward Euler step:
+    if abs(1 + ForwardEulerWeight * EigValScaled) > 1
+      println("Non-internally stable forward euler step!")
+    end
+
+    for i = IndexForwardEuler+1:length(InvAbsValsSquared)
+      EigValScaled = i * dt1 * EigenValues[j]
+
+      # Intermediate stage:
+
+      # mu = -2 Re, \tilde mu = 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigValScaled) > 1
+      # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
+      if abs(TwoRealOverAbsSquared[i] - EigValScaled*InvAbsValsSquared[i]) > 1
+      # mu = -2 Re/|r|, \tilde mu = 1/|r|
+      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internally stable Intermediate update at timestep " * string(i))
+      end
+
+      # Second stage
+
+      # mu = 1, \tilde mu = 1/|r|^2
+      #if abs(1 - InvAbsValsSquared[i] * EigValScaled) > 1
+      # mu = 1, \tilde mu = 1
+      if abs(1 - EigValScaled) > 1
+      # mu = 1, \tilde mu = 1/|r|
+      #if abs(1 - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internally stable Second update at timestep " * string(i))
+      end
+    end
+  end
 end
 
 
