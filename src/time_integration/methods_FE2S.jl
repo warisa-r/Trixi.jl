@@ -59,6 +59,38 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler
 end
 
+function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64}, 
+                           EigenValuesScaled::Vector{ComplexF64})
+
+  for i in eachindex(InvAbsValsSquared)
+    for j in eachindex(EigenValuesScaled)
+      # Intermediate stage:
+
+      # mu = -2 Re, \tilde mu = 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigenValuesScaled[j]) > 1
+      # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
+      #if abs(TwoRealOverAbsSquared[i] - EigenValuesScaled[j]*InvAbsValsSquared[i]) > 1
+      # mu = -2 Re/|r|, \tilde mu = 1/|r|
+      if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internal stable Intermediate update at timestep " * string(i))
+      end
+
+      # Second stage
+
+      # mu = 1, \tilde mu = 1/|r|^2
+      #if abs(1 - InvAbsValsSquared[i] * EigenValuesScaled[j]) > 1
+      # mu = 1, \tilde mu = 1
+      #if abs(1 - EigenValuesScaled[j]) > 1
+      # mu = 1, \tilde mu = 1/|r|
+      if abs(1 - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
+        println("Non-internal stable Second update at timestep " * string(i))
+      end
+
+    end
+  end
+
+end
+
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
@@ -214,7 +246,7 @@ function solve!(integrator::FE2S_Integrator)
 
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
-                            integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
@@ -240,7 +272,7 @@ function solve!(integrator::FE2S_Integrator)
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
-                            integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
