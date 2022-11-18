@@ -1,3 +1,5 @@
+using DelimitedFiles
+
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -42,6 +44,9 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
 
   # Sort in ascending manner
   perm = sortperm(TimeSteps)
+  
+  # Sort in DESCENDING manner
+  #perm = sortperm(TimeSteps, rev=true)
   TimeSteps = TimeSteps[perm]
 
   # Find position of ForwardEulerWeight after sorting, required to do steps in correct order
@@ -56,46 +61,128 @@ function ComputeFE2S_Coefficients(Stages::Int, PathPseudoExtrema::AbstractString
   println("TimeSteps:\n"); display(TimeSteps); println("\n")
   println("Sum of Timesteps:\n");  println(sum(TimeSteps))
 
-  return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler
+  return ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, TimeSteps, IndexForwardEuler, perm
+end
+
+function ComputeFE2S_Coefficients_RealRK(Stages::Int, PathPseudoExtrema::AbstractString,
+                                         NumTrueComplex_::Int)
+
+  PathPureReal = PathPseudoExtrema * "PureReal" * string(Stages) * ".txt"
+  NumPureReal, PureReal = read_file(PathPureReal, Float64)
+
+  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
+  @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
+  ForwardEulerWeight = -1.0 / PureReal[1]
+
+  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Stages) * ".txt"
+  NumTrueComplex, TrueComplex = read_file(PathTrueComplex, ComplexF64)
+  @assert NumTrueComplex == NumTrueComplex_ "Assume that all but one pseudo-extremum are complex"
+
+  # Sort ascending => ascending timesteps (real part is always negative)
+  perm = sortperm(real.(TrueComplex))
+  TrueComplex = TrueComplex[perm]
+
+  # Find first element where a timestep would be greater 1 => Special treatment
+  IndGreater1 = findfirst(x->real(x) > -1.0, TrueComplex)
+  println(IndGreater1)
+
+  if IndGreater1 === nothing
+    # Easy: All can use negated inverse root as timestep
+    IndGreater1 = NumTrueComplex + 1
+  end
+
+  a  = zeros(NumTrueComplex_)
+  b1 = zeros(NumTrueComplex_)
+  b2 = zeros(NumTrueComplex_)
+
+  for i = 1:IndGreater1 - 1
+    a[i]  = -1.0 / real(TrueComplex[i])
+    # Ansatz: Use same weight for both b1, b2.
+    b1[i] = -real(TrueComplex[i]) / (abs(TrueComplex[i]) .* abs.(TrueComplex[i]))
+    b2[i] = b1[i]
+  end
+
+  for i = IndGreater1:NumTrueComplex
+    # To avoid timesteps > 1: set a[i] to 1.
+    a[i]  = 1.0
+
+    b2[i] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i])
+    b1[i] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i]
+  end
+
+  display(a); println()
+  display(b1); println()
+  display(b2); println()
+
+  return a, b1, b2
+end
+
+
+
+function read_eta_opt(Stages::Int, BasePath::AbstractString, NumTrueComplex_::Int, TimeStepSort::Vector{Int64})
+  Path = BasePath * "eta" * string(Stages) * ".txt"
+  eta_opt = readdlm(Path, ',')
+  @assert size(eta_opt, 1) == NumTrueComplex_ "Provided eta values do not match!"
+
+  # Add dummy row to eta_opt resembling forward euler
+  eta_opt = vcat([42.0 42.0 42.0], eta_opt)
+
+  # Sort with ascending timestep
+  eta_opt[:, 1] = permute!(eta_opt[:, 1], TimeStepSort)
+  eta_opt[:, 2] = permute!(eta_opt[:, 2], TimeStepSort)
+  eta_opt[:, 3] = permute!(eta_opt[:, 3], TimeStepSort)
+
+  return eta_opt
 end
 
 
 function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64},
                            ForwardEulerWeight::Float64, EigenValuesScaled::Vector{ComplexF64})
 
+  unstable = false                           
   for j in eachindex(EigenValuesScaled)                           
     # Forward Euler step:
     if abs(1 + ForwardEulerWeight * EigenValuesScaled[j]) > 1
-      println("Non-internally stable forward euler step!")
+      #println("Non-internally stable forward euler step!")
+      unstable = true 
+      break
     end
 
-    #=
+    
     for i in eachindex(InvAbsValsSquared)
       # Intermediate stage:
 
       # mu = -2 Re, \tilde mu = 1
-      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigenValuesScaled[j]) > 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] + EigenValuesScaled[j]) > 1
       # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
-      #if abs(TwoRealOverAbsSquared[i] - EigenValuesScaled[j]*InvAbsValsSquared[i]) > 1
+      #if abs(TwoRealOverAbsSquared[i] + EigenValuesScaled[j]*InvAbsValsSquared[i]) > 1
       # mu = -2 Re/|r|, \tilde mu = 1/|r|
-      if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
-        println("Non-internally stable Intermediate update at timestep " * string(i))
+      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) + EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
+      # mu = 1, \tilde mu = -2 Re/|r|^2
+      if abs(1 + EigenValuesScaled[j]*TwoRealOverAbsSquared[i]) > 1
+        #println("Non-internally stable Intermediate update at timestep " * string(i))
+        unstable = true 
+        break
       end
 
       # Second stage
 
       # mu = 1, \tilde mu = 1/|r|^2
-      #if abs(1 - InvAbsValsSquared[i] * EigenValuesScaled[j]) > 1
+      #if abs(1 + InvAbsValsSquared[i] * EigenValuesScaled[j]) > 1
       # mu = 1, \tilde mu = 1
-      #if abs(1 - EigenValuesScaled[j]) > 1
+      #if abs(1 + EigenValuesScaled[j]) > 1
       # mu = 1, \tilde mu = 1/|r|
-      if abs(1 - EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
-        println("Non-internally stable Second update at timestep " * string(i))
+      #if abs(1 + EigenValuesScaled[j]*sqrt(InvAbsValsSquared[i])) > 1
+      # mu = 1, \tilde mu = -2Re
+      if abs(1 + EigenValuesScaled[j] * TwoRealOverAbsSquared[i] / InvAbsValsSquared[i]) > 1
+        #println("Non-internally stable Second update at timestep " * string(i))
+        unstable = true 
+        break
       end
-
     end
-    =#
   end
+
+  return unstable
 end
 
 function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSquared::Vector{Float64},
@@ -109,22 +196,22 @@ function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSqu
       # Intermediate stage:
 
       # mu = -2 Re, \tilde mu = 1
-      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigValScaled) > 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] + EigValScaled) > 1
       # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
-      if abs(TwoRealOverAbsSquared[i] - EigValScaled*InvAbsValsSquared[i]) > 1
+      if abs(TwoRealOverAbsSquared[i] + EigValScaled*InvAbsValsSquared[i]) > 1
       # mu = -2 Re/|r|, \tilde mu = 1/|r|
-      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) + EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
         println("Non-internally stable Intermediate update at timestep " * string(i))
       end
 
       # Second stage
 
       # mu = 1, \tilde mu = 1/|r|^2
-      #if abs(1 - InvAbsValsSquared[i] * EigValScaled) > 1
+      #if abs(1 + InvAbsValsSquared[i] * EigValScaled) > 1
       # mu = 1, \tilde mu = 1
-      if abs(1 - EigValScaled) > 1
+      if abs(1 + EigValScaled) > 1
       # mu = 1, \tilde mu = 1/|r|
-      #if abs(1 - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+      #if abs(1 + EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
         println("Non-internally stable Second update at timestep " * string(i))
       end
     end
@@ -141,22 +228,22 @@ function InternalStability(InvAbsValsSquared::Vector{Float64}, TwoRealOverAbsSqu
       # Intermediate stage:
 
       # mu = -2 Re, \tilde mu = 1
-      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] - EigValScaled) > 1
+      #if abs(TwoRealOverAbsSquared[i] / InvAbsValsSquared[i] + EigValScaled) > 1
       # mu = -2 Re/|r|^2, \tilde mu = 1/|r|^2
-      if abs(TwoRealOverAbsSquared[i] - EigValScaled*InvAbsValsSquared[i]) > 1
+      if abs(TwoRealOverAbsSquared[i] + EigValScaled*InvAbsValsSquared[i]) > 1
       # mu = -2 Re/|r|, \tilde mu = 1/|r|
-      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+      #if abs(TwoRealOverAbsSquared[i]/sqrt(InvAbsValsSquared[i]) + EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
         println("Non-internally stable Intermediate update at timestep " * string(i))
       end
 
       # Second stage
 
       # mu = 1, \tilde mu = 1/|r|^2
-      #if abs(1 - InvAbsValsSquared[i] * EigValScaled) > 1
+      #if abs(1 + InvAbsValsSquared[i] * EigValScaled) > 1
       # mu = 1, \tilde mu = 1
-      if abs(1 - EigValScaled) > 1
+      if abs(1 + EigValScaled) > 1
       # mu = 1, \tilde mu = 1/|r|
-      #if abs(1 - EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
+      #if abs(1 + EigValScaled*sqrt(InvAbsValsSquared[i])) > 1
         println("Non-internally stable Second update at timestep " * string(i))
       end
     end
@@ -185,7 +272,14 @@ mutable struct FE2S
   InvAbsValsSquared::Vector{Float64}
   TwoRealOverAbsSquared::Vector{Float64}
   TimeSteps::Vector{Float64}
+  TimeStepSort::Vector{Int64}
   IndexForwardEuler::Int
+
+  eta_opt::Matrix{Float64}
+
+  a::Vector{Float64}
+  b1::Vector{Float64}
+  b2::Vector{Float64}
 
   # Constructor for previously computed A Coeffs
   function FE2S(Stages_::Int, PathPseudoExtrema_::AbstractString)
@@ -197,9 +291,13 @@ mutable struct FE2S
     newFE2S = new(Stages_, NumTrueComplex_)
 
     newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared, 
-    newFE2S.TimeSteps, newFE2S.IndexForwardEuler = 
+    newFE2S.TimeSteps, newFE2S.IndexForwardEuler, newFE2S.TimeStepSort = 
       ComputeFE2S_Coefficients(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
 
+    newFE2S.a, newFE2S.b1, newFE2S.b2 =
+      ComputeFE2S_Coefficients_RealRK(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
+
+    #newFE2S.eta_opt = read_eta_opt(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex, newFE2S.TimeStepSort)
     return newFE2S
   end
 end # struct FE2S
@@ -302,12 +400,12 @@ function solve!(integrator::FE2S_Integrator)
       terminate!(integrator)
     end
 
-    # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
     @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
       @threaded for j in eachindex(integrator.u)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
 
+      #=
       # Two-stage substeps with smaller timestep than ForwardEuler
       for i = 1:alg.IndexForwardEuler-1
         if i > 1
@@ -319,6 +417,11 @@ function solve!(integrator::FE2S_Integrator)
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
                              integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+          
+          #=
+          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.eta_opt[i, 2] + 
+                             integrator.u_tmp[j] * alg.eta_opt[i, 1]
+          =#                            
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
@@ -326,6 +429,8 @@ function solve!(integrator::FE2S_Integrator)
                                   
         @threaded for j in eachindex(integrator.du)
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
+
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
         end
         integrator.t_stage += alg.TwoRealOverAbsSquared[i]
       end
@@ -345,6 +450,11 @@ function solve!(integrator::FE2S_Integrator)
         @threaded for j in eachindex(integrator.du)
           integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
                              integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
+
+          #=
+          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.eta_opt[i, 2] + 
+                             integrator.u_tmp[j] * alg.eta_opt[i, 1]
+          =#
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
@@ -352,8 +462,36 @@ function solve!(integrator::FE2S_Integrator)
 
         @threaded for j in eachindex(integrator.du)                                  
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
+
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
         end
         integrator.t_stage += alg.TwoRealOverAbsSquared[i]
+      end
+      =#
+
+      # Forward Euler step
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage) # du = k1
+      
+      @threaded for j in eachindex(integrator.du)
+        integrator.u_tmp[j] += alg.ForwardEulerWeight * integrator.dt * integrator.du[j]
+      end
+
+      # Intermediate "two-step" sub methods
+      for i in eachindex(alg.a)
+        # Low-storage implementation (only one k = du):
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+
+        # First RK update
+        @threaded for j in eachindex(integrator.du)
+          integrator.k1[j]     = integrator.u_tmp[j] + integrator.dt * alg.a[i] * integrator.du[j]
+          integrator.u_tmp[j] += integrator.dt * alg.b1[i] * integrator.du[j]
+        end
+        
+        integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
+
+        @threaded for j in eachindex(integrator.du)
+          integrator.u_tmp[j] += integrator.dt .* alg.b2[i] .* integrator.du[j]
+        end
       end
 
       integrator.t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
