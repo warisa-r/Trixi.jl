@@ -672,7 +672,9 @@
         
         # k1: Evaluated on entire domain / all levels
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        integrator.k1 = integrator.du * integrator.dt
+        @threaded for i in eachindex(integrator.du)
+          integrator.k1[i] = integrator.du[i] * integrator.dt
+        end
   
         #=
         # One scheme for whole domain (primarily for tests)
@@ -709,19 +711,36 @@
         
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
+        
+        @trixi_timeit timer() "computing k2" begin
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
                      integrator.level_info_elements_acc[1],
                      integrator.level_info_interfaces_acc[1],
                      integrator.level_info_boundaries_acc[1],
                      integrator.level_info_mortars_acc[1])
-              
+        end
+        
+        #=
+        @threaded for i in eachindex(integrator.k1)
+          integrator.k_higher[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
+        end
+        integrator.f(integrator.du, integrator.k_higher, prob.p, tstage, 
+                     integrator.level_info_elements_acc[1],
+                     integrator.level_info_interfaces_acc[1],
+                     integrator.level_info_boundaries_acc[1],
+                     integrator.level_info_mortars_acc[1])
+        =#  
+        
+        
         @threaded for u_ind in integrator.level_u_indices_elements[1]
           integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
         end
   
         for stage = 3:alg.NumStages
           # Construct current state
-          integrator.u_tmp = copy(integrator.u)
+          @threaded for i in eachindex(integrator.u)
+            integrator.u_tmp[i] = integrator.u[i]
+          end
   
           #TODO: Implement fall-back for case when number of available integrators and mesh-partitions not match
           for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
