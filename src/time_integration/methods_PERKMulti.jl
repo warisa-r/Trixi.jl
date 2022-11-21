@@ -711,25 +711,11 @@
         
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
-        
-        @trixi_timeit timer() "computing k2" begin
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage, 
                      integrator.level_info_elements_acc[1],
                      integrator.level_info_interfaces_acc[1],
                      integrator.level_info_boundaries_acc[1],
                      integrator.level_info_mortars_acc[1])
-        end
-        
-        #=
-        @threaded for i in eachindex(integrator.k1)
-          integrator.k_higher[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
-        end
-        integrator.f(integrator.du, integrator.k_higher, prob.p, tstage, 
-                     integrator.level_info_elements_acc[1],
-                     integrator.level_info_interfaces_acc[1],
-                     integrator.level_info_boundaries_acc[1],
-                     integrator.level_info_mortars_acc[1])
-        =#  
         
         
         @threaded for u_ind in integrator.level_u_indices_elements[1]
@@ -779,7 +765,9 @@
         
   
         # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
-        integrator.u += integrator.k_higher
+        @threaded for i in eachindex(integrator.u)
+          integrator.u[i] += integrator.k_higher[i]
+        end
       end # PERK_Multi step
   
       integrator.iter += 1
