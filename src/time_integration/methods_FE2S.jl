@@ -106,7 +106,9 @@ function ComputeFE2S_Coefficients_RealRK(Stages::Int, PathPseudoExtrema::Abstrac
     # To avoid timesteps > 1: set a[i] to 1.
     a[i]  = 1.0
 
-    b2[i] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i])
+    #b2[i] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i])
+    b2[i] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]))
+    
     b1[i] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i]
   end
 
@@ -405,7 +407,7 @@ function solve!(integrator::FE2S_Integrator)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
 
-      #=
+      ### Successive Intermediate Stages implementation ### 
       # Two-stage substeps with smaller timestep than ForwardEuler
       for i = 1:alg.IndexForwardEuler-1
         if i > 1
@@ -467,8 +469,9 @@ function solve!(integrator::FE2S_Integrator)
         end
         integrator.t_stage += alg.TwoRealOverAbsSquared[i]
       end
-      =#
 
+      ### Classic RK version ###
+      #=
       # Forward Euler step
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage) # du = k1
       
@@ -489,11 +492,14 @@ function solve!(integrator::FE2S_Integrator)
         
         integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
 
+        # Second RK update
         @threaded for j in eachindex(integrator.du)
           integrator.u_tmp[j] += integrator.dt .* alg.b2[i] .* integrator.du[j]
         end
       end
+      =#
 
+      ### Common step regardless of treatment of Intermediate stages ###
       integrator.t_stage = integrator.t + alg.TimeSteps[end] * integrator.dt
       # Final Euler step with step length of dt (Due to form of stability polynomial)
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
