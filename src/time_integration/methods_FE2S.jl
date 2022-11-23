@@ -407,6 +407,7 @@ function solve!(integrator::FE2S_Integrator)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
 
+      
       ### Successive Intermediate Stages implementation ### 
       # Two-stage substeps with smaller timestep than ForwardEuler
       for i = 1:alg.IndexForwardEuler-1
@@ -417,21 +418,43 @@ function solve!(integrator::FE2S_Integrator)
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for j in eachindex(integrator.du)
-          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
-                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
           
-          #=
-          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.eta_opt[i, 2] + 
-                             integrator.u_tmp[j] * alg.eta_opt[i, 1]
-          =#                            
+          # k = 0
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] + 
+                             integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i]
+               
+          #=                             
+          # k = 1
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] / sqrt(alg.InvAbsValsSquared[i]) + 
+                             integrator.dt * integrator.du[j] * sqrt(alg.InvAbsValsSquared[i])                       
+
+          # k = 2
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] / alg.InvAbsValsSquared[i] + 
+                             integrator.dt * integrator.du[j]
+
+          =#      
+
+          # Optimized eta
+          #=               
+          integrator.k1[j] = integrator.u_tmp[j] * alg.eta_opt[i, 1] + 
+                             integrator.dt * integrator.du[j] * alg.eta_opt[i, 2]
+          =#                             
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
         integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
                                   
         @threaded for j in eachindex(integrator.du)
+          # k = 0
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
 
+          # k = 1
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * sqrt(alg.InvAbsValsSquared[i])
+
+          #k = 2
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i]
+
+          # Optimized eta
           #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
         end
         integrator.t_stage += alg.TwoRealOverAbsSquared[i]
@@ -450,28 +473,50 @@ function solve!(integrator::FE2S_Integrator)
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
         @threaded for j in eachindex(integrator.du)
-          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i] + 
-                             integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i]
 
+          # k = 0
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] + 
+                             integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i]
+              
+          #=                             
+          # k = 1
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] / sqrt(alg.InvAbsValsSquared[i]) + 
+                             integrator.dt * integrator.du[j] * sqrt(alg.InvAbsValsSquared[i])                       
+
+          # k = 2
+          integrator.k1[j] = integrator.u_tmp[j] * alg.TwoRealOverAbsSquared[i] / alg.InvAbsValsSquared[i] + 
+                             integrator.dt * integrator.du[j]
+          =#      
+
+          # Optimized eta                        
           #=
-          integrator.k1[j] = integrator.dt * integrator.du[j] * alg.eta_opt[i, 2] + 
-                             integrator.u_tmp[j] * alg.eta_opt[i, 1]
-          =#
+          integrator.k1[j] = integrator.u_tmp[j] * alg.eta_opt[i, 1] + 
+                             integrator.dt * integrator.du[j] * alg.eta_opt[i, 2]
+          =#                   
         end
 
         integrator.t_stage += alg.InvAbsValsSquared[i]
         integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage)
 
         @threaded for j in eachindex(integrator.du)                                  
+          # k = 0
           integrator.u_tmp[j] += integrator.dt * integrator.du[j]
 
+          # k = 1
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * sqrt(alg.InvAbsValsSquared[i])
+
+          #k = 2
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.InvAbsValsSquared[i]
+
+          # Optimized eta 
           #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
         end
         integrator.t_stage += alg.TwoRealOverAbsSquared[i]
       end
+      
 
-      ### Classic RK version ###
       #=
+      ### Classic RK version ###
       # Forward Euler step
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage) # du = k1
       
