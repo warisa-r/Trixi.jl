@@ -409,6 +409,7 @@ function solve!(integrator::FE2S_Integrator)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
       
+      
       ### Successive Intermediate Stages implementation ###
       integrator.t_stage = integrator.t
       # Two-stage substeps with smaller timestep than ForwardEuler
@@ -434,23 +435,23 @@ function solve!(integrator::FE2S_Integrator)
           integrator.k1[j] = integrator.u_tmp[j] * alg.eta_opt[i, 1] + 
                              integrator.dt * integrator.du[j] * alg.eta_opt[i, 2]  
           
-          =#                      
+                               
           # eta_1 = 1 (Somewhat RK like)
           integrator.k1[j] = integrator.u_tmp[j] + 
                              integrator.dt * integrator.du[j] / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i]          
             
-          #=
+          =#
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
           # u_tmp = g_i
           integrator.u_tmp[j] = integrator.u_tmp[j] + 
                                 integrator.dt * integrator.du[j] * 0.5 * alg.TwoRealOverAbsSquared[i]
-          =#                                
+                                          
         end
-        #integrator.t_stage += integrator.dt * alg.InvAbsValsSquared[i]
-
-        integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage + integrator.dt / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i])
-        # For Lebedev way:
-        #integrator.f(integrator.k1, integrator.u_tmp, prob.p, integrator.t_stage)
+        # For eta_1 = 1 (Somewhat RK like)
+        #integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage + integrator.dt / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i])
+        # Instead for Lebedev way:
+        integrator.t_stage += integrator.dt * 0.5 * alg.TwoRealOverAbsSquared[i]
+        integrator.f(integrator.k1, integrator.u_tmp, prob.p, integrator.t_stage)
                                   
         @threaded for j in eachindex(integrator.du)
           # k = 0
@@ -466,17 +467,19 @@ function solve!(integrator::FE2S_Integrator)
           #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
 
           # eta_1 = 1 (Somewhat RK like)
-          integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.TwoRealOverAbsSquared[i]
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.TwoRealOverAbsSquared[i]
 
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
-          #=
+          
           integrator.u_tmp[j] += integrator.dt * (0.5 * alg.TwoRealOverAbsSquared[i] * integrator.du[j] + 
                                  alg.InvAbsValsSquared[i] / (0.5 * alg.TwoRealOverAbsSquared[i]) * 
                                  (integrator.k1[j] - integrator.du[j]))
-          =#                                 
+                                         
         end
-        integrator.t_stage += integrator.dt * alg.TwoRealOverAbsSquared[i]
-        #integrator.t_stage += integrator.dt * (alg.TwoRealOverAbsSquared[i] + alg.InvAbsValsSquared[i])
+        # For eta_1 = 1 (Somewhat RK like)
+        #integrator.t_stage += integrator.dt * alg.TwoRealOverAbsSquared[i]
+        # Instead for Lebedev way:
+        integrator.t_stage += integrator.dt * 0.5 * alg.TwoRealOverAbsSquared[i]
       end
 
       # Forward Euler step
@@ -509,24 +512,25 @@ function solve!(integrator::FE2S_Integrator)
           # Optimized eta             
           integrator.k1[j] = integrator.u_tmp[j] * alg.eta_opt[i, 1] + 
                              integrator.dt * integrator.du[j] * alg.eta_opt[i, 2]  
-          =#  
+          
                              
           # eta_1 = 1 (Somewhat RK like)
           integrator.k1[j] = integrator.u_tmp[j] + 
                              integrator.dt * integrator.du[j] / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i]          
-                                      
-          #=
+          =#                          
+          
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
           # u_tmp = g_i
+          
           integrator.u_tmp[j] = integrator.u_tmp[j] + 
                                 integrator.dt * integrator.du[j] * 0.5 * alg.TwoRealOverAbsSquared[i]
-          =#                                
+                                          
         end
-        #integrator.t_stage += integrator.dt * alg.InvAbsValsSquared[i]
 
-        integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage + integrator.dt / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i])
-        # For Lebedev way:
-        #integrator.f(integrator.k1, integrator.u_tmp, prob.p, integrator.t_stage)
+        #integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage + integrator.dt / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i])
+        # Intead for Lebedev way:
+        integrator.t_stage += integrator.dt * 0.5 * alg.TwoRealOverAbsSquared[i]
+        integrator.f(integrator.k1, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for j in eachindex(integrator.du)                                  
           # k = 0
@@ -542,17 +546,19 @@ function solve!(integrator::FE2S_Integrator)
           #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.eta_opt[i, 3]
 
           # eta_1 = 1 (Somewhat RK like)
-          integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.TwoRealOverAbsSquared[i]
+          #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.TwoRealOverAbsSquared[i]
 
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
-          #=
+          
           integrator.u_tmp[j] += integrator.dt * (0.5 * alg.TwoRealOverAbsSquared[i] * integrator.du[j] + 
                                  alg.InvAbsValsSquared[i] / (0.5 * alg.TwoRealOverAbsSquared[i]) * 
                                  (integrator.k1[j] - integrator.du[j]))
-          =#                                 
+                                         
         end
-        integrator.t_stage += integrator.dt * alg.TwoRealOverAbsSquared[i]
-        #integrator.t_stage += integrator.dt * (alg.TwoRealOverAbsSquared[i] + alg.InvAbsValsSquared[i])
+        # For eta_1 = 1 (Somewhat RK like)
+        #integrator.t_stage += integrator.dt * alg.TwoRealOverAbsSquared[i]
+        # Instead for Lebedev way:
+        integrator.t_stage += integrator.dt * 0.5 * alg.TwoRealOverAbsSquared[i]
       end
       
 
