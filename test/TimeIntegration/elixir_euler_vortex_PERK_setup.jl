@@ -49,7 +49,8 @@ function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerE
 end
 initial_condition = initial_condition_isentropic_vortex
 
-surf_flux = flux_lax_friedrichs # Rusanov
+surf_flux = flux_lax_friedrichs # = Rusanov, originally used
+surf_flux = flux_hll # Better flux, allows much larger timesteps
 solver = DGSEM(polydeg=6, surface_flux=surf_flux)
 
 coordinates_min = (-20.0, -20.0)
@@ -64,7 +65,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 20.0)
+#tspan = (0.0, 20.0)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -83,7 +85,11 @@ save_solution = SaveSolutionCallback(interval=100,
                                      solution_variables=cons2prim)
 
 # NOTE: The timesteps in the PERK publication where {10, 5, 2.5, 1.25} * 10^{-4}
-stepsize_callback = StepsizeCallback(cfl=0.36) # this gives roughly 27 * 10^{-4}
+if surf_flux == flux_lax_friedrichs
+  stepsize_callback = StepsizeCallback(cfl=0.36) # this gives roughly 27 * 10^{-4}
+elseif surf_flux == flux_hll
+  stepsize_callback = StepsizeCallback(cfl=0.71) # this gives roughly 53 * 10^{-4}
+end
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,

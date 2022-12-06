@@ -36,19 +36,19 @@
     AMatrix = zeros(CoeffsMax, 2)
     AMatrix[:, 1] = c[3:end]
 
-    #=
+    
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(NumStages) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == CoeffsMax
     A = ComputeACoeffs(NumStages, SE_Factors, MonCoeffs)
-    =#
 
-    
+    #=
     # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
     PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == CoeffsMax
-    
+    =#
+
     AMatrix[:, 1] -= A
     AMatrix[:, 2]  = A
       
@@ -192,26 +192,36 @@
         
         # k1: 
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-        integrator.k1 = integrator.du * integrator.dt
+        @threaded for i in eachindex(integrator.du)
+          integrator.k1[i] = integrator.du[i] * integrator.dt
+        end
 
         tstage = integrator.t + alg.c[2] * integrator.dt
         # k2
         integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage)
-        integrator.k_higher = integrator.du * integrator.dt
+        @threaded for i in eachindex(integrator.du)
+          integrator.k_higher[i] = integrator.du[i] * integrator.dt
+        end
         
         # Higher stages
         for stage = 3:alg.NumStages
           # Construct current state
-          integrator.u_tmp = integrator.u + alg.AMatrix[stage - 2, 1] * integrator.k1 + 
-            alg.AMatrix[stage - 2, 2] * integrator.k_higher
+          @threaded for i in eachindex(integrator.du)
+            integrator.u_tmp[i] = integrator.u[i] + alg.AMatrix[stage - 2, 1] * integrator.k1[i] + 
+              alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
+          end
 
           tstage = integrator.t + alg.c[stage] * integrator.dt
 
           integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage)
-          integrator.k_higher = integrator.du * integrator.dt
+          @threaded for i in eachindex(integrator.du)
+            integrator.k_higher[i] = integrator.du[i] * integrator.dt
+          end
         end
-        
-        integrator.u += integrator.k_higher
+
+        @threaded for i in eachindex(integrator.u)
+          integrator.u[i] += integrator.k_higher[i]
+        end
       end # PERK step
   
       integrator.iter += 1
