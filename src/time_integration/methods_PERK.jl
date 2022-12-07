@@ -43,7 +43,7 @@ function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractS
   A = ComputeACoeffs(NumStages, SE_Factors, MonCoeffs)
 
   #=
-  # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
+  # TODO: Not sure if I not rather want to read-in values (especially those from Many Stage C++ Optim)
   PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
   NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
   @assert NumMonCoeffs == CoeffsMax

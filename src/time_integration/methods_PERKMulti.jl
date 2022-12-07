@@ -44,19 +44,19 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    
+    #=
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
     A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), SE_Factors, MonCoeffs)
-    
+    =#
 
-    #=
-    # TODO: Not sure if I not rather want to read-in values (especcially those from Many Stage C++ Optim)
+    
+    # TODO: Not sure if I not rather want to read-in values (especially those from Many Stage C++ Optim)
     PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-    =#
+    
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
@@ -192,6 +192,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   max_level = maximum_level(mesh.tree)
   n_levels = max_level - min_level + 1
 
+  # NOTE: Next-to-fine is NOT integrated with fine integrator
   #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
@@ -322,7 +323,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   =#
   
-  
+  # NOTE: Next-to-fine is also integrated with fine integrator
+  #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors
   level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -358,7 +360,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   for level in 1:n_levels
     # Make sure elements are only stored once: In the finest level
     for fine_level in 1:level-1
-      level_info_elements_set[level] = setdiff(level_info_elements_set[level], level_info_elements_set[fine_level])
+      level_info_elements_set[level] = setdiff(level_info_elements_set[level], 
+                                               level_info_elements_set[fine_level])
     end
 
     level_info_elements[level] = sort(collect(level_info_elements_set[level]))
@@ -422,7 +425,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   for level in 1:n_levels
     # Make sure elements are only stored once: In the finest level
     for fine_level in 1:level-1
-      level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], level_info_interfaces_set[fine_level])
+      level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], 
+                                                 level_info_interfaces_set[fine_level])
     end
 
     level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
@@ -551,7 +555,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
   end
   display(level_u_indices_elements); println()
-  
+  =#
 
   #=
   # CARE: Hard-coded "artificial" mesh splitting in two halves
@@ -623,6 +627,90 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   display(level_u_indices_elements); println()
   =#
+
+  # CARE: Distribute level assignment randomly
+  level_info_elements     = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
+  level_info_elements_acc = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
+  
+  for element_id in 1:n_elements
+    level_id = Int(mod(round(100 * rand()), alg.NumDoublings+1)) + 1
+
+    push!(level_info_elements[level_id], element_id)
+    # Add to accumulated container
+    for l in level_id:alg.NumDoublings+1
+      push!(level_info_elements_acc[l], element_id)
+    end  
+  end
+  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
+
+  element_ODE_level_dict = Dict{Int, Int}()
+  for level in 1:length(level_info_elements)
+    for element_id in level_info_elements[level]
+      push!(element_ODE_level_dict, element_id=>level)
+    end
+  end
+  display(element_ODE_level_dict); println()
+
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:length(level_info_elements)]
+  # Determine ODE level for each interface
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Interface neighboring two distinct ODE levels belong to finest one
+    ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
+                    get(element_ODE_level_dict, element_id_right, -1))                           
+    
+    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+
+    # Add to accumulated container
+    for l in ode_level:length(level_info_elements)
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+  end
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  for level in 1:length(level_info_elements)
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_mortars_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+
+  println("level_info_elements:")
+  display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
+
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
+
+  println("level_info_boundaries_acc:")
+  display(level_info_boundaries_acc); println()
+
+  # Set initial distribution of DG Base function coefficients 
+  @unpack equations, solver = ode.p
+  u = wrap_array(u0, mesh, equations, solver, cache)
+  level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  dimensions = ndims(mesh.tree) # Spatial dimension
+  if dimensions == 1
+    for level in 1:alg.NumDoublings+1
+      for element_id in level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  elseif dimensions == 2
+    for level in 1:alg.NumDoublings+1
+      for element_id in level_info_elements[level]
+        indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  end
+  display(level_u_indices_elements); println()
 
   ### Done with setting up for handling of level-dependent integration ###
 
@@ -787,6 +875,12 @@ function solve!(integrator::PERK_Multi_Integrator)
       terminate!(integrator)
     end
   end # "main loop" timer
+
+  io = open("u_final.txt", "w") do io
+    for CellAverage in integrator.u
+      println(io, CellAverage)
+    end
+  end
   
   return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                 (prob.u0, integrator.u),
