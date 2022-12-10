@@ -100,7 +100,7 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt = 3e-3 / 2, save_everystep=false, callback = callbacks)
 =#
 
-NumStages = 30
+NumStages = 120
 
 NumStageRef = 16
 dtRef = 0.0171722409308131328
@@ -136,6 +136,11 @@ CFL = 0.99 # Edge case for 30 stages
 #CFL = 0.86  # Edge case for 60 stages
 #CFL = 0.35  # Edge case for 120 stages
 
+
+# Lebedev way
+CFL = 0.93 # Edge case for 30 stages
+CFL = 0.72  # Edge case for 60 stages
+CFL = 0.46  # Edge case for 120 stages
 
 dtOptMin = dtRef * (NumStages / NumStageRef) * CFL
 

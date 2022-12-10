@@ -56,7 +56,8 @@ initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_lax_friedrichs # = Rusanov, originally used
 surf_flux = flux_hll # Better flux, allows much larger timesteps
-solver = DGSEM(polydeg=6, surface_flux=surf_flux)
+PolyDeg = 6
+solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 coordinates_min = (-20.0, -20.0)
 coordinates_max = ( 20.0,  20.0)
@@ -93,21 +94,41 @@ callbacks = CallbackSet(summary_callback,
 NumCells = 2^Refinement
 NumCellsRef = 4
 
+
 NumBaseStages = 4
-NumDoublings = 2
+NumDoublings = 3
 
-dtRefBase = 0.255777720361038519
+# CARE: For linea increasing PERK
+#NumDoublings = 12 # = Num Increases
 
-CFL = 0.99
 
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL
+#=
+NumBaseStages = 32
+NumDoublings = 0
+=#
+
+dtRefBase = 0.255777720361038519 # 4
+
+CFL_Stability = 0.99
+CFL_Convergence = 1/7
+
+dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL_Stability * CFL_Convergence
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
+                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/S32/")
+
+#=
+ode_algorithm = PERK(NumBaseStages, 
                 "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/")
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacks);
+
+sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
+            dt = 2.27e-3,
+            save_everystep=false, callback=callbacks);
 
 summary_callback() # print the timer summary
 plot(sol)
