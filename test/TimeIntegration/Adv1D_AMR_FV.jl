@@ -13,17 +13,31 @@ numerical_flux = flux_lax_friedrichs
 solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux,
                volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
 
-coordinates_min = -5.0 # minimum coordinate
-coordinates_max =  5.0 # maximum coordinate
+#coordinates_min = -5.0 # minimum coordinate
+#coordinates_max =  5.0 # maximum coordinate
 
-RefinementLevel = 6
+coordinates_min = -1.0 # minimum coordinate
+coordinates_max = 1.0 # maximum coordinate
+
+RefinementLevel = 5
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
                 initial_refinement_level=RefinementLevel,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-initial_condition = initial_condition_gauss
+# Manual refinement (see NonUniformMesh)
+
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+# Refine right half of mesh
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
+
+
+#initial_condition = initial_condition_gauss
+initial_condition = initial_condition_convergence_test
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -32,7 +46,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 10
+#EndTime = 1.5
+EndTime = 100
 
 
 # Create ODEProblem
@@ -68,23 +83,35 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=false) # Adaption of initial condition not yet supported
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
-#callbacks = CallbackSet(summary_callback, analysis_callback)
+callbacksPERK = CallbackSet(summary_callback, analysis_callback, amr_callback)
+callbacksPERK = CallbackSet(summary_callback, analysis_callback)
+
+stepsize_callback = StepsizeCallback(cfl=1.0)     
+callbacksSSPRK22 = CallbackSet(summary_callback, analysis_callback,
+                               stepsize_callback)
 
 
 ###############################################################################
 # run the simulation
 
-NumStages = 4
-NumDoublings = 2
+#=
+sol = solve(ode, 
+            #CarpenterKennedy2N54(williamson_condition=false),
+            SSPRK22(),
+            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+            save_everystep=false, callback=callbacksSSPRK22);
+=#
+
+NumStages = 16
+NumDoublings = 1
 
 #dtOptMin = 0.234375014901161194  # 4
-dtOptMin = 0.234375014901161194 / (2.0^(InitialRefinement - 4)) * 5
+dtOptMin = 0.234375014901161194 / (2.0^(RefinementLevel - 4)) * coordinates_max
 
 #dtOptMin = 0.273437764616573986 # 8
 #dtOptMin = 0.289062499999090505 # 16
 
-CFL = 1
+CFL = 4
 
 ode_algorithm = PERK_Multi(NumStages, NumDoublings,
                            "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_FV/")
@@ -92,7 +119,7 @@ ode_algorithm = PERK_Multi(NumStages, NumDoublings,
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   dt = dtOptMin * CFL,
-                  save_everystep=false, callback=callbacks);
+                  save_everystep=false, callback=callbacksPERK);
 
 # Print the timer summary
 summary_callback()
@@ -101,10 +128,12 @@ plot(sol, plot_title = EndTime)
 
 pd = PlotData1D(sol)
 
+#=
 io = open("x_final.txt", "w") do io
   for Pos in pd.x
     println(io, Pos)
   end
 end
+=#
 
 plot!(getmesh(pd))

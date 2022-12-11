@@ -145,17 +145,19 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-#=
+
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+2, max_threshold=-2.0)                                      
-=#
 
+
+#=
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
                                       med_level=Refinement+2, med_threshold=-3.0,
                                       max_level=Refinement+3, max_threshold=-2.0)  
+=#
 
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
@@ -168,8 +170,8 @@ callbacksPERK = CallbackSet(summary_callback,
 # The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl=0.65)                    
 callbacksSSPRK22 = CallbackSet(summary_callback,
-                              analysis_callback, alive_callback, amr_callback,
-                              stepsize_callback)                        
+                               analysis_callback, alive_callback, amr_callback,
+                               stepsize_callback)                        
 
 ###############################################################################
 # run the simulation
@@ -178,15 +180,21 @@ callbacksSSPRK22 = CallbackSet(summary_callback,
 NumCells = 2^Refinement
 NumCellsRef = 4
 
-
-NumBaseStages = 4
-NumDoublings = 3
-
 dtRefBase = 0.255777720361038519 # 4
 
+NumBaseStages = 8
+NumDoublings = 2
+
+#=
+NumBaseStages = 8
+NumDoublings = 2
+=#
+
 CFL_Stability = 0.99
-CFL_Convergence = 0.5 # For three levels
-CFL_Convergence = 0.34 # For four levels
+
+#CFL_Convergence = 0.34 # For four levels, base refinement: 4
+CFL_Convergence = 0.54 # For three levels: 4, 8, 16, base refinement: 4
+CFL_Convergence = 0.7 # For three levels: 8, 16, 32, base refinement: 4
 
 CFL_Stage = 1
 
