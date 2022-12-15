@@ -90,7 +90,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     end
   end
 
-  println("Active Levels:"); display(ActiveLevels); println()
+  println("\nActive Levels:"); display(ActiveLevels); println()
 
   return AMatrices, c, ActiveLevels
 end
@@ -788,7 +788,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       terminate!(integrator)
     end
 
-    # TODO: Try multi-threaded execution as implemented for other integrators!
+    # TODO: Eliminate allocations!
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
@@ -829,15 +829,18 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
       
-      
       integrator.t_stage = integrator.t + alg.c[2] * integrator.dt
       # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
-      integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, integrator.t_stage, 
+      @threaded for i in eachindex(integrator.u)
+        integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
+      end
+
+      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)  
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_mortars_acc[1])
-      
       
       @threaded for u_ind in integrator.level_u_indices_elements[1]
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
@@ -849,7 +852,6 @@ function solve!(integrator::PERK_Multi_Integrator)
           integrator.u_tmp[i] = integrator.u[i]
         end
 
-        #TODO: Implement fall-back for case when number of available integrators and mesh-partitions not match
         for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
@@ -860,7 +862,6 @@ function solve!(integrator::PERK_Multi_Integrator)
 
           # First attempt to be more effective
           if alg.AMatrices[level, stage - 2, 2] > 0 # TODO: Avoid if at some point (two for loops for stage < > E)
-            #odelvl = level + alg.NumDoublings + 1 - nlevels
             @threaded for u_ind in integrator.level_u_indices_elements[level]
               #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
@@ -873,8 +874,20 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
+        #=
         integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
-                                          length(integrator.level_info_elements_acc)])
+                                                                  length(integrator.level_info_elements_acc)])
+        =#
+
+        # Allocation-free version
+        for lvl in alg.ActiveLevels[stage]
+          if alg.ActiveLevels[stage][lvl] > length(integrator.level_info_elements_acc)
+            break
+          else
+            integrator.coarsest_lvl = lvl
+          end
+        end
+
 
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
@@ -909,7 +922,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
     end
 
-    
+    #=
     TV = 0
     for i in 1:length(integrator.u)-1
       TV += abs(integrator.u[i+1] - integrator.u[i])
@@ -922,7 +935,7 @@ function solve!(integrator::PERK_Multi_Integrator)
     io = open("TV.txt", "a") do io
       println(io, TV)
     end
-    
+    =#
 
     # respect maximum number of iterations
     if integrator.iter >= integrator.opts.maxiters && !integrator.finalstep
