@@ -1,7 +1,7 @@
 # The same setup as tree_1d_dgsem/elixir_advection_basic.jl
 # to verify the StructuredMesh implementation against TreeMesh
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -58,3 +58,4 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
 
 # Print the timer summary
 summary_callback()
+plot(sol)
