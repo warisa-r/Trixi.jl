@@ -76,11 +76,13 @@ function rhs!(du, u, t,
   # Reset du
   @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
 
-  # Calculate volume integral
-  @trixi_timeit timer() "volume integral" calc_volume_integral!(
-    du, u, mesh,
-    have_nonconservative_terms(equations), equations,
-    dg.volume_integral, dg, cache)
+  if length(dg.basis.nodes) > 1 # First order finite volume (FV)
+    # Calculate volume integral
+    @trixi_timeit timer() "volume integral" calc_volume_integral!(
+      du, u, mesh,
+      have_nonconservative_terms(equations), equations,
+      dg.volume_integral, dg, cache)
+  end
 
   # Prolong solution to interfaces
   @trixi_timeit timer() "prolong2interfaces" prolong2interfaces!(

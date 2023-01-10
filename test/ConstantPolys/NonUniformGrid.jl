@@ -9,8 +9,8 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
 PolyDegree = 0
 numerical_flux = flux_lax_friedrichs
-solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux,
-               volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
+solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux)
+               #volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
 
 coordinates_min = -1.0 # minimum coordinate
 coordinates_max = 1.0 # maximum coordinate
@@ -55,7 +55,7 @@ analysis_callback = AnalysisCallback(semi, interval=Interval, extra_analysis_err
 
 stepsize_callback = StepsizeCallback(cfl=1.0)     
 callbacks = CallbackSet(summary_callback, analysis_callback,
-                               stepsize_callback)
+                        stepsize_callback)
 
 
 ###############################################################################
