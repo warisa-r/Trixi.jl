@@ -60,7 +60,7 @@ num_leafs = length(LLID)
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 
-# For testing: Have transition: Coarse -> Fine (without medium in between - bot supported by Trixi)
+# For testing: Have transition: Coarse -> Fine (without medium in between - not supported by Trixi)
 #Trixi.refine!(mesh.tree, LLID[5 : Int(3*num_leafs/4)])
 
 

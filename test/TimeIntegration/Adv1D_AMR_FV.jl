@@ -8,7 +8,7 @@ using Trixi
 advection_velocity = 1.0
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
-PolyDegree = 3
+PolyDegree = 0
 numerical_flux = flux_lax_friedrichs
 solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux)
                #volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
@@ -24,14 +24,33 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
 # Manual refinement (see NonUniformMesh)
-
+#=
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
 # Refine center of mesh
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
+=#
 
+# First refinement
+# Refine mesh locally 
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+# Refine right 3 quarters of mesh
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
+
+
+# Second refinement
+# Refine mesh locally
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+@assert num_leafs % 4 == 0
+# Refine third quarter to ensure we have only transitions from coarse->medium->fine
+Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 
 initial_condition = initial_condition_gauss
 #initial_condition = initial_condition_convergence_test
@@ -98,19 +117,22 @@ sol = solve(ode,
             save_everystep=false, callback=callbacksSSPRK22);
 =#
 
-NumStages = 8
-NumDoublings = 1
+NumStagesBase = 4
+NumDoublings = 2
 
-# p = 0
+# p = 0, NumStagesBase = 8
 dtOptMin = 1.09375089152126748 / (2.0^(RefinementLevel - 6))
 
+# p = 0, NumStagesBase = 4
+dtOptMin = 0.468750029687726055 / (2.0^(RefinementLevel - 6))
+
 # p = 3
-dtOptMin = 0.132761826736896182 / (2.0^(RefinementLevel - 6))
+#dtOptMin = 0.132761826736896182 / (2.0^(RefinementLevel - 6))
 
 CFL = 1.0
 
-ode_algorithm = PERK_Multi(NumStages, NumDoublings,
-                           "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/p3/")
+ode_algorithm = PERK_Multi(NumStagesBase, NumDoublings,
+                           "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/p0/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
