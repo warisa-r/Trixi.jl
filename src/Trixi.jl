@@ -233,7 +233,8 @@ export PlotData1D, PlotData2D, ScalarPlotData2D, getmesh, adapt_to_mesh_level!, 
 function __init__()
   init_mpi()
 
-  init_p4est()
+  # TODO: Hack to get Trixi to compile!
+  #init_p4est()
 
   # Enable features that depend on the availability of the Plots package
   @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" begin
