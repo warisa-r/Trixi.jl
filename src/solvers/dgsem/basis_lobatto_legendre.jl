@@ -100,7 +100,13 @@ end
 
 @inline nnodes(basis::LobattoLegendreBasis{RealT, NNODES}) where {RealT, NNODES} = NNODES
 
-# Returns range of indices, not the objects itself!
+"""
+    eachnode(basis::LobattoLegendreBasis)
+
+Return an iterator over the indices that specify the location in relevant data structures
+for the nodes in `basis`. 
+In particular, not the nodes themselves are returned.
+"""
 @inline eachnode(basis::LobattoLegendreBasis) = Base.OneTo(nnodes(basis))
 
 @inline polydeg(basis::LobattoLegendreBasis) = nnodes(basis) - 1
@@ -267,7 +273,13 @@ end
 @inline Base.real(analyzer::LobattoLegendreAnalyzer{RealT}) where {RealT} = RealT
 
 @inline nnodes(analyzer::LobattoLegendreAnalyzer{RealT, NNODES}) where {RealT, NNODES} = NNODES
-# Returns range of indices, not the objects itself!
+"""
+    eachnode(analyzer::LobattoLegendreAnalyzer)
+
+Return an iterator over the indices that specify the location in relevant data structures
+for the nodes in `analyzer`. 
+In particular, not the nodes themselves are returned.
+"""
 @inline eachnode(analyzer::LobattoLegendreAnalyzer) = Base.OneTo(nnodes(analyzer))
 
 @inline polydeg(analyzer::LobattoLegendreAnalyzer) = nnodes(analyzer) - 1
@@ -495,48 +507,59 @@ function gauss_lobatto_nodes_weights(n_nodes::Integer)
   # Get polynomial degree for convenience
   N = n_nodes - 1
 
-  # Calculate values at boundary
-  nodes[1] = -1.0
-  nodes[end] = 1.0
-  weights[1] = 2 / (N * (N + 1))
-  weights[end] = weights[1]
+  if N > 0
+    # Calculate values at boundary
+    nodes[1] = -1.0
+    nodes[end] = 1.0
+    weights[1] = 2 / (N * (N + 1))
+    weights[end] = weights[1]
 
-  # Calculate interior values
-  if N > 1
-    cont1 = pi/N
-    cont2 = 3/(8 * N * pi)
+    # Calculate interior values
+    if N > 1
+      cont1 = pi/N
+      cont2 = 3/(8 * N * pi)
 
-    # Use symmetry -> only left side is computed
-    for i in 1:(div(N + 1, 2) - 1)
-      # Calculate node
-      # Initial guess for Newton method
-      nodes[i+1] = -cos(cont1*(i+0.25) - cont2/(i+0.25))
+      # Use symmetry -> only left side is computed
+      for i in 1:(div(N + 1, 2) - 1)
+        # Calculate node
+        # Initial guess for Newton method
+        nodes[i+1] = -cos(cont1*(i+0.25) - cont2/(i+0.25))
 
-      # Newton iteration to find root of Legendre polynomial (= integration node)
-      for k in 0:n_iterations
-        q, qder, _ = calc_q_and_l(N, nodes[i+1])
-        dx = -q/qder
-        nodes[i+1] += dx
-        if abs(dx) < tolerance * abs(nodes[i+1])
-          break
+        # Newton iteration to find root of Legendre polynomial (= integration node)
+        for k in 0:n_iterations
+          q, qder, _ = calc_q_and_l(N, nodes[i+1])
+          dx = -q/qder
+          nodes[i+1] += dx
+          if abs(dx) < tolerance * abs(nodes[i+1])
+            break
+          end
         end
+
+        # Calculate weight
+        _, _, L = calc_q_and_l(N, nodes[i+1])
+        weights[i+1] = weights[1] / L^2
+
+        # Set nodes and weights according to symmetry properties
+        nodes[N+1-i] = -nodes[i+1]
+        weights[N+1-i] = weights[i+1]
       end
-
-      # Calculate weight
-      _, _, L = calc_q_and_l(N, nodes[i+1])
-      weights[i+1] = weights[1] / L^2
-
-      # Set nodes and weights according to symmetry properties
-      nodes[N+1-i] = -nodes[i+1]
-      weights[N+1-i] = weights[i+1]
     end
-  end
 
-  # If odd number of nodes, set center node to origin (= 0.0) and calculate weight
-  if n_nodes % 2 == 1
-    _, _, L = calc_q_and_l(N, 0)
-    nodes[div(N, 2) + 1] = 0.0
-    weights[div(N, 2) + 1] = weights[1] / L^2
+    # If odd number of nodes, set center node to origin (= 0.0) and calculate weight
+    if n_nodes % 2 == 1
+      _, _, L = calc_q_and_l(N, 0)
+      nodes[div(N, 2) + 1] = 0.0
+      weights[div(N, 2) + 1] = weights[1] / L^2
+    end
+  else # N = 0: Idea: Gauss-LEGENDRE (NOT Lobatto) 
+        # Issue: That is equivalent to move from nodal to modal DG
+    # https://en.wikipedia.org/wiki/Gaussian_quadrature#Gauss%E2%80%93Legendre_quadrature
+    #nodes[1] = 0.0
+    #weights[1] = 2.0
+
+    # Some dummy values (apparently not used)
+    nodes[1] = 42.0
+    weights[1] = 42.0
   end
 
   return nodes, weights
