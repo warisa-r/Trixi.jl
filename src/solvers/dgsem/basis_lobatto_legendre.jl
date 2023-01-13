@@ -551,7 +551,8 @@ function gauss_lobatto_nodes_weights(n_nodes::Integer)
       nodes[div(N, 2) + 1] = 0.0
       weights[div(N, 2) + 1] = weights[1] / L^2
     end
-  else # N = 0: Use Gauss-LEGENDRE (NOT Lobatto; Fallback case)
+  else # N = 0: Idea: Gauss-LEGENDRE (NOT Lobatto) 
+       # Issue: That is equivalent to move from nodal to modal DG
     # https://en.wikipedia.org/wiki/Gaussian_quadrature#Gauss%E2%80%93Legendre_quadrature
     #nodes[1] = 0.0
     #weights[1] = 2.0

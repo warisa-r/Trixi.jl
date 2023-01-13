@@ -12,15 +12,16 @@ numerical_flux = flux_lax_friedrichs
 solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux)
                #volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
 
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max = 1.0 # maximum coordinate
+coordinates_min = -5.0 # minimum coordinate
+coordinates_max =  5.0 # maximum coordinate
 
-RefinementLevel = 4
+RefinementLevel = 6
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
                 initial_refinement_level=RefinementLevel,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
+
 
 # Manual refinement
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -30,7 +31,9 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
 
-initial_condition = initial_condition_convergence_test
+
+#initial_condition = initial_condition_convergence_test
+initial_condition = initial_condition_gauss
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -39,7 +42,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 1.5
+EndTime = 2
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
