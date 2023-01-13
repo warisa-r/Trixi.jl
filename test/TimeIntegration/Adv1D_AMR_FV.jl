@@ -8,18 +8,15 @@ using Trixi
 advection_velocity = 1.0
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
-PolyDegree = 0
+PolyDegree = 3
 numerical_flux = flux_lax_friedrichs
-solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux,
-               volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
+solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux)
+               #volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
 
-#coordinates_min = -5.0 # minimum coordinate
-#coordinates_max =  5.0 # maximum coordinate
+coordinates_min = -5.0 # minimum coordinate
+coordinates_max =  5.0 # maximum coordinate
 
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max = 1.0 # maximum coordinate
-
-RefinementLevel = 5
+RefinementLevel = 6
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
@@ -31,13 +28,13 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
-# Refine right half of mesh
+# Refine center of mesh
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
 
 
-#initial_condition = initial_condition_gauss
-initial_condition = initial_condition_convergence_test
+initial_condition = initial_condition_gauss
+#initial_condition = initial_condition_convergence_test
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -46,8 +43,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-#EndTime = 1.5
-EndTime = 100
+EndTime = 2
 
 
 # Create ODEProblem
@@ -102,19 +98,19 @@ sol = solve(ode,
             save_everystep=false, callback=callbacksSSPRK22);
 =#
 
-NumStages = 16
+NumStages = 8
 NumDoublings = 1
 
-#dtOptMin = 0.234375014901161194  # 4
-dtOptMin = 0.234375014901161194 / (2.0^(RefinementLevel - 4)) * coordinates_max
+# p = 0
+dtOptMin = 1.09375089152126748 / (2.0^(RefinementLevel - 6))
 
-#dtOptMin = 0.273437764616573986 # 8
-#dtOptMin = 0.289062499999090505 # 16
+# p = 3
+dtOptMin = 0.132761826736896182 / (2.0^(RefinementLevel - 6))
 
-CFL = 4
+CFL = 1.0
 
 ode_algorithm = PERK_Multi(NumStages, NumDoublings,
-                           "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_FV/")
+                           "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/p3/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
