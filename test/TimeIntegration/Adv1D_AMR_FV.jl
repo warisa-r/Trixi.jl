@@ -13,8 +13,8 @@ numerical_flux = flux_lax_friedrichs
 solver = DGSEM(polydeg=PolyDegree, surface_flux=numerical_flux)
                #volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
 
-coordinates_min = -5.0 # minimum coordinate
-coordinates_max =  5.0 # maximum coordinate
+coordinates_min = -1.0 # minimum coordinate
+coordinates_max =  1.0 # maximum coordinate
 
 RefinementLevel = 6
 # Create a uniformly refined mesh with periodic boundaries
@@ -32,6 +32,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
 =#
+
 
 # First refinement
 # Refine mesh locally 
@@ -52,8 +53,9 @@ num_leafs = length(LLID)
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 
-initial_condition = initial_condition_gauss
-#initial_condition = initial_condition_convergence_test
+
+#initial_condition = initial_condition_gauss
+initial_condition = initial_condition_convergence_test
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -62,7 +64,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 2
+EndTime = 1.5
 
 
 # Create ODEProblem
@@ -117,17 +119,15 @@ sol = solve(ode,
             save_everystep=false, callback=callbacksSSPRK22);
 =#
 
-NumStagesBase = 4
+NumStagesBase = 2
 NumDoublings = 2
 
-# p = 0, NumStagesBase = 8
-dtOptMin = 1.09375089152126748 / (2.0^(RefinementLevel - 6))
-
 # p = 0, NumStagesBase = 4
-dtOptMin = 0.468750029687726055 / (2.0^(RefinementLevel - 6))
+dtOptMin = 0.0937500079744495451 / (2.0^(RefinementLevel - 6))
 
-# p = 3
-#dtOptMin = 0.132761826736896182 / (2.0^(RefinementLevel - 6))
+# p = 0, NumStagesBase = 2
+dtOptMin = 0.0312500000003637967 / (2.0^(RefinementLevel - 6))
+
 
 CFL = 1.0
 

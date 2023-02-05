@@ -1,4 +1,3 @@
-
 using OrdinaryDiffEq
 using Trixi
 
@@ -7,23 +6,46 @@ using Trixi
 
 equations = InviscidBurgersEquation1D()
 
-initial_condition = initial_condition_shock
+basis = LobattoLegendreBasis(3)
+# Use shock capturing techniques to supress oscillations at discontinuities
+indicator_sc = IndicatorHennemannGassner(equations, basis,
+                                         alpha_max=1.0,
+                                         alpha_min=0.001,
+                                         alpha_smooth=true,
+                                         variable=first)
 
-solver = DGSEM(polydeg=1, surface_flux=flux_lax_friedrichs)
+volume_flux  = flux_ec
+surface_flux = flux_lax_friedrichs
 
-coordinates_min = 0.0
-coordinates_max = 1.0
+volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
+                                                 volume_flux_dg=surface_flux,
+                                                 volume_flux_fv=surface_flux)
+                                                 
+solver = DGSEM(basis, surface_flux, volume_integral)
 
-mesh = TreeMesh(coordinates_min, coordinates_max,
+coordinate_min = 0.0
+coordinate_max = 1.0
+
+# Make sure to turn periodicity explicitly off as special boundary conditions are specified
+mesh = TreeMesh(coordinate_min, coordinate_max,
                 initial_refinement_level=6,
                 n_cells_max=10_000,
-                periodicity=false) # CARE: This has to be explicitly set!
+                periodicity=false)
+
+# Discontinuous initial condition (Riemann Problem) leading to a shock to test e.g. correct shock speed.
+function initial_condition_shock(x, t, equation::InviscidBurgersEquation1D)
+  scalar = x[1] < 0.5 ? 1.5 : 0.5
+
+  return SVector(scalar)
+end
+
+###############################################################################
+# Specify non-periodic boundary conditions
 
 function inflow(x, t, equations::InviscidBurgersEquation1D)
-  return initial_condition_shock(coordinates_min, t, equations)
+  return initial_condition_shock(coordinate_min, t, equations)
 end
 boundary_condition_inflow = BoundaryConditionDirichlet(inflow)
-
 
 function boundary_condition_outflow(u_inner, orientation, normal_direction, x, t,
                                     surface_flux_function, equations::InviscidBurgersEquation1D)
@@ -35,7 +57,9 @@ end
 
 
 boundary_conditions = (x_neg=boundary_condition_inflow,
-                       x_pos=boundary_condition_outflow)                
+                       x_pos=boundary_condition_outflow)
+                       
+initial_condition = initial_condition_shock
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
@@ -45,20 +69,16 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.2)
-#tspan = (0.0, 0.0) # For plotting initial condition
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
 analysis_interval = 100
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
-                                     extra_analysis_errors=(:l2_error_primitive,
-                                                            :linf_error_primitive,
-                                                            :conservation_error))
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl=1)
+stepsize_callback = StepsizeCallback(cfl=0.9)
 
 
 callbacks = CallbackSet(summary_callback,
@@ -68,17 +88,9 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-#=
-# Try positivity limiter to prevent oscillations - seems not to give anything
-stage_limiter! = PositivityPreservingLimiterZhangShu(thresholds=(1.6,),
-                                                     variables=(Trixi.scalar,))
 
-ode_algorithm = SSPRK33(stage_limiter!)
-=#
-
-ode_algorithm = SSPRK33()
-sol = solve(ode, ode_algorithm,
-            dt=1, # solve needs some value here but it will be overwritten by the stepsize_callback
+sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
+            dt=42, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
 
 summary_callback() # print the timer summary
