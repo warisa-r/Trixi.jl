@@ -126,7 +126,7 @@ end
 function read_eta_opt(Stages::Int, BasePath::AbstractString, NumTrueComplex_::Int, TimeStepSort::Vector{Int64})
   Path = BasePath * "eta" * string(Stages) * ".txt"
   eta_opt = readdlm(Path, ',')
-  @assert size(eta_opt, 1) == NumTrueComplex_ "Provided eta values do not match!"
+  @assert size(eta_opt, 1) == NumTrueComplex_ "Provided eta values do not match stage count!"
 
   # Add dummy row to eta_opt resembling forward euler
   eta_opt = vcat([42.0 42.0 42.0], eta_opt)
@@ -137,6 +137,26 @@ function read_eta_opt(Stages::Int, BasePath::AbstractString, NumTrueComplex_::In
   eta_opt[:, 3] = permute!(eta_opt[:, 3], TimeStepSort)
 
   return eta_opt
+end
+
+
+function read_ShuOsherCoeffs(BasePath::AbstractString, NumTrueComplex::Int)
+  NumForwardEuler, ForwardEulerWeight = read_file(BasePath * "ForwardEulerWeight.txt")
+  @assert NumForwardEuler <= 1
+
+  NumIndexForwardEuler, IndexForwardEuler = read_file(BasePath * "IndexForwardEuler.txt", Int64)
+  @assert NumIndexForwardEuler <= 1
+
+  NumbetaFirstStage, betaFirstStage = read_file(BasePath * "betaFirstStage.txt")
+  @assert NumbetaFirstStage == NumTrueComplex "Provided betaFirstStage coefficients do not match stage count!"
+
+  alphaSecondStage = readdlm(BasePath * "alphaSecondStage.txt", ',')
+  @assert size(alphaSecondStage, 1) == NumTrueComplex "Provided alphaSecondStage coefficients do not match stage count!"
+
+  betaSecondStage = readdlm(BasePath * "betaSecondStage.txt", ',')
+  @assert size(betaSecondStage, 1) == NumTrueComplex "Provided betaSecondStage coefficients do not match stage count!"
+
+  return ForwardEulerWeight[1], IndexForwardEuler[1], betaFirstStage, alphaSecondStage, betaSecondStage
 end
 
 
@@ -170,6 +190,12 @@ mutable struct FE2S
   b1::Vector{Float64}
   b2::Vector{Float64}
 
+  # alpha(s) of first stage simply 1
+  betaFirstStage::Vector{Float64}
+
+  alphaSecondStage::Matrix{Float64}
+  betaSecondStage::Matrix{Float64}
+
   # Constructor for previously computed A Coeffs
   function FE2S(Stages_::Int, PathPseudoExtrema_::AbstractString)
     if Stages_ % 2 == 0 
@@ -179,6 +205,10 @@ mutable struct FE2S
     end
     newFE2S = new(Stages_, NumTrueComplex_)
 
+    newFE2S.ForwardEulerWeight, newFE2S.IndexForwardEuler, 
+    newFE2S.betaFirstStage, newFE2S.alphaSecondStage, newFE2S.betaSecondStage = read_ShuOsherCoeffs(PathPseudoExtrema_, NumTrueComplex_)
+
+    #=
     newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared, 
     newFE2S.TimeSteps, newFE2S.IndexForwardEuler, newFE2S.TimeStepSort = 
       ComputeFE2S_Coefficients(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
@@ -187,6 +217,8 @@ mutable struct FE2S
       ComputeFE2S_Coefficients_RealRK(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
 
     #newFE2S.eta_opt = read_eta_opt(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex, newFE2S.TimeStepSort)
+    =#
+
     return newFE2S
   end
 end # struct FE2S
@@ -241,6 +273,8 @@ function solve(ode::ODEProblem, alg::FE2S;
                dt::Real, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0) # Initial value
+
+  # TODO: Introduce u1, u2, k1, k2!
   du    = similar(u0)
   u_tmp = similar(u0)
 
@@ -325,12 +359,15 @@ function solve!(integrator::FE2S_Integrator)
           integrator.k1[j] = integrator.u_tmp[j] + 
                              integrator.dt * integrator.du[j] / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i]          
             
-          =#
+          
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
           # u_tmp = g_i
           integrator.u_tmp[j] = integrator.u_tmp[j] + 
                                 integrator.dt * integrator.du[j] * 0.5 * alg.TwoRealOverAbsSquared[i]
-                                          
+          =#
+          
+          # Shu-Osher form: First stage
+          integrator.u_tmp[j] = integrator.u_tmp[j] + integrator.dt * alg.betaFirstStage[i] * integrator.du[j]
         end
         # For eta_1 = 1 (Somewhat RK like)
         #integrator.f(integrator.du, integrator.k1, prob.p, integrator.t_stage + integrator.dt / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i])
@@ -355,11 +392,14 @@ function solve!(integrator::FE2S_Integrator)
           #integrator.u_tmp[j] += integrator.dt * integrator.du[j] * alg.TwoRealOverAbsSquared[i]
 
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
-          
+          #=
           integrator.u_tmp[j] += integrator.dt * (0.5 * alg.TwoRealOverAbsSquared[i] * integrator.du[j] + 
                                  alg.InvAbsValsSquared[i] / (0.5 * alg.TwoRealOverAbsSquared[i]) * 
                                  (integrator.k1[j] - integrator.du[j]))
-                                         
+          =#
+          
+          # Shu-Osher
+          #integrator.u_tmp[j] = alg.alphaSecondStage[i, 1] * 
         end
         # For eta_1 = 1 (Somewhat RK like)
         #integrator.t_stage += integrator.dt * alg.TwoRealOverAbsSquared[i]

@@ -218,7 +218,7 @@ end
 
 
 # Required for adaptive time integrators which read-in optimized Runge-Kutta quantities
-function read_file(FilePath::AbstractString, DataType::Type)
+function read_file(FilePath::AbstractString, DataType::Type=Float64)
   @assert isfile(FilePath) "Couldn't find file"
   Data = zeros(DataType, 0)
   open(FilePath, "r") do File
