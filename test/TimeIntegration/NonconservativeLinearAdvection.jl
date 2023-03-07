@@ -83,7 +83,7 @@ solver = DGSEM(polydeg=5, surface_flux=surface_flux,
 semi = SemidiscretizationHyperbolic(mesh, equation, initial_condition_sine, solver)
 
 # Create an ODE problem with given time span
-tspan = (0.0, 10.0)
+tspan = (0.0, 200.0)
 ode = semidiscretize(semi, tspan);
 
 # Set up some standard callbacks summarizing the simulation setup and computing
@@ -142,9 +142,27 @@ CFL = 0.93 # Edge case for 30 stages
 CFL = 0.72  # Edge case for 60 stages
 CFL = 0.46  # Edge case for 120 stages
 
+
+
 dtOptMin = dtRef * (NumStages / NumStageRef) * CFL
 
-ode_algorithm = FE2S(NumStages, "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_VarSpeed/")
+# 4 stages
+dtOptMin = 0.00383180375676602133
+
+# 30 stages
+CFL = 0.95
+dtOptMin = 0.031436587387667768 * CFL
+
+# 60 stages
+CFL = 0.75
+dtOptMin = 0.066430373464476819 * CFL
+
+# 120 stages
+CFL = 0.62
+dtOptMin = 0.128857 * CFL
+
+ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_NonConstSpeed/7/120/")
+#ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_NonConstSpeed/7/")
 
 #=
 ode_algorithm = PERK_Multi(NumStages, 0,
@@ -153,8 +171,7 @@ ode_algorithm = PERK_Multi(NumStages, 0,
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
-                  save_everystep=false, callback=callbacks);
-     
+                  save_everystep=false, callback=callbacks)
 
 # Plot the numerical solution at the final time
 using Plots: plot
