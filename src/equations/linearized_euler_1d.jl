@@ -149,7 +149,7 @@ function initial_condition_acoustic_wave(x, t, equations::LinearizedEulerEquatio
   alpha     = 1.0
   beta      = 250.0
   center    = 0.5
-  Direction = -1 # Intended to be either -1 or +1
+  Direction = 1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp(-beta * (x[1] - center)^2)
 
@@ -165,7 +165,7 @@ function initial_condition_char_vars_acoustic_wave(x, p::Int, equations::Lineari
   alpha = 1.0
   beta  = 250.0
   center = 0.5
-  Direction = -1 # Intended to be either -1 or +1
+  Direction = 1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp.(-beta * (x .- center).^2)
 
