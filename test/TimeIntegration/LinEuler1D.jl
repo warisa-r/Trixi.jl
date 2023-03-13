@@ -23,7 +23,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 300)
+tspan = (0.0, 10)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -42,8 +42,8 @@ stepsize_callback = StepsizeCallback(cfl=1.0)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
-                        save_solution,
-                        stepsize_callback)
+                        save_solution)
+                        #stepsize_callback)
 
 ###############################################################################
 # run the simulation
@@ -53,7 +53,7 @@ NumStagesRef = 16
 
 NumStages = 120
 
-CFL = 0.99
+CFL = 0.9
 dt = dtRef * NumStages/NumStagesRef * CFL
 
 
@@ -75,6 +75,5 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
 =#
 
 summary_callback() # print the timer summary
-
 
 plot(sol)
