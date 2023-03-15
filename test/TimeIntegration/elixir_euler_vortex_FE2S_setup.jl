@@ -18,7 +18,7 @@ https://spectrum.library.concordia.ca/id/eprint/985444/1/Paired-explicit-Runge-K
 """
 function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
   # Evaluate error after full domain traversion
-  if t == 40
+  if t == 20
     t = 0
   end
 
@@ -56,10 +56,12 @@ initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_lax_friedrichs # = Rusanov, originally used
 surf_flux = flux_hll # Better flux, allows much larger timesteps
-solver = DGSEM(polydeg=6, surface_flux=surf_flux)
+solver = DGSEM(polydeg=3, surface_flux=surf_flux)
 
-coordinates_min = (-20.0, -20.0)
-coordinates_max = ( 20.0,  20.0)
+EdgeLength = 10.0
+coordinates_min = (-EdgeLength, -EdgeLength)
+coordinates_max = ( EdgeLength,  EdgeLength)
+
 NumCells = 80
 cells_per_dimension = (NumCells, NumCells)
 
@@ -70,7 +72,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 40.0)
+tspan = (0.0, 2 * EdgeLength)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -91,7 +93,7 @@ elseif surf_flux == flux_hll
 end
 
 callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback)
+                        analysis_callback, alive_callback) 
                         #stepsize_callback)
 
 
@@ -109,104 +111,51 @@ sol = solve(ode, SSPRK22(),
 # Testruns: Check if spatial accuracy limits now
 #=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            dt = 0.75e-2,
+            dt=42, # solve needs some value here but it will be overwritten by the stepsize_callback
+            #dt = 0.75e-2,
             save_everystep=false, callback=callbacks);
 =#
 
-# Control case: See if 2x2 is sufficient to estimate 80x80
-NumStages = 4
-CFL_Opt             = 1.0 # By definition
-CFL_Internal        = 1.0
-CFL_ConvergenceStudy = 1.4 * 0.83 # 2x2
+NumCellsOpt = 8
+CFL_Grid = NumCellsOpt / NumCells
+
+EdgeLengthOpt = 20
+CFL_EdgeLength = EdgeLength / EdgeLengthOpt
+
+NumStagesRef = 2
+dtRef = 0.0535678688311236328
 
 #=
-CFL_ConvergenceStudy = 0.99 # 3x3
-CFL_ConvergenceStudy = 0.99 # 4x4
-CFL_ConvergenceStudy = 0.99 # 5x5
-CFL_ConvergenceStudy = 1.0 # 6x6
-CFL_ConvergenceStudy = 1.0 # 7x7
-CFL_ConvergenceStudy = 0.99 # 8x8
+NumStagesRef = 4
+dtRef = 0.376334667205810547
+CFL = 0.98
 =#
 
+NumStages = 40
+CFL = 0.75
 
-# 26 
-#=
-NumStages = 26
-CFL_Opt = 0.95535463700870915
-
-CFL_Internal = 0.79 # Lebedev
-CFL_Internal = 0.04 # Successive Intermediate classic RK
-CFL_Internal = 0.8 # Classic RK
-
-CFL_ConvergenceStudy = 1
-
-
-# 52 
-NumStages = 52
-CFL_Opt = 0.93135613167399789
-
-CFL_Internal = 0.7 # Lebedev
-CFL_Internal = 0.01 # Successive Intermediate classic RK
-CFL_Internal = 0.48 # Classic RK
-
-CFL_ConvergenceStudy = 1
-=#
-
-
-# 104
-#=
-NumStages = 104
-CFL_Opt = 0.91021259292341095
-
-CFL_Internal = 0.28 # Lebedev
-CFL_Internal = 0.004 # Successive Intermediate classic RK
-CFL_Internal = 0.23 # Classic RK
-
-CFL_ConvergenceStudy = 1
-=#
-
-NumStageRef = 16
-dtRef = 2.29160435257381323
-
-NumStageRef = 4
-
-NumCellsRef = 2
-dtRef = 0.419013938898388005 # 2x2
+dtOptMin = dtRef  * NumStages/NumStagesRef * CFL * CFL_Grid * CFL_EdgeLength
 
 #=
-NumCellsRef = 3
-dtRef = 0.338754492229782045 # 3x3
-
-NumCellsRef = 4
-dtRef = 0.255777720361038519 # 4x4
-
-NumCellsRef = 5
-dtRef = 0.204524988307639433 # 5x5
-
-NumCellsRef = 6
-dtRef = 0.168881459738258854 # 6x6
-
-NumCellsRef = 7
-dtRef = 0.145751630958147865 # 7x7
-
-NumCellsRef = 8
-dtRef = 0.127459716796329298 # 8x8
-=#
-
-dtOptMin = dtRef * (NumStages / NumStageRef) / (NumCells/NumCellsRef) * CFL_Opt * CFL_Internal * CFL_ConvergenceStudy
-
-#ode_algorithm = FE2S(NumStages, "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/")
-
 ode_algorithm = PERK(NumStages, 
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/")
+                "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/")
+=#
+
+#=
+ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
+                                string(NumStages) * "/")
+=#
+
+ode_algorithm = SSPRK2S(NumStages)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacks);
 
+
 summary_callback() # print the timer summary
-plot(sol)
+#plot(sol)
 
 pd = PlotData2D(sol)
 plot(pd["rho"])
+plot!(getmesh(pd))

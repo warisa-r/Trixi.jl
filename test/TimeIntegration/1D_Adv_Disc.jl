@@ -77,12 +77,12 @@ callbacks = CallbackSet(summary_callback,
 dtRef = 0.00781250000072759619
 StagesRef = 2
 
-
+#=
 dtRef = 0.101582545940618735
 StagesRef = 14
+=#
 
-
-NumStages = 14
+NumStages = 2
 CFL = 1.0
 
 dt = dtRef * NumStages / StagesRef * CFL
@@ -93,11 +93,12 @@ sol = solve(ode, SSPRK22(),
             save_everystep=false, callback=callbacks);
 =#
 
-ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_FV/")
+#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_FV/")
+ode_algorithm = SSPRK2S(NumStages)
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
-                  save_everystep=false, callback=callbacks)               
-
+                  save_everystep=false, callback=callbacks)
 
 summary_callback() # print the timer summary
 plot(sol)

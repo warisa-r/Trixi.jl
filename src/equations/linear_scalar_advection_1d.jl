@@ -70,9 +70,14 @@ A Gaussian pulse used together with
 """
 function initial_condition_gauss(x, t, equation::LinearScalarAdvectionEquation1D)
   # Store translated coordinate for easy use of exact solution
+  if t > 0
+    t = 0
+  end
+
   x_trans = x - equation.advection_velocity * t
 
-  scalar = exp(-(x_trans[1]^2))
+  TwoSigmaSquared = 0.1
+  scalar = exp(-(x_trans[1]^2)/TwoSigmaSquared)
   return SVector(scalar)
 end
 

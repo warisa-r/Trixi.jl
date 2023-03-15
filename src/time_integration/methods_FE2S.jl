@@ -206,7 +206,6 @@ mutable struct FE2S
       ComputeFE2S_Coefficients_RealRK(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
 
     #newFE2S.eta_opt = read_eta_opt(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex, newFE2S.TimeStepSort)
-    
 
     return newFE2S
   end
