@@ -55,11 +55,13 @@ callbacks = CallbackSet(summary_callback,
 
 dtRef = 0.0360458314265997635
 NumStagesRef = 16
-CFL = 0.99
 
+CFL_Convergence = 0.25
+
+CFL = 0.99
 NumStages = 128
 
-dtOptMin = NumStages / NumStagesRef * dtRef * CFL
+dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * 
                                 string(NumStages) * "/")
