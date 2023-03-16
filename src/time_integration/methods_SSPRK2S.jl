@@ -7,7 +7,7 @@
 @muladd begin
 
 """
-    SSPRK2S()
+    SSPRKS2()
 
 The following structures and methods provide a minimal implementation of
 the optimal second order accurate, S-stage method family.
@@ -22,20 +22,20 @@ This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods
 CarpenterKennedy2N{54, 43} methods.
 """
 
-mutable struct SSPRK2S
+mutable struct SSPRKS2
   const NumStages::Int
   
-  function SSPRK2S(NumStages_::Int)
+  function SSPRKS2(NumStages_::Int)
 
-    newSSPRK2S = new(NumStages_)
+    newSSPRKS2 = new(NumStages_)
 
-    return newSSPRK2S
+    return newSSPRKS2
   end
-end # struct SSPRK2S
+end # struct SSPRKS2
 
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
-mutable struct SSPRK2S_IntegratorOptions{Callback}
+mutable struct SSPRKS2_IntegratorOptions{Callback}
   callback::Callback # callbacks; used in Trixi
   adaptive::Bool # whether the algorithm is adaptive; ignored
   dtmax::Float64 # ignored
@@ -43,15 +43,15 @@ mutable struct SSPRK2S_IntegratorOptions{Callback}
   tstops::Vector{Float64} # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
 end
 
-function SSPRK2S_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
-  SSPRK2S_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
+function SSPRKS2_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
+  SSPRKS2_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.
-mutable struct SSPRK2S_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRK2S_IntegratorOptions}
+mutable struct SSPRKS2_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRKS2_IntegratorOptions}
   u::uType
   du::uType
   u_tmp::uType
@@ -63,12 +63,12 @@ mutable struct SSPRK2S_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRK
   sol::Sol # faked
   f::F
   alg::Alg # This is our own class written above; Abbreviation for ALGorithm
-  opts::SSPRK2S_IntegratorOptions
+  opts::SSPRKS2_IntegratorOptions
   finalstep::Bool # added for convenience
 end
 
 # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
-function Base.getproperty(integrator::SSPRK2S_Integrator, field::Symbol)
+function Base.getproperty(integrator::SSPRKS2_Integrator, field::Symbol)
   if field === :destats
     return (naccept = getfield(integrator, :iter),)
   end
@@ -77,7 +77,7 @@ function Base.getproperty(integrator::SSPRK2S_Integrator, field::Symbol)
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::SSPRK2S;
+function solve(ode::ODEProblem, alg::SSPRKS2;
                 dt, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0)
@@ -88,9 +88,9 @@ function solve(ode::ODEProblem, alg::SSPRK2S;
   iter = 0
 
 
-  integrator = SSPRK2S_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+  integrator = SSPRKS2_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                 (prob=ode,), ode.f, alg,
-                SSPRK2S_IntegratorOptions(callback, ode.tspan; kwargs...), false)
+                SSPRKS2_IntegratorOptions(callback, ode.tspan; kwargs...), false)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -107,7 +107,7 @@ function solve(ode::ODEProblem, alg::SSPRK2S;
   solve!(integrator)
 end
 
-function solve!(integrator::SSPRK2S_Integrator)
+function solve!(integrator::SSPRKS2_Integrator)
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan)
@@ -126,7 +126,7 @@ function solve!(integrator::SSPRK2S_Integrator)
       terminate!(integrator)
     end
 
-    @trixi_timeit timer() "SSPRK2S ODE integration step" begin
+    @trixi_timeit timer() "SSPRKS2 ODE integration step" begin
 
       @threaded for j in eachindex(integrator.u)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
@@ -145,7 +145,7 @@ function solve!(integrator::SSPRK2S_Integrator)
         integrator.u[i] *= 1/alg.NumStages
         integrator.u[i] += (alg.NumStages - 1)/alg.NumStages * integrator.u_tmp[i]
       end
-    end # SSPRK2S step
+    end # SSPRKS2 step
 
     integrator.iter += 1
     integrator.t += integrator.dt
@@ -172,25 +172,25 @@ function solve!(integrator::SSPRK2S_Integrator)
 end
 
 # get a cache where the RHS can be stored
-get_du(integrator::SSPRK2S_Integrator) = integrator.du
-get_tmp_cache(integrator::SSPRK2S_Integrator) = (integrator.u_tmp,)
+get_du(integrator::SSPRKS2_Integrator) = integrator.du
+get_tmp_cache(integrator::SSPRKS2_Integrator) = (integrator.u_tmp,)
 
 # some algorithms from DiffEq like FSAL-ones need to be informed when a callback has modified u
-u_modified!(integrator::SSPRK2S_Integrator, ::Bool) = false
+u_modified!(integrator::SSPRKS2_Integrator, ::Bool) = false
 
 # used by adaptive timestepping algorithms in DiffEq
-function set_proposed_dt!(integrator::SSPRK2S_Integrator, dt)
+function set_proposed_dt!(integrator::SSPRKS2_Integrator, dt)
   integrator.dt = dt
 end
 
 # stop the time integration
-function terminate!(integrator::SSPRK2S_Integrator)
+function terminate!(integrator::SSPRKS2_Integrator)
   integrator.finalstep = true
   empty!(integrator.opts.tstops)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::SSPRK2S_Integrator, new_size)
+function Base.resize!(integrator::SSPRKS2_Integrator, new_size)
   resize!(integrator.u, new_size)
   resize!(integrator.du, new_size)
   resize!(integrator.u_tmp, new_size)

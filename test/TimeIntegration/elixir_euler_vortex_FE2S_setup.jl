@@ -146,7 +146,7 @@ ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spec
                                 string(NumStages) * "/")
 =#
 
-ode_algorithm = SSPRK2S(NumStages)
+ode_algorithm = SSPRKS2(NumStages)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,

@@ -94,7 +94,7 @@ sol = solve(ode, SSPRK22(),
 =#
 
 #ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_FV/")
-ode_algorithm = SSPRK2S(NumStages)
+ode_algorithm = SSPRKS2(NumStages)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
