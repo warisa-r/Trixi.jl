@@ -71,9 +71,9 @@ end
 end
 
 
-@inline have_constant_speed(::LinearizedEulerEquations2D) = Val(false)
+@inline have_constant_speed(::LinearizedEulerEquations2D) = Val(true)
 
-@inline function max_abs_speeds(u, equations::LinearizedEulerEquations2D)
+@inline function max_abs_speeds(equations::LinearizedEulerEquations2D)
   (; v1_0, v2_0, c_0) = equations
   return abs(v1_0) + c_0, abs(v2_0) + c_0
 end
