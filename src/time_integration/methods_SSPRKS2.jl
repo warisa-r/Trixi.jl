@@ -30,7 +30,7 @@ function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF6
   while dtMax - dtMin > dtEps
     dt = 0.5 * (dtMax + dtMin)
 
-    AbsPMax = -1
+    AbsPMax = 0.0
     for i in eachindex(EigVals)
       AbsP = abs(1.0/NumStages + (NumStages - 1)/NumStages * (1.0 + EigVals[i] * dt/(NumStages - 1))^NumStages)
 
