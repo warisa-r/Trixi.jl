@@ -140,6 +140,11 @@ function initialize!(cb::DiscreteCallback{Condition,Affect!}, u_ode, t, integrat
           @printf(io, "   %-14s", "linf_" * v)
         end
       end
+      if :l1_error in analysis_errors
+        for v in varnames(cons2cons, equations)
+          @printf(io, "   %-14s", "l1_" * v)
+        end
+      end
       if :conservation_error in analysis_errors
         for v in varnames(cons2cons, equations)
           @printf(io, "   %-14s", "cons_" * v)
@@ -158,6 +163,11 @@ function initialize!(cb::DiscreteCallback{Condition,Affect!}, u_ode, t, integrat
       if :linf_error_primitive in analysis_errors
         for v in varnames(cons2prim, equations)
           @printf(io, "   %-14s", "linf_" * v)
+        end
+      end
+      if :l1_error_primitive in analysis_errors
+        for v in varnames(cons2prim, equations)
+          @printf(io, "   %-14s", "l1_" * v)
         end
       end
 
@@ -182,7 +192,7 @@ function (analysis_callback::AnalysisCallback)(integrator)
   mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
   @unpack dt, t = integrator
   iter = integrator.destats.naccept
-
+  
   runtime_absolute = 1.0e-9 * (time_ns() - analysis_callback.start_time)
   runtime_relative = 1.0e-9 * take!(semi.performance_counter) / ndofs(semi)
 
@@ -226,7 +236,7 @@ function (analysis_callback::AnalysisCallback)(integrator)
     @notimeit timer() integrator.f(du_ode, integrator.u, semi, t)
     u  = wrap_array(integrator.u, mesh, equations, solver, cache)
     du = wrap_array(du_ode,       mesh, equations, solver, cache)
-    l2_error, linf_error = analysis_callback(io, du, u, integrator.u, t, semi)
+    l2_error, linf_error, l1_error = analysis_callback(io, du, u, integrator.u, t, semi)
 
     mpi_println("─"^100)
     mpi_println()
@@ -245,7 +255,7 @@ function (analysis_callback::AnalysisCallback)(integrator)
   u_modified!(integrator, false)
 
   # Return errors for EOC analysis
-  return l2_error, linf_error
+  return l2_error, linf_error, l1_error
 end
 
 
@@ -259,7 +269,7 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
   # Calculate and print derived quantities (error norms, entropy etc.)
   # Variable names required for L2 error, Linf error, and conservation error
   if any(q in analysis_errors for q in
-         (:l2_error, :linf_error, :conservation_error, :residual)) && mpi_isroot()
+         (:l2_error, :linf_error, :l1_error, :conservation_error, :residual)) && mpi_isroot()
     print(" Variable:    ")
     for v in eachvariable(equations)
       @printf("   %-14s", varnames(cons2cons, equations)[v])
@@ -267,8 +277,8 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
     println()
   end
 
-  # Calculate L2/Linf errors, which are also returned
-  l2_error, linf_error = calc_error_norms(u_ode, t, analyzer, semi, cache_analysis)
+  # Calculate L2, L1, Linf errors, which are also returned
+  l2_error, linf_error, l1_error = calc_error_norms(u_ode, t, analyzer, semi, cache_analysis)
 
   if mpi_isroot()
     # L2 error
@@ -287,6 +297,16 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
       for v in eachvariable(equations)
         @printf("  % 10.8e", linf_error[v])
         @printf(io, "  % 10.8e", linf_error[v])
+      end
+      println()
+    end
+
+    # L1 error
+    if :l1_error in analysis_errors
+      print(" L1 error:    ")
+      for v in eachvariable(equations)
+        @printf("  % 10.8e", l1_error[v])
+        @printf(io, "  % 10.8e", l1_error[v])
       end
       println()
     end
@@ -330,9 +350,10 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
     mpi_println()
   end
 
-  # L2/L∞ errors of the primitive variables
-  if :l2_error_primitive in analysis_errors || :linf_error_primitive in analysis_errors
-    l2_error_prim, linf_error_prim = calc_error_norms(cons2prim, u_ode, t, analyzer, semi, cache_analysis)
+  # L2, L1, L∞ errors of the primitive variables
+  if :l2_error_primitive in analysis_errors || :linf_error_primitive in analysis_errors || 
+    :l1_error_primitive in analysis_errors
+    l2_error_prim, linf_error_prim, l1_error_prim = calc_error_norms(cons2prim, u_ode, t, analyzer, semi, cache_analysis)
 
     if mpi_isroot()
       print(" Variable:    ")
@@ -360,13 +381,23 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
         end
         println()
       end
+
+      # L1 error
+      if :l1_error_primitive in analysis_errors
+        print(" L1 error prim.: ")
+        for v in eachvariable(equations)
+          @printf("%10.8e   ", l1_error_prim[v])
+          @printf(io, "  % 10.8e", l1_error_prim[v])
+        end
+        println()
+      end
     end
   end
 
   # additional integrals
   analyze_integrals(analysis_integrals, io, du, u, t, semi)
 
-  return l2_error, linf_error
+  return l2_error, linf_error, l1_error
 end
 
 
@@ -451,8 +482,8 @@ function (cb::DiscreteCallback{Condition,Affect!})(sol) where {Condition, Affect
   @unpack analyzer = analysis_callback
   cache_analysis = analysis_callback.cache
 
-  l2_error, linf_error = calc_error_norms(sol.u[end], sol.t[end], analyzer, semi, cache_analysis)
-  (; l2=l2_error, linf=linf_error)
+  l2_error, linf_error, l1_error = calc_error_norms(sol.u[end], sol.t[end], analyzer, semi, cache_analysis)
+  (; l2=l2_error, linf=linf_error, l1=l1_error)
 end
 
 
@@ -503,12 +534,13 @@ pretty_form_ascii(::Val{:linf_divb}) = "linf_divb"
 pretty_form_utf(::typeof(lake_at_rest_error)) = "∑|H₀-(h+b)|"
 pretty_form_ascii(::typeof(lake_at_rest_error)) = "|H0-(h+b)|"
 
+
+end # @muladd
+
+
 # specialized implementations specific to some solvers
 include("analysis_dg1d.jl")
 include("analysis_dg2d.jl")
 include("analysis_dg2d_parallel.jl")
 include("analysis_dg3d.jl")
 include("analysis_dg3d_parallel.jl")
-
-
-end # @muladd
