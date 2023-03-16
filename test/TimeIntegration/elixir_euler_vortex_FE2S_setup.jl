@@ -59,10 +59,12 @@ surf_flux = flux_hll # Better flux, allows much larger timesteps
 solver = DGSEM(polydeg=3, surface_flux=surf_flux)
 
 EdgeLength = 10.0
+#EdgeLength = 20.0
 coordinates_min = (-EdgeLength, -EdgeLength)
 coordinates_max = ( EdgeLength,  EdgeLength)
 
 NumCells = 80
+#NumCells = 8
 cells_per_dimension = (NumCells, NumCells)
 
 mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max)
@@ -122,6 +124,15 @@ CFL_Grid = NumCellsOpt / NumCells
 EdgeLengthOpt = 20
 CFL_EdgeLength = EdgeLength / EdgeLengthOpt
 
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_8.txt", ComplexF64)
+NumStages = 4
+dtRefStages = Trixi.MaxTimeStep(NumStages, 1.0, EigVals)
+
+CFL = 0.99
+dtOptMin = dtRefStages * CFL * CFL_Grid * CFL_EdgeLength
+
+#=
+
 NumStagesRef = 2
 dtRef = 0.0535678688311236328
 
@@ -131,23 +142,14 @@ dtRef = 0.376334667205810547
 CFL = 0.98
 =#
 
-NumStages = 32
-CFL = 0.99
-
-NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_8.txt", ComplexF64)
-
-dtRefStages = Trixi.MaxTimeStep(NumStages, 1.0, EigVals)
-
 dtOptMin = dtRef * NumStages/NumStagesRef * CFL * CFL_Grid * CFL_EdgeLength
-
-dtOptMin = dtRefStages * CFL * CFL_Grid * CFL_EdgeLength
 
 #=
 ode_algorithm = PERK(NumStages, 
                 "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/")
 =#
 
-#=
+
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
                                 string(NumStages) * "/")
 =#
