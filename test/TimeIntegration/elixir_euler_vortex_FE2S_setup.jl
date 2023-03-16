@@ -131,10 +131,16 @@ dtRef = 0.376334667205810547
 CFL = 0.98
 =#
 
-NumStages = 40
-CFL = 0.75
+NumStages = 32
+CFL = 0.99
 
-dtOptMin = dtRef  * NumStages/NumStagesRef * CFL * CFL_Grid * CFL_EdgeLength
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_8.txt", ComplexF64)
+
+dtRefStages = Trixi.MaxTimeStep(NumStages, 1.0, EigVals)
+
+dtOptMin = dtRef * NumStages/NumStagesRef * CFL * CFL_Grid * CFL_EdgeLength
+
+dtOptMin = dtRefStages * CFL * CFL_Grid * CFL_EdgeLength
 
 #=
 ode_algorithm = PERK(NumStages, 

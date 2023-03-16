@@ -22,6 +22,40 @@ This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods
 CarpenterKennedy2N{54, 43} methods.
 """
 
+function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64})
+  dtEps = 1e-9
+  dt    = -1.0
+  dtMin = 0.0
+
+  while dtMax - dtMin > dtEps
+    dt = 0.5 * (dtMax + dtMin)
+
+    AbsPMax = -1
+    for i in eachindex(EigVals)
+      AbsP = abs(1.0/NumStages + (NumStages - 1)/NumStages * (1.0 + EigVals[i] * dt/(NumStages - 1))^NumStages)
+
+      if AbsP > AbsPMax
+        AbsPMax = AbsP
+      end
+
+      if AbsPMax > 1.0
+        break
+      end
+    end
+
+    if AbsPMax > 1.0
+      dtMax = dt
+    else
+      dtMin = dt
+    end
+
+    println("Current dt: ", dt)
+    println("Current AbsPMax: ", AbsPMax, "\n")
+  end
+
+  return dt
+end
+
 mutable struct SSPRKS2
   const NumStages::Int
   
