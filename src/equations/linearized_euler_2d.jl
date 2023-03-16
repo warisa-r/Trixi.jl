@@ -95,6 +95,33 @@ end
 end
 
 
+# Calculate minimum and maximum wave speeds for HLL-type fluxes
+@inline function min_max_speed_naive(u_ll, u_rr, orientation::Integer,
+                                     equations::LinearizedEulerEquations2D)
+
+  if orientation == 1 # x-direction
+    λ_min = equations.v1_0 - equations.c_0
+    λ_max = equations.v1_0 + equations.c_0
+  else # y-direction
+    λ_min = equations.v2_0 - equations.c_0
+    λ_max = equations.v2_0 + equations.c_0
+  end
+
+  return λ_min, λ_max
+end
+
+@inline function min_max_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
+                                     equations::LinearizedEulerEquations2D)
+  v_normal = equations.v1_0 * normal_direction[1] + equations.v2_0 * normal_direction[2]
+
+  norm_ = norm(normal_direction)
+  # The v_normals are already scaled by the norm
+  λ_min = v_normal - equations.c_0 * norm_
+  λ_max = v_normal + equations.c_0 * norm_
+
+  return λ_min, λ_max
+end
+
 # Convert conservative variables to primitive
 @inline cons2prim(u, equations::LinearizedEulerEquations2D) = cons2cons(u, equations)
 @inline cons2entropy(u, ::LinearizedEulerEquations2D) = u
