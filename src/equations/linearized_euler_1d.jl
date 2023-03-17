@@ -146,16 +146,16 @@ end
 
 function initial_condition_acoustic_wave(x, t, equations::LinearizedEulerEquations1D)
   # Parameters
-  alpha     = 1.0
-  beta      = 250.0
+  alpha     = 0.1
+  beta      = 50.0
   center    = 0.5
   Direction = 1 # Intended to be either -1 or +1
 
   Gaussian = alpha * exp(-beta * (x[1] - center)^2)
 
-  rho_prime = Direction * equations.rho_0 * Gaussian / equations.c_0
+  rho_prime = Direction * equations.rho_0 * Gaussian / (equations.c_0 * equations.v_0)
   v_prime   = Gaussian
-  p_prime   = Direction * equations.rho_0 * Gaussian * equations.c_0
+  p_prime   = Direction * equations.rho_0 * Gaussian * (equations.c_0 * equations.v_0)
 
   return SVector(rho_prime, v_prime, p_prime)
 end
