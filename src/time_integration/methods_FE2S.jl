@@ -152,6 +152,59 @@ function read_ShuOsherCoeffs(BasePath::AbstractString, Stages::Int)
   return alpha, beta
 end
 
+function StabPoly(ForwardEulerWeight, InvAbsValsSquared, TwoRealOverAbsSquared, IndexForwardEuler, z)
+
+  P = 1
+  for i = 1:IndexForwardEuler-1
+    k1 = 1 + z / TwoRealOverAbsSquared[i] * InvAbsValsSquared[i]
+    P *= 1 + TwoRealOverAbsSquared[i] * z * k1
+  end
+
+  P *= 1 + z * ForwardEulerWeight
+
+  for i = IndexForwardEuler+1:length(InvAbsValsSquared)
+    k1 = 1 + z / TwoRealOverAbsSquared[i] * InvAbsValsSquared[i]
+    P *= 1 + TwoRealOverAbsSquared[i] * z * k1
+  end
+
+  return P
+end
+
+function MaxTimeStep(dtMax::Float64, EigVals::Vector{<:ComplexF64},
+                     alg)
+  dtEps = 1e-9
+  dt    = -1.0
+  dtMin = 0.0
+
+  while dtMax - dtMin > dtEps
+    dt = 0.5 * (dtMax + dtMin)
+
+    AbsPMax = 0.0
+    for i in eachindex(EigVals)
+      AbsP = abs(StabPoly(alg.ForwardEulerWeight, alg.InvAbsValsSquared, alg.TwoRealOverAbsSquared, alg.IndexForwardEuler, dt * EigVals[i]))
+
+      if AbsP > AbsPMax
+        AbsPMax = AbsP
+      end
+
+      if AbsPMax > 1.0
+        break
+      end
+    end
+
+    if AbsPMax > 1.0
+      dtMax = dt
+    else
+      dtMin = dt
+    end
+
+    println("Current dt: ", dt)
+    println("Current AbsPMax: ", AbsPMax, "\n")
+  end
+
+  return dt
+end
+
 
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
@@ -195,7 +248,7 @@ mutable struct FE2S
     end
     newFE2S = new(Stages_, NumTrueComplex_)
 
-    newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
+    #newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
 
     
     newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared, 
@@ -351,7 +404,7 @@ function solve!(integrator::FE2S_Integrator)
           # eta_1 = 1 (Somewhat RK like)
           
           integrator.k1[j] = integrator.u_tmp[j] + 
-                            integrator.dt * integrator.du[j] / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i]          
+                             integrator.dt * integrator.du[j] / alg.TwoRealOverAbsSquared[i] * alg.InvAbsValsSquared[i]          
           
           
           # "Lebedev-way" (See https://infoscience.epfl.ch/record/182180/files/abd_cheb_springer.pdf Eq. (17).)
