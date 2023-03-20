@@ -335,7 +335,5 @@ include("acoustic_perturbation_2d.jl")
 abstract type LinearizedEulerEquations{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
 include("linearized_euler_1d.jl")
 include("linearized_euler_2d.jl")
-# Primarily for testing
-include("linearized_euler_1d_pos_dep_mach.jl")
 
 end # @muladd
