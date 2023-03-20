@@ -377,6 +377,7 @@ function solve!(integrator::FE2S_Integrator)
       ### Successive Intermediate Stages implementation ###
       integrator.t_stage = integrator.t
 
+      
       # Two-stage substeps with smaller timestep than ForwardEuler
       for i = 1:alg.IndexForwardEuler-1
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)

@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -9,35 +9,21 @@ equations = InviscidBurgersEquation1D()
 
 initial_condition = initial_condition_convergence_test
 
-solver = DGSEM(polydeg=0, surface_flux=flux_lax_friedrichs)
+flux = flux_godunov
+#flux = flux_lax_friedrichs
+solver = DGSEM(polydeg=3, surface_flux=flux)
 
 coordinates_min = 0.0
 coordinates_max = 1.0
 
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=9,
+                initial_refinement_level=8,
                 n_cells_max=10_000)
 
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
-                                    source_terms=source_terms_convergence_test)
+                                    source_terms=source_terms_convergence_test)                            
 
-#=
-A = jacobian_ad_forward(semi)
-Eigenvalues = eigvals(A)
-
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = scatter(EigValsReal, EigValsImag, label = "Start")
-display(plotdata)                                
-=#
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -70,35 +56,21 @@ callbacks = CallbackSet(summary_callback,
 tspan = (0.0, 2)
 ode = semidiscretize(semi, tspan)
 
-#=
-dtRef = 0.000742809865041635946
-NumStagesRef = 2
-CFL_SSPRK22 = 0.97 # = Heun's method
-
-sol = solve(ode, SSPRK22(), #CarpenterKennedy2N54(williamson_condition=false),
-            dt=dtRef*CFL_SSPRK22, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
-
-plot(sol)
-
-
-NumStages = 2
-CFL_RK2 = 0.969
-dt = dtRef * NumStages / NumStagesRef * CFL_RK2
-
-ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
-
-sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dt,
-                  save_everystep=false, callback=callbacks);
-=#
+NumStagesRef = 16
+dtRef = 0.00291312662768177694
 
 NumStages = 16
-dtRef = 0.0151153922080993647
-CFL = 0.6
-dt = dtRef * CFL
+CFL = 0.79
+
+NumStages = 32
+CFL = 0.4798
+
+dt = dtRef * NumStages/NumStagesRef * CFL
         
-ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
+#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
+
+ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
+                                string(NumStages) * "/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
@@ -107,14 +79,27 @@ sol = Trixi.solve(ode, ode_algorithm,
 summary_callback() # print the timer summary
 plot(sol)
 
-A = jacobian_ad_forward(semi, tspan[end], sol.u[end])
+
+A = jacobian_ad_forward(semi)
 Eigenvalues = eigvals(A)
 
 # Complex conjugate eigenvalues have same modulus
 Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
 
 # Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-#Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
+Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
+
+EigValsReal = real(Eigenvalues)
+EigValsImag = imag(Eigenvalues)
+
+plotdata = scatter(EigValsReal, EigValsImag, label = "Start")
+display(plotdata)    
+
+A = jacobian_ad_forward(semi, tspan[end], sol.u[end])
+Eigenvalues = eigvals(A)
+
+# Complex conjugate eigenvalues have same modulus
+Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
 
 EigValsReal = real(Eigenvalues)
 EigValsImag = imag(Eigenvalues)

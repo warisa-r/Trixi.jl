@@ -44,7 +44,8 @@ summary_callback = SummaryCallback()
 
 Interval = 500
 # The AnalysisCallback allows to analyse the solution in regular intervals and prints the results
-analysis_callback = AnalysisCallback(semi, interval=Interval, extra_analysis_errors=(:conservation_error,))
+analysis_callback = AnalysisCallback(semi, interval=Interval, 
+                                     extra_analysis_errors=(:conservation_error, :l1_error))
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, 
@@ -56,10 +57,10 @@ callbacks = CallbackSet(summary_callback,
 dtRef = 0.0360458314265997635
 NumStagesRef = 16
 
-CFL_Convergence = 0.25
+CFL_Convergence = 1.0
 
-CFL = 0.99
-NumStages = 128
+CFL = 1.0
+NumStages = 26
 
 dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
 
