@@ -5,14 +5,17 @@ using Trixi
 # semidiscretization of the linearized Euler equations
 
 # Convergence test
-equations = LinearizedEulerEquations2D(1.0, 0.0, 0.0, 1.0)
+#equations = LinearizedEulerEquations2D(1.0, 0.0, 0.0, 1.0)
+equations = LinearizedEulerEquations2D(1.0, 1.0, 1.0, 0.1)
 
 initial_condition = initial_condition_convergence_test
 
-# Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-solver = DGSEM(polydeg=2, surface_flux=flux_lax_friedrichs)
+#flux=flux_lax_friedrichs
+flux = flux_hll
+solver = DGSEM(polydeg=2, surface_flux=flux)
 
-coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
+#coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
+coordinates_min = (0.0, 0.0) # minimum coordinates (min(x), min(y))
 coordinates_max = ( 1.0,  1.0) # maximum coordinates (max(x), max(y))
 
 RefinementLevel = 7
@@ -29,7 +32,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 0.2
-tspan = (0.0, 30)
+tspan = (0.0, 10)
 ode = semidiscretize(semi, tspan)
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
@@ -55,30 +58,42 @@ callbacksDE = CallbackSet(summary_callback, analysis_callback, alive_callback, s
 # run the simulation
 
 
-dtRef = 0.0680664062027062793
-NumStagesRef = 3
-
-
-#=
-dtRef = 0.477797849840499111
+dtRef = 0.185585539041312586
 NumStagesRef = 16
-=#
-
 
 RefinementOpt = 3
 CFL_Refinement = 1.0 / 2^(RefinementLevel - RefinementOpt)
 
-#CFL = 0.7
-CFL = 0.99
-NumStages = 3
+NumStages = 16
+CFL = 1.0
+
+
+NumStages = 32
+# Minimize beta
+CFL = 0.98
+
+
+NumStages = 64
+# Minimize beta
+CFL = 0.94
+
+
+NumStages = 128
+CFL = 0.75
+
 
 dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement
 
-ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/")
+#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/")
 
-#=
+
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/" * 
                                 string(NumStages) * "/")
+
+
+#=
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/EigenvalueList_Refined3.txt", ComplexF64)
+dtRefStages = Trixi.MaxTimeStep(2*dtOptMin, EigVals, ode_algorithm)
 =#
 
 sol = Trixi.solve(ode, ode_algorithm,
@@ -91,7 +106,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacksDE);
-=#                 
+=#
 
 # Print the timer summary
 summary_callback()
