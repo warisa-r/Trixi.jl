@@ -59,22 +59,30 @@ ode = semidiscretize(semi, tspan)
 NumStagesRef = 16
 dtRef = 0.00291312662768177694
 
+#=
 NumStages = 16
 CFL = 0.79
+=#
 
-#=
+
 NumStages = 32
 CFL = 1.0
-=#
+
+
+NumStages = 64
+CFL = 0.81
+
+NumStages = 128
+CFL = 0.39
 
 dt = dtRef * NumStages/NumStagesRef * CFL
         
-ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
+#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
 
-#=
+
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
                                 string(NumStages) * "/")
-=#
+
 
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/EigenvalueList_Refined8.txt", ComplexF64)  
 M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt/CFL)
