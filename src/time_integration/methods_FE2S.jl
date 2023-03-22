@@ -202,6 +202,62 @@ function read_ShuOsherCoeffs(BasePath::AbstractString, Stages::Int)
   return alpha, beta
 end
 
+
+function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{Float64}, EigValsScaled::Vector{<:Complex})
+  M = 0.0
+
+  # Parameters of last Forward Euler step with weight 1
+  alpha_Splus    = zeros(1, Stages)
+  alpha_Splus[1] = 1.0
+
+  beta_Splus = zeros(ComplexF64, 1, Stages)
+
+  alphaMat = zeros(Stages, Stages) # = alpha_{1:S}
+  betaMat  = zeros(ComplexF64, Stages, Stages)
+
+  # CARE: Assumes that Forward Euler step is always executed first!
+  # Include Forward Euler at first position
+  alphaMat[2, 1] = 1.0
+  betaMat[2, 1]  = beta[1, 2]
+
+  for i = 3:Stages
+    alphaMat[i, i-2] = alpha[i-1, 1]
+    alphaMat[i, i-1] = alpha[i-1, 2]
+
+    betaMat[i, i-2] = beta[i-1, 1]
+    betaMat[i, i-1] = beta[i-1, 2]
+  end
+
+  for i in eachindex(EigValsScaled)
+    beta_Splus[Stages] = EigValsScaled[i]
+
+    # Compute (I - alpha_1:S - z * beta_1:S)^(-1)
+    Inv = I
+
+    # Multiply beta with eigenvalue
+    betaMat *= EigValsScaled[i]
+
+    Power = alphaMat + betaMat
+    for i = 1:Stages-1
+      Inv += Power
+      Power *= alphaMat + betaMat
+    end
+
+    # Compute maximum of Q_j of this eigenvalue
+    QMax = maximum(abs.((alpha_Splus + beta_Splus) * Inv))
+
+    if QMax > M
+      M = QMax
+    end
+
+    # Undo Multiplication with eigenvalue
+    betaMat /= EigValsScaled[i]
+  end
+
+  return M
+end
+
+
 function StabPoly(NumTrueComplex::Int, z::Complex, alpha::Matrix{Float64}, beta::Matrix{Float64})
 
   # Forward Euler step
@@ -296,22 +352,24 @@ mutable struct FE2S
     TrueComplex_, newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared = 
       Process_PE(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
 
-    newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
+    #newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
     # TODO: Compute Timesteps if Forward Euler is already included!
 
     #=
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_CaseDep(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
+    =#
 
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_Consecutive(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
-    =#
-
+    
+                                                  
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_NegBeta(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
+    
 
     return newFE2S
   end
