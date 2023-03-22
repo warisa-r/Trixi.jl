@@ -62,19 +62,28 @@ dtRef = 0.00291312662768177694
 NumStages = 16
 CFL = 0.79
 
+#=
 NumStages = 32
-CFL = 0.4798
+CFL = 1.0
+=#
 
 dt = dtRef * NumStages/NumStagesRef * CFL
         
-#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
+ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
 
+#=
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
                                 string(NumStages) * "/")
+=#
+
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/EigenvalueList_Refined8.txt", ComplexF64)  
+M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt/CFL)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
+
+plot(sol)
 
 summary_callback() # print the timer summary
 
@@ -92,5 +101,3 @@ Eigenvalues = eigvals(A)
 EigValsReal = real(Eigenvalues)
 
 println("Maximum real part of all EV of final condiguration: ", maximum(EigValsReal))
-
-plot(sol)

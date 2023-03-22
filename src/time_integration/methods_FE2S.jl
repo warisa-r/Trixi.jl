@@ -181,8 +181,8 @@ function FE2S_Coeffs_NegBeta(Stages::Int, NumTrueComplex::Int,
     # Second substage
     alpha[2*i, 2] = 1.0
 
-    beta[2*i, 1]  = 0.5 * TwoRealOverAbsSquared[i] - 1.0 / (real(TrueComplex[i]))
-    beta[2*i, 2]  = 1.0 / (real(TrueComplex[i]))
+    beta[2*i, 1]  = 0.5 * TwoRealOverAbsSquared[i] + 1.0 / (real(TrueComplex[i]))
+    beta[2*i, 2]  = -1.0 / (real(TrueComplex[i]))
   end
 
   c = ComputeTimeSteps(Stages, NumTrueComplex, ForwardEulerWeight, alpha, beta)
@@ -359,14 +359,14 @@ mutable struct FE2S
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_CaseDep(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
-    =#
-
-    newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_Consecutive(Stages_, NumTrueComplex_, TrueComplex_, 
-                                              newFE2S.ForwardEulerWeight, 
-                                              newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
     
                                                   
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_NegBeta(Stages_, NumTrueComplex_, TrueComplex_, 
+                                              newFE2S.ForwardEulerWeight, 
+                                              newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)                                              
+
+    =#
+    newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_Consecutive(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
     
