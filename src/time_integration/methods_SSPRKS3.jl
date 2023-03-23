@@ -73,6 +73,18 @@ function MaxTimeStep(n::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg:
   return dt
 end
 
+# See https://doi.org/10.1137/130936245 Theorem 3.5 (n >= 9)
+function InternalAmpFactor_LowerBnd(n::Int)
+  @assert n >= 9 "Bounds only valid for n >= 9!"
+  return (1 + 1/(n*n) * (log(n) - log(log(n))))^((n*n-n)/2)
+end
+
+# See https://doi.org/10.1137/130936245 Theorem 3.5 (n >= 9)
+function InternalAmpFactor_UpperBnd(n::Int)
+  @assert n >= 9 "Bounds only valid for n >= 9!"
+  return (1 + 1/(n*n) * (log(n) - log(log(n))/8))^((n*n-n)/2)
+end
+
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
 mutable struct SSPRKS3_IntegratorOptions{Callback}
   callback::Callback # callbacks; used in Trixi
@@ -168,8 +180,8 @@ function solve!(integrator::SSPRKS3_Integrator)
 
     @trixi_timeit timer() "SSPRKS3 ODE integration step" begin
 
-      @threaded for j in eachindex(integrator.u)
-        integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
+      @threaded for i in eachindex(integrator.u)
+        integrator.u_tmp[i] = integrator.u[i] # Used for incremental stage update
       end
       
       for stage = 1:alg.mn
@@ -182,8 +194,8 @@ function solve!(integrator::SSPRKS3_Integrator)
       end
 
       # Store u_mn
-      @threaded for j in eachindex(integrator.u)
-        integrator.u_mn[j] = integrator.u_tmp[j]
+      @threaded for i in eachindex(integrator.u)
+        integrator.u_mn[i] = integrator.u_tmp[i]
       end
 
       for stage = alg.mn+1:alg.kn-1
@@ -199,12 +211,12 @@ function solve!(integrator::SSPRKS3_Integrator)
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
       @threaded for i in eachindex(integrator.du)
         integrator.u_tmp[i] *= (alg.n - 1)/(2*alg.n - 1)
-        integrator.u_tmp[i] += alg.n / (2*alg.n - 1) * integrator.u_mn[j] + 
-                               integrator.dt / (alg.n*(2*alg.n - 1)) * integrator.du[j]
+        integrator.u_tmp[i] += alg.n / (2*alg.n - 1) * integrator.u_mn[i] + 
+                               integrator.dt / (alg.n*(2*alg.n - 1)) * integrator.du[i]
       end
 
       # Remaining steps
-      for stage = alg.kn+1:alg.s
+      for stage = alg.kn+1:alg.S
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
 

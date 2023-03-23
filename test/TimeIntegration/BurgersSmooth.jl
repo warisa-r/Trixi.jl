@@ -72,20 +72,30 @@ CFL = 1.0
 NumStages = 64
 CFL = 0.81
 
+#=
 NumStages = 128
 CFL = 0.39
+=#
 
 dt = dtRef * NumStages/NumStagesRef * CFL
         
 #ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
 
+n = 51
+ode_algorithm = SSPRKS3(n)
+
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/EigenvalueList_Refined8.txt", ComplexF64)  
+dt = Trixi.MaxTimeStep(n, dtRef * n*n/NumStagesRef, EigVals, ode_algorithm)
+M_LB = Trixi.InternalAmpFactor_LowerBnd(n)
+M_UB = Trixi.InternalAmpFactor_UpperBnd(n)
+ErrorAMP = M_LB * n*n
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
                                 string(NumStages) * "/")
 
-
-NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/EigenvalueList_Refined8.txt", ComplexF64)  
-M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt/CFL)
+#M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt/CFL)
+M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt)
+ErrorAMP = M * NumStages
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
