@@ -258,59 +258,6 @@ function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{
 end
 
 
-function StabPoly(NumTrueComplex::Int, z::Complex, alpha::Matrix{Float64}, beta::Matrix{Float64})
-
-  # Forward Euler step
-  P = 1 + z * beta[1, 2]
-
-  # Two-stage submethods
-  for i = 1:NumTrueComplex
-    k1 = 1 + z * beta[2*i, 2]
-    P *= alpha[2*i + 1, 1] + alpha[2*i + 1, 2] * k1 + beta[2*i + 1, 1] * z + beta[2*i + 1, 2] * z * k1
-  end
-
-  # Final Forward Euler step
-  P = 1 + z * P
-
-  return P
-end
-
-# Examine stability of certain parametrization - not really useful
-function MaxTimeStep(dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg)
-  dtEps = 1e-9
-  dt    = -1.0
-  dtMin = 0.0
-
-  while dtMax - dtMin > dtEps
-    dt = 0.5 * (dtMax + dtMin)
-
-    AbsPMax = 0.0
-    for i in eachindex(EigVals)
-      AbsP = abs(StabPoly(alg.NumTrueComplex, EigVals[i] * dt, alg.alpha, alg.beta))
-
-      if AbsP > AbsPMax
-        AbsPMax = AbsP
-      end
-
-      if AbsPMax > 1.0
-        break
-      end
-    end
-
-    if AbsPMax < 1.0
-      dtMin = dt
-    else
-      dtMax = dt
-    end
-
-    println("Current dt: ", dt)
-    println("Current AbsPMax: ", AbsPMax, "\n")
-  end
-
-  return dt
-end
-
-
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
 """
@@ -374,6 +321,58 @@ mutable struct FE2S
     return newFE2S
   end
 end # struct FE2S
+
+function StabPolyFE2S(NumTrueComplex::Int, z::Complex, alpha::Matrix{Float64}, beta::Matrix{Float64})
+
+  # Forward Euler step
+  P = 1 + z * beta[1, 2]
+
+  # Two-stage submethods
+  for i = 1:NumTrueComplex
+    k1 = 1 + z * beta[2*i, 2]
+    P *= alpha[2*i + 1, 1] + alpha[2*i + 1, 2] * k1 + beta[2*i + 1, 1] * z + beta[2*i + 1, 2] * z * k1
+  end
+
+  # Final Forward Euler step
+  P = 1 + z * P
+
+  return P
+end
+
+# Examine stability of certain parametrization - not really useful
+function MaxTimeStep(dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::FE2S)
+  dtEps = 1e-9
+  dt    = -1.0
+  dtMin = 0.0
+
+  while dtMax - dtMin > dtEps
+    dt = 0.5 * (dtMax + dtMin)
+
+    AbsPMax = 0.0
+    for i in eachindex(EigVals)
+      AbsP = abs(StabPolyFE2S(alg.NumTrueComplex, EigVals[i] * dt, alg.alpha, alg.beta))
+
+      if AbsP > AbsPMax
+        AbsPMax = AbsP
+      end
+
+      if AbsPMax > 1.0
+        break
+      end
+    end
+
+    if AbsPMax < 1.0
+      dtMin = dt
+    else
+      dtMax = dt
+    end
+
+    println("Current dt: ", dt)
+    println("Current AbsPMax: ", AbsPMax, "\n")
+  end
+
+  return dt
+end
 
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1

@@ -5,37 +5,41 @@
 @muladd begin
 
 """
-    SSPRKS2()
+    SSPRKS3()
 
 The following structures and methods provide a minimal implementation of
-the optimal second order accurate, S-stage method family.
-The stability polynomial is the optimal second order accurate stability polynomial for the circle
-and comes with many other advantageous properties.
-See e.g.
-https://doi.org/10.1016/j.jcp.2004.05.002
+the optimal third order accurate, S-stage method family.
+
+Original paper:
+https://doi.org/10.1137/07070485X
+
+A somewhat clearer representation can be found in
 https://doi.org/10.1137/130936245
-https://doi.org/10.1142/7498
+
 
 This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods_2N.jl" for the
 CarpenterKennedy2N{54, 43} methods.
 """
 
-mutable struct SSPRKS2
-  const NumStages::Int
-  
-  function SSPRKS2(NumStages_::Int)
+mutable struct SSPRKS3
+  const n::Int
+  const S::Int
+  const kn::Float64
+  const mn::Float64
 
-    newSSPRKS2 = new(NumStages_)
+  function SSPRKS3(n_::Int)
 
-    return newSSPRKS2
+    newSSPRKS3 = new(n_, n_*n_, n_*(n_+1)/2 + 1, (n_-1)*(n_-1)/2 + 1)
+
+    return newSSPRKS3
   end
-end # struct SSPRKS2
+end # struct SSPRKS3
 
-function StabPolySSPRKS2(S::Int, z::Complex)
-  return 1.0/S + (S - 1)/S * (1.0 + z/(S - 1))^S
+function StabPolySSPRKS3(n::Int, z::Complex)
+  return 1/(2*n - 1) * ((n-1) * (1 + z/(n^2 -n))^(n^2) + n * (1 + z/(n^2 -n))^((n-1)^2))
 end
 
-function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS2)
+function MaxTimeStep(n::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS3)
   dtEps = 1e-9
   dt    = -1.0
   dtMin = 0.0
@@ -45,7 +49,7 @@ function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF6
 
     AbsPMax = 0.0
     for i in eachindex(EigVals)
-      AbsP = abs(StabPolySSPRKS2(NumStages, dt * EigVals[i]))
+      AbsP = abs(StabPolySSPRKS3(n, dt * EigVals[i]))
 
       if AbsP > AbsPMax
         AbsPMax = AbsP
@@ -70,7 +74,7 @@ function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF6
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
-mutable struct SSPRKS2_IntegratorOptions{Callback}
+mutable struct SSPRKS3_IntegratorOptions{Callback}
   callback::Callback # callbacks; used in Trixi
   adaptive::Bool # whether the algorithm is adaptive; ignored
   dtmax::Float64 # ignored
@@ -78,15 +82,15 @@ mutable struct SSPRKS2_IntegratorOptions{Callback}
   tstops::Vector{Float64} # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
 end
 
-function SSPRKS2_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
-  SSPRKS2_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
+function SSPRKS3_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
+  SSPRKS3_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.
-mutable struct SSPRKS2_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRKS2_IntegratorOptions}
+mutable struct SSPRKS3_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRKS3_IntegratorOptions}
   u::uType
   du::uType
   u_tmp::uType
@@ -98,12 +102,13 @@ mutable struct SSPRKS2_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, SSPRK
   sol::Sol # faked
   f::F
   alg::Alg # This is our own class written above; Abbreviation for ALGorithm
-  opts::SSPRKS2_IntegratorOptions
+  opts::SSPRKS3_IntegratorOptions
   finalstep::Bool # added for convenience
+  u_mn::uType # Required for this particular method
 end
 
 # Forward integrator.destats.naccept to integrator.iter (see GitHub PR#771)
-function Base.getproperty(integrator::SSPRKS2_Integrator, field::Symbol)
+function Base.getproperty(integrator::SSPRKS3_Integrator, field::Symbol)
   if field === :destats
     return (naccept = getfield(integrator, :iter),)
   end
@@ -112,7 +117,7 @@ function Base.getproperty(integrator::SSPRKS2_Integrator, field::Symbol)
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::SSPRKS2;
+function solve(ode::ODEProblem, alg::SSPRKS3;
                 dt, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0)
@@ -123,9 +128,9 @@ function solve(ode::ODEProblem, alg::SSPRKS2;
   iter = 0
 
 
-  integrator = SSPRKS2_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+  integrator = SSPRKS3_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                 (prob=ode,), ode.f, alg,
-                SSPRKS2_IntegratorOptions(callback, ode.tspan; kwargs...), false)
+                SSPRKS3_IntegratorOptions(callback, ode.tspan; kwargs...), false, similar(u0))
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -142,7 +147,7 @@ function solve(ode::ODEProblem, alg::SSPRKS2;
   solve!(integrator)
 end
 
-function solve!(integrator::SSPRKS2_Integrator)
+function solve!(integrator::SSPRKS3_Integrator)
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan)
@@ -161,26 +166,54 @@ function solve!(integrator::SSPRKS2_Integrator)
       terminate!(integrator)
     end
 
-    @trixi_timeit timer() "SSPRKS2 ODE integration step" begin
+    @trixi_timeit timer() "SSPRKS3 ODE integration step" begin
 
       @threaded for j in eachindex(integrator.u)
         integrator.u_tmp[j] = integrator.u[j] # Used for incremental stage update
       end
       
-      for stage = 1:alg.NumStages
+      for stage = 1:alg.mn
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
 
         @threaded for i in eachindex(integrator.du)
-          integrator.u_tmp[i] += integrator.dt/(alg.NumStages - 1) * integrator.du[i]
+          integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]
         end
       end
 
-      @threaded for i in eachindex(integrator.u)
-        integrator.u[i] *= 1/alg.NumStages
-        integrator.u[i] += (alg.NumStages - 1)/alg.NumStages * integrator.u_tmp[i]
+      # Store u_mn
+      @threaded for j in eachindex(integrator.u)
+        integrator.u_mn[j] = integrator.u_tmp[j]
       end
-    end # SSPRKS2 step
+
+      for stage = alg.mn+1:alg.kn-1
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+
+        @threaded for i in eachindex(integrator.du)
+          integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]
+        end
+      end
+
+      # kn'th step
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+      @threaded for i in eachindex(integrator.du)
+        integrator.u_tmp[i] *= (alg.n - 1)/(2*alg.n - 1)
+        integrator.u_tmp[i] += alg.n / (2*alg.n - 1) * integrator.u_mn[j] + 
+                               integrator.dt / (alg.n*(2*alg.n - 1)) * integrator.du[j]
+      end
+
+      # Remaining steps
+      for stage = alg.kn+1:alg.s
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+
+        @threaded for i in eachindex(integrator.du)
+          integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]
+        end
+      end
+
+    end # SSPRKS3 step
 
     integrator.iter += 1
     integrator.t += integrator.dt
@@ -207,25 +240,25 @@ function solve!(integrator::SSPRKS2_Integrator)
 end
 
 # get a cache where the RHS can be stored
-get_du(integrator::SSPRKS2_Integrator) = integrator.du
-get_tmp_cache(integrator::SSPRKS2_Integrator) = (integrator.u_tmp,)
+get_du(integrator::SSPRKS3_Integrator) = integrator.du
+get_tmp_cache(integrator::SSPRKS3_Integrator) = (integrator.u_tmp,)
 
 # some algorithms from DiffEq like FSAL-ones need to be informed when a callback has modified u
-u_modified!(integrator::SSPRKS2_Integrator, ::Bool) = false
+u_modified!(integrator::SSPRKS3_Integrator, ::Bool) = false
 
 # used by adaptive timestepping algorithms in DiffEq
-function set_proposed_dt!(integrator::SSPRKS2_Integrator, dt)
+function set_proposed_dt!(integrator::SSPRKS3_Integrator, dt)
   integrator.dt = dt
 end
 
 # stop the time integration
-function terminate!(integrator::SSPRKS2_Integrator)
+function terminate!(integrator::SSPRKS3_Integrator)
   integrator.finalstep = true
   empty!(integrator.opts.tstops)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::SSPRKS2_Integrator, new_size)
+function Base.resize!(integrator::SSPRKS3_Integrator, new_size)
   resize!(integrator.u, new_size)
   resize!(integrator.du, new_size)
   resize!(integrator.u_tmp, new_size)
