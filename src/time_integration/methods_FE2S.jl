@@ -143,14 +143,14 @@ function FE2S_Coeffs_Consecutive(Stages::Int, NumTrueComplex::Int,
   # Two-stage submethods
   for i = 1:NumTrueComplex
     # First substage
-    alpha[2*i - 1, 2] = 1.0
-    beta[2*i - 1, 2]  = -1.0 / (2.0 * real(TrueComplex[i]))
+    alpha[2*i, 2] = 1.0
+    beta[2*i, 2]  = -1.0 / (2.0 * real(TrueComplex[i]))
 
     # Second substage
-    alpha[2*i, 1] = 1.0
+    alpha[2*i+1, 1] = 1.0
 
-    beta[2*i, 1]  = 0.0
-    beta[2*i, 2]  = TwoRealOverAbsSquared[i]
+    beta[2*i+1, 1]  = 0.0
+    beta[2*i+1, 2]  = TwoRealOverAbsSquared[i]
   end
 
   c = ComputeTimeSteps(Stages, NumTrueComplex, ForwardEulerWeight, alpha, beta)
@@ -175,14 +175,14 @@ function FE2S_Coeffs_NegBeta(Stages::Int, NumTrueComplex::Int,
   # Two-stage submethods
   for i = 1:NumTrueComplex
     # First substage
-    alpha[2*i - 1, 2] = 1.0
-    beta[2*i - 1, 2]  = -1.0 / (2.0 * real(TrueComplex[i]))
+    alpha[2*i, 2] = 1.0
+    beta[2*i, 2]  = -1.0 / (2.0 * real(TrueComplex[i]))
 
     # Second substage
-    alpha[2*i, 2] = 1.0
+    alpha[2*i+1, 2] = 1.0
 
-    beta[2*i, 1]  = 0.5 * TwoRealOverAbsSquared[i] + 1.0 / (real(TrueComplex[i]))
-    beta[2*i, 2]  = -1.0 / (real(TrueComplex[i]))
+    beta[2*i+1, 1]  = 0.5 * TwoRealOverAbsSquared[i] + 1.0 / (real(TrueComplex[i]))
+    beta[2*i+1, 2]  = -1.0 / (real(TrueComplex[i]))
   end
 
   c = ComputeTimeSteps(Stages, NumTrueComplex, ForwardEulerWeight, alpha, beta)
@@ -317,6 +317,8 @@ mutable struct FE2S
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
     
+    display(newFE2S.alpha)
+    display(newFE2S.beta)
 
     return newFE2S
   end
@@ -426,7 +428,6 @@ function solve(ode::ODEProblem, alg::FE2S;
 
   u0    = copy(ode.u0) # Initial value
 
-  # TODO: Introduce u1, u2, k1, k2!
   du    = similar(u0)
   u_tmp = similar(u0)
 
@@ -542,6 +543,72 @@ function solve!(integrator::FE2S_Integrator)
                                 (prob.u0, integrator.u),
                                 integrator.sol.prob)
 end
+
+# Only for convergence studies independent of spatial errors
+
+# Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
+function solve_ODE(u0::Vector{Float64}, J::Matrix{Float64}, alg::FE2S, dt::Real, t_end::Real)
+  u     = copy(u0)
+  du    = similar(u0)
+  u_tmp = similar(u0)
+
+  k1 = similar(u0)
+  u_1 = similar(u0)
+
+  t = 0
+
+  while t < t_end
+    # if the next iteration would push the simulation beyond the end time, set dt accordingly
+    if t + dt > t_end || isapprox(t + dt, t_end)
+      dt = t_end - t
+    end
+
+    @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
+      @threaded for j in eachindex(u)
+        u_tmp[j] = u[j] # Used for incremental stage update
+        # For Shu-Osher form
+        u_1[j] = u[j] 
+      end
+
+      ### Successive Intermediate Stages implementation ###
+
+      ### Shu-Osher Form with two substages ###
+      # NOTE: No efficient implementation at this stage!
+      for i = 1:alg.Stages - 1
+        du = J * u_tmp
+        k1 = J * u_1
+
+        @threaded for j in eachindex(u_tmp)
+          u_tmp[j] = alg.alpha[i, 1] * u_tmp[j] + alg.alpha[i, 2] * u_1[j] + 
+                                  dt * (alg.beta[i, 1] * du[j] + 
+                                        alg.beta[i, 2] * k1[j])
+        end
+        
+        # Switch u_tmp & u_1
+        @threaded for j in eachindex(u_tmp)
+          k1[j] = u_1[j]
+          u_1[j] = u_tmp[j]
+          u_tmp[j] = k1[j]
+        end
+      end
+
+      # Switch back for last step
+      @threaded for j in eachindex(u_tmp)
+        u_tmp[j] = u_1[j]
+      end
+
+      # Final Euler step with step length of dt (Due to form of stability polynomial)
+      du = J * u_tmp
+      @threaded for j in eachindex(du)
+        u[j] += dt * du[j]
+      end
+    end # FE2S step
+    t += dt
+  end
+
+  return u
+end
+
 
 # get a cache where the RHS can be stored
 get_du(integrator::FE2S_Integrator) = integrator.du
