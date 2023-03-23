@@ -51,26 +51,39 @@ analysis_callback = AnalysisCallback(semi, interval=Interval,
 callbacks = CallbackSet(summary_callback, 
                         analysis_callback)
 
+stepsize_callback = StepsizeCallback(cfl=0.125)
+
+# Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
+callbacks_DE = CallbackSet(summary_callback, analysis_callback, stepsize_callback)
 ###############################################################################
 # run the simulation
 
 dtRef = 0.0360458314265997635
 NumStagesRef = 16
 
-CFL_Convergence = 1.0
-
 CFL = 1.0
 NumStages = 26
 
-dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
+dtOptMin = NumStages / NumStagesRef * dtRef * CFL
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * 
                                 string(NumStages) * "/")
+
+#=                                
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/EigenvalueList_Refined9.txt", ComplexF64)
+M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin)      
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacks);
+
+#=
+sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
+            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+            save_everystep=false, callback=callbacks_DE);                       
+=#
 
 # Print the timer summary
 summary_callback()
