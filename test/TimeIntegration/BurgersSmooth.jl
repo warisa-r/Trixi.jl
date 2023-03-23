@@ -30,30 +30,23 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
-                                     extra_analysis_errors=(:l2_error_primitive,
-                                                            :linf_error_primitive))
+                                     extra_analysis_errors=(:l1_error, ))
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
-
-save_solution = SaveSolutionCallback(interval=1000,
-                                     save_initial_solution=true,
-                                     save_final_solution=true,
-                                     solution_variables=cons2prim)
 
 stepsize_callback = StepsizeCallback(cfl=1.0)
 
 callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback,
-                        save_solution)
+                        analysis_callback, alive_callback)
                         #stepsize_callback)
 
 
 ###############################################################################
 # run the simulation
 
-tspan = (0.0, 2)
+tspan = (0.0, 20)
 ode = semidiscretize(semi, tspan)
 
 NumStagesRef = 16
@@ -68,19 +61,22 @@ CFL = 0.79
 NumStages = 32
 CFL = 1.0
 
-
+#=
 NumStages = 64
 CFL = 0.81
 
-#=
+
 NumStages = 128
 CFL = 0.39
 =#
 
-dt = dtRef * NumStages/NumStagesRef * CFL
+CFL_Convergence = 1/1
+
+dt = dtRef * NumStages/NumStagesRef * CFL * CFL_Convergence
         
 #ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
 
+#=
 n = 51
 ode_algorithm = SSPRKS3(n)
 
@@ -89,13 +85,16 @@ dt = Trixi.MaxTimeStep(n, dtRef * n*n/NumStagesRef, EigVals, ode_algorithm)
 M_LB = Trixi.InternalAmpFactor_LowerBnd(n)
 M_UB = Trixi.InternalAmpFactor_UpperBnd(n)
 ErrorAMP = M_LB * n*n
+=#
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
                                 string(NumStages) * "/")
 
+#=                                
 #M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt/CFL)
 M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dt)
 ErrorAMP = M * NumStages
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,

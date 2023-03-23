@@ -299,7 +299,7 @@ mutable struct FE2S
     TrueComplex_, newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared = 
       Process_PE(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
 
-    #newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
+    newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
     # TODO: Compute Timesteps if Forward Euler is already included!
 
     #=
@@ -312,11 +312,11 @@ mutable struct FE2S
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)                                              
 
-    =#
+    
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_Consecutive(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
-    
+    =#
     display(newFE2S.alpha)
     display(newFE2S.beta)
 

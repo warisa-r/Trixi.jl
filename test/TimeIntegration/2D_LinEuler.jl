@@ -64,22 +64,22 @@ NumStagesRef = 16
 RefinementOpt = 3
 CFL_Refinement = 1.0 / 2^(RefinementLevel - RefinementOpt)
 
+#=
 NumStages = 16
 CFL = 1.0
+=#
 
 
 NumStages = 32
-# Minimize beta
 CFL = 0.98
 
 
 NumStages = 64
-# Minimize beta
 CFL = 0.94
 
 
 NumStages = 128
-CFL = 0.75
+CFL = 0.73
 
 
 dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement
@@ -92,8 +92,7 @@ ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spec
 
 
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/EigenvalueList_Refined3.txt", ComplexF64)
-
-M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin/CFL)
+M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
 
 
 sol = Trixi.solve(ode, ode_algorithm,
