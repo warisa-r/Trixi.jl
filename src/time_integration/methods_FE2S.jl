@@ -347,13 +347,14 @@ mutable struct FE2S
 
     newFE2S = new(Stages_, NumTrueComplex_)
 
-    TrueComplex_, newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared = 
-      Process_PE(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
-
     newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
     # TODO: Compute Timesteps if Forward Euler is already included!
 
     #=
+    TrueComplex_, newFE2S.ForwardEulerWeight, newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared = 
+      Process_PE(Stages_, PathPseudoExtrema_, newFE2S.NumTrueComplex)
+
+    
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_CaseDep(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
@@ -362,14 +363,14 @@ mutable struct FE2S
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_NegBeta(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)                                              
-
+    
     
     newFE2S.alpha, newFE2S.beta, newFE2S.c = FE2S_Coeffs_Consecutive(Stages_, NumTrueComplex_, TrueComplex_, 
                                               newFE2S.ForwardEulerWeight, 
                                               newFE2S.InvAbsValsSquared, newFE2S.TwoRealOverAbsSquared)
     =#
-    display(newFE2S.alpha)
-    display(newFE2S.beta)
+    #display(newFE2S.alpha)
+    #display(newFE2S.beta)
 
     return newFE2S
   end
@@ -551,21 +552,11 @@ function solve!(integrator::FE2S_Integrator)
         end
 
         # Switch u_tmp & u_1
-        @threaded for j in eachindex(integrator.u_tmp)
-          integrator.k1[j] = integrator.u_1[j]
-          integrator.u_1[j] = integrator.u_tmp[j]
-          integrator.u_tmp[j] = integrator.k1[j]
-        end
+        integrator.u_tmp, integrator.u_1 = integrator.u_1, integrator.u_tmp
       end
-
-      # Switch back for last step
-      @threaded for j in eachindex(integrator.u_tmp)
-        integrator.u_tmp[j] = integrator.u_1[j]
-      end
-      
 
       # Final Euler step with step length of dt (Due to form of stability polynomial)
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+      integrator.f(integrator.du, integrator.u_1, prob.p, integrator.t_stage)
       @threaded for j in eachindex(integrator.du)
         integrator.u[j] += integrator.dt * integrator.du[j]
       end
@@ -594,72 +585,6 @@ function solve!(integrator::FE2S_Integrator)
                                 (prob.u0, integrator.u),
                                 integrator.sol.prob)
 end
-
-# Only for convergence studies independent of spatial errors
-
-# Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve_ODE(u0::Vector{Float64}, J::Matrix{Float64}, alg::FE2S, dt::Real, t_end::Real)
-  u     = copy(u0)
-  du    = similar(u0)
-  u_tmp = similar(u0)
-
-  k1 = similar(u0)
-  u_1 = similar(u0)
-
-  t = 0
-
-  while t < t_end
-    # if the next iteration would push the simulation beyond the end time, set dt accordingly
-    if t + dt > t_end || isapprox(t + dt, t_end)
-      dt = t_end - t
-    end
-
-    @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
-      @threaded for j in eachindex(u)
-        u_tmp[j] = u[j] # Used for incremental stage update
-        # For Shu-Osher form
-        u_1[j] = u[j] 
-      end
-
-      ### Successive Intermediate Stages implementation ###
-
-      ### Shu-Osher Form with two substages ###
-      # NOTE: No efficient implementation at this stage!
-      for i = 1:alg.Stages - 1
-        du = J * u_tmp
-        k1 = J * u_1
-
-        @threaded for j in eachindex(u_tmp)
-          u_tmp[j] = alg.alpha[i, 1] * u_tmp[j] + alg.alpha[i, 2] * u_1[j] + 
-                                  dt * (alg.beta[i, 1] * du[j] + 
-                                        alg.beta[i, 2] * k1[j])
-        end
-        
-        # Switch u_tmp & u_1
-        @threaded for j in eachindex(u_tmp)
-          k1[j] = u_1[j]
-          u_1[j] = u_tmp[j]
-          u_tmp[j] = k1[j]
-        end
-      end
-
-      # Switch back for last step
-      @threaded for j in eachindex(u_tmp)
-        u_tmp[j] = u_1[j]
-      end
-
-      # Final Euler step with step length of dt (Due to form of stability polynomial)
-      du = J * u_tmp
-      @threaded for j in eachindex(du)
-        u[j] += dt * du[j]
-      end
-    end # FE2S step
-    t += dt
-  end
-
-  return u
-end
-
 
 # get a cache where the RHS can be stored
 get_du(integrator::FE2S_Integrator) = integrator.du

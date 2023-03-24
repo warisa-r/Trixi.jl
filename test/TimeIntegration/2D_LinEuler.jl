@@ -33,6 +33,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 # Create ODE problem with time span from 0.0 to 0.2
 tspan = (0.0, 10)
+#tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan)
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
@@ -64,10 +65,9 @@ NumStagesRef = 16
 RefinementOpt = 3
 CFL_Refinement = 1.0 / 2^(RefinementLevel - RefinementOpt)
 
-#=
+
 NumStages = 16
 CFL = 1.0
-=#
 
 
 NumStages = 32
@@ -78,11 +78,19 @@ NumStages = 64
 CFL = 0.94
 
 
+NumStages = 96
+CFL = 1.0
+
+
+#=
+# Seems not to converge
 NumStages = 128
 CFL = 0.73
+=#
 
+CFL_Convergence = 1.0
 
-dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement
+dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement * CFL_Convergence
 
 #ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/")
 
@@ -90,10 +98,12 @@ dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/" * 
                                 string(NumStages) * "/")
 
-
+#                  
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/EigenvalueList_Refined3.txt", ComplexF64)
-M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
-
+M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
+display(M * 10^(-15))
+display(dtOptMin^3)
+#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback

@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots, LinearAlgebra, FastExpm
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -43,7 +43,7 @@ ode = semidiscretize(semi, (StartTime, EndTime));
 # and resets the timers
 summary_callback = SummaryCallback()
 
-Interval = 500
+Interval = 5000
 # The AnalysisCallback allows to analyse the solution in regular intervals and prints the results
 analysis_callback = AnalysisCallback(semi, interval=Interval, 
                                      extra_analysis_errors=(:conservation_error, :l1_error))
@@ -65,16 +65,19 @@ NumStagesRef = 16
 CFL = 1.0
 NumStages = 104
 
-CFL_Convergence = 1/1
+CFL_Convergence = 1/32
 
 dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * 
                                 string(NumStages) * "/")
 
-                                
+#=                                
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/EigenvalueList_Refined9.txt", ComplexF64)
-M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin)
+M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin)
+display(M * 10^(-15))
+display(dtOptMin^3)
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
@@ -91,22 +94,3 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
 summary_callback()
 
 plot(sol)
-
-#=
-J = jacobian_ad_forward(semi)
-
-t_f = 0.5
-u_TrueSol = real.(fastExpm(J * t_f) * sol.u[1])
-
-u_Approx = Trixi.solve_ODE(sol.u[1], J, ode_algorithm, dtOptMin, dtOptMin);
-
-display(norm(u_Approx - sol.u[1]))
-
-err = u_Approx - u_TrueSol
-
-display(norm(err, 1))
-display(norm(err, Inf))
-
-plot(u_TrueSol)
-plot!(u_Approx)
-=#
