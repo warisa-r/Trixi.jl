@@ -49,23 +49,48 @@ callbacks = CallbackSet(summary_callback,
 tspan = (0.0, 10)
 ode = semidiscretize(semi, tspan)
 
+NumStagesRef = 3
+dtRef = 0.00047515869140625001
+
+#=
 NumStagesRef = 16
 dtRef = 0.00291312662768177694
+=#
+
+NumStages = 3
+CFL = 0.96
 
 #=
 NumStages = 16
 CFL = 0.79
 =#
 
+#=
+NumStages = 28
+CFL = 0.71
+=#
 
+#=
 NumStages = 32
 CFL = 0.71
+=#
+
+#=
+NumStages = 56
+CFL = 0.54
+=#
 
 #=
 NumStages = 64
 CFL = 0.34
+=#
 
+#=
+NumStages = 112
+CFL = 0.25
+=#
 
+#=
 NumStages = 128
 CFL = 0.21
 =#
@@ -74,17 +99,19 @@ CFL_Convergence = 1/1
 
 dt = dtRef * NumStages/NumStagesRef * CFL * CFL_Convergence
         
-#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
+ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/")
 
-
+#=
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/" * 
                                 string(NumStages) * "/")
+=#
 
+#=
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/BurgersSourceTerm/EigenvalueList_Refined8.txt", ComplexF64)                                
 M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
 display(M * 10^(-15))
 display(dt^3)
-
+=#
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
