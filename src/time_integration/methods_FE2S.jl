@@ -202,7 +202,7 @@ function read_ShuOsherCoeffs(BasePath::AbstractString, Stages::Int)
   return alpha, beta
 end
 
-
+# The maximum internal amplification factor as defined in (2.18) in https://doi.org/10.1137/130936245
 function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{Float64}, EigValsScaled::Vector{<:Complex})
   M = 0.0
 
@@ -214,6 +214,7 @@ function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{
 
   alphaMat = zeros(Stages, Stages) # = alpha_{1:S}
   betaMat  = zeros(ComplexF64, Stages, Stages)
+  betaMatEV = similar(betaMat)
 
   # CARE: Assumes that Forward Euler step is always executed first!
   # Include Forward Euler at first position
@@ -232,15 +233,15 @@ function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{
     beta_Splus[Stages] = EigValsScaled[i]
 
     # Compute (I - alpha_1:S - z * beta_1:S)^(-1)
-    Inv = I
+    Inv = I # corresponds to i = 0
 
     # Multiply beta with eigenvalue
-    betaMat *= EigValsScaled[i]
+    betaMatEV = betaMat * EigValsScaled[i]
 
-    Power = alphaMat + betaMat
+    Power = alphaMat + betaMatEV
     for i = 1:Stages-1
       Inv += Power
-      Power *= alphaMat + betaMat
+      Power *= alphaMat + betaMatEV
     end
 
     # Compute maximum of Q_j of this eigenvalue
@@ -249,9 +250,59 @@ function MaxInternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{
     if QMax > M
       M = QMax
     end
+  end
 
-    # Undo Multiplication with eigenvalue
-    betaMat /= EigValsScaled[i]
+  return M
+end
+
+# More precise variant of the maximum internal aplification factor from https://doi.org/10.1137/130936245
+function InternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{Float64}, EigValsScaled::Vector{<:Complex})
+  M = 0.0
+
+  # Parameters of last Forward Euler step with weight 1
+  alpha_Splus    = zeros(1, Stages)
+  alpha_Splus[1] = 1.0
+
+  beta_Splus = zeros(ComplexF64, 1, Stages)
+
+  alphaMat = zeros(Stages, Stages) # = alpha_{1:S}
+  betaMat  = zeros(ComplexF64, Stages, Stages)
+  betaMatEV = similar(betaMat)
+
+  # CARE: Assumes that Forward Euler step is always executed first!
+  # Include Forward Euler at first position
+  alphaMat[2, 1] = 1.0
+  betaMat[2, 1]  = beta[1, 2]
+
+  for i = 3:Stages
+    alphaMat[i, i-2] = alpha[i-1, 1]
+    alphaMat[i, i-1] = alpha[i-1, 2]
+
+    betaMat[i, i-2] = beta[i-1, 1]
+    betaMat[i, i-1] = beta[i-1, 2]
+  end
+
+  for i in eachindex(EigValsScaled)
+    beta_Splus[Stages] = EigValsScaled[i]
+
+    # Compute (I - alpha_1:S - z * beta_1:S)^(-1)
+    Inv = I # corresponds to i = 0
+
+    # Multiply beta with eigenvalue
+    betaMatEV = betaMat * EigValsScaled[i]
+
+    Power = alphaMat + betaMatEV
+    for i = 1:Stages-1
+      Inv += Power
+      Power *= alphaMat + betaMatEV
+    end
+
+    # Compute sum of Q_j of this eigenvalue
+    QSum = sum(abs.((alpha_Splus + beta_Splus) * Inv))
+
+    if QSum > M
+      M = QSum
+    end
   end
 
   return M
