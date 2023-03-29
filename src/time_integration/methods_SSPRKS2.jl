@@ -35,6 +35,31 @@ function StabPolySSPRKS2(S::Int, z::Complex)
   return 1.0/S + (S - 1)/S * (1.0 + z/(S - 1))^S
 end
 
+function ButcherForm(S::Int)
+  alpha_1toS = zeros(S, S)
+  beta_1toS  = zeros(S, S)
+
+  for i = 2:S
+    alpha_1toS[i, i-1] = 1
+    beta_1toS[i, i-1]  = 1/(S-1)
+  end
+
+  alpha_SPlus = zeros(1, S)
+  alpha_SPlus[1] = 1/S
+  alpha_SPlus[S] = (S-1)/S
+
+  beta_SPlus = zeros(1, S)
+  alpha_SPlus[S] = 1/S
+
+  A = inv(I - alpha_1toS) * beta_1toS
+  b = beta_SPlus + alpha_SPlus * A
+  c = A * ones(S)
+
+  display(A);
+  display(b);
+  display(c);
+end
+
 function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS2)
   dtEps = 1e-9
   dt    = -1.0
