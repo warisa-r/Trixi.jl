@@ -54,7 +54,6 @@ function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerE
 end
 initial_condition = initial_condition_isentropic_vortex
 
-surf_flux = flux_lax_friedrichs # = Rusanov, originally used
 surf_flux = flux_hll # Better flux, allows much larger timesteps
 solver = DGSEM(polydeg=3, surface_flux=surf_flux)
 
@@ -124,37 +123,39 @@ CFL_Grid = NumCellsOpt / NumCells
 EdgeLengthOpt = 20
 CFL_EdgeLength = EdgeLength / EdgeLengthOpt
 
+#=
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_8.txt", ComplexF64)
 NumStages = 4
 dtRefStages = Trixi.MaxTimeStep(NumStages, 1.0, EigVals)
+=#
 
-CFL = 0.99
+NumStagesRef = 16
+dtRef = 1.62708502945406508
+
+NumStages = 28
+CFL = 0.88
+
+NumStages = 56
+CFL = 0.67
+
+NumStages = 56
+CFL = 0.67
+
+NumStages = 112
+CFL = 0.42
+
+ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
+                                string(NumStages) * "/NegBeta/")
+
+dtRefStages = NumStages / NumStagesRef * dtRef                       
 dtOptMin = dtRefStages * CFL * CFL_Grid * CFL_EdgeLength
 
 #=
-
-NumStagesRef = 2
-dtRef = 0.0535678688311236328
-
-#=
-NumStagesRef = 4
-dtRef = 0.376334667205810547
-CFL = 0.98
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_8.txt", ComplexF64)                                
+M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtRefStages * CFL)
+display(M * 10^(-15))
+display(dtOptMin^3)
 =#
-
-dtOptMin = dtRef * NumStages/NumStagesRef * CFL * CFL_Grid * CFL_EdgeLength
-
-#=
-ode_algorithm = PERK(NumStages, 
-                "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/")
-=#
-
-
-ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
-                                string(NumStages) * "/")
-=#
-
-ode_algorithm = SSPRKS2(NumStages)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,

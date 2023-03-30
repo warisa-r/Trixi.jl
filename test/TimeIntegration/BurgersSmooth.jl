@@ -79,13 +79,13 @@ NumStages = 16
 CFL = 0.79
 =#
 
-#=
+
 NumStages = 28
 # Positive beta
 CFL = 0.71
 # Negative beta
 CFL = 0.78
-=#
+
 
 #=
 NumStages = 32
@@ -105,19 +105,20 @@ NumStages = 64
 CFL = 0.34
 =#
 
-
+#=
 NumStages = 112
 # Positive beta
 CFL = 0.25
 # Negative beta
 CFL = 0.33
+=#
 
 #=
 NumStages = 128
 CFL = 0.21
 =#
 
-CFL_Convergence = 1/1
+CFL_Convergence = 1/8
 
 dt = dtRef * NumStages/NumStagesRef * CFL * CFL_Convergence
         

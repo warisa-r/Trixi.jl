@@ -73,14 +73,14 @@ CFL = 1.0
 NumStages = 32
 CFL = 0.98
 
-
+#=
 NumStages = 64
 CFL = 0.94
 
 
 NumStages = 96
-CFL = 1.0
-
+CFL = 0.73
+=#
 
 #=
 # Seems not to converge
@@ -96,14 +96,14 @@ dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement * CFL_Converg
 
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/" * 
-                                string(NumStages) * "/")
+                                string(NumStages) * "/NegBeta/")
 
-#                  
+               
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/EigenvalueList_Refined3.txt", ComplexF64)
 M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
 display(M * 10^(-15))
 display(dtOptMin^3)
-#
+
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback

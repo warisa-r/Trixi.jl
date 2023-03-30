@@ -71,7 +71,7 @@ dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
 
 
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * 
-                                string(NumStages) * "/PosBeta/")
+                                string(NumStages) * "/NegBeta/")
 
 
 #=
