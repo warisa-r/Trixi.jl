@@ -53,12 +53,54 @@ function ComputeTimeSteps(Stages::Int, NumTrueComplex::Int,
   end
 
   alphaPower = alphaMat
-  for i = 1:Stages-3
+  for i = 1:Stages-1
     InvIMinusAlpha += alphaPower
     alphaPower *= alphaMat
   end
   c = InvIMinusAlpha * betaMat * ones(Stages)
   #display(c)
+
+  c_combined = zeros(NumTrueComplex + 1)
+  c_combined[1] = c[2]
+  for i = 2:NumTrueComplex + 1
+    c_combined[i] = c[2*i - 1] + c[2*i]
+  end
+  #display(c_combined)
+
+  # TODO: Implement sorting of two stage steps based on combined timesteps!
+
+  return c
+end
+
+function ComputeTimeSteps(Stages::Int, NumTrueComplex::Int, 
+                          alpha::Matrix{Float64}, beta::Matrix{Float64})
+  # Timestep computation: c = (I - alpha)^(-1) * beta * Vector{1}
+
+  # Compute (I - alpha)^(-1) = sum_{k=0}^{S-1} alpha^k 
+  InvIMinusAlpha = Matrix(1.0I, Stages, Stages)
+
+  alphaMat = zeros(Stages, Stages) # = alpha_{1:S}
+  betaMat  = zeros(Stages, Stages)
+
+  # Include Forward Euler at first position
+  alphaMat[2, 1] = 1.0
+  betaMat[2, 1]  = beta[1, 2]
+
+  for i = 3:Stages
+    alphaMat[i, i-2] = alpha[i-1, 1]
+    alphaMat[i, i-1] = alpha[i-1, 2]
+
+    betaMat[i, i-2] = beta[i-1, 1]
+    betaMat[i, i-1] = beta[i-1, 2]
+  end
+
+  alphaPower = alphaMat
+  for i = 1:Stages-1
+    InvIMinusAlpha += alphaPower
+    alphaPower *= alphaMat
+  end
+  c = InvIMinusAlpha * betaMat * ones(Stages)
+  display(c)
 
   c_combined = zeros(NumTrueComplex + 1)
   c_combined[1] = c[2]
@@ -348,6 +390,7 @@ mutable struct FE2S
     newFE2S = new(Stages_, NumTrueComplex_)
 
     newFE2S.alpha, newFE2S.beta = read_ShuOsherCoeffs(PathPseudoExtrema_, Stages_)
+    newFE2S.c = ComputeTimeSteps(Stages_, NumTrueComplex_, newFE2S.alpha, newFE2S.beta)
     # TODO: Compute Timesteps if Forward Euler is already included!
 
     #=
@@ -542,8 +585,8 @@ function solve!(integrator::FE2S_Integrator)
       ### Shu-Osher Form with two substages ###
       # TODO: Correct timestep!
       for i = 1:alg.Stages - 1
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
-        integrator.f(integrator.k1, integrator.u_1, prob.p, integrator.t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage + integrator.dt * alg.c[i])
+        integrator.f(integrator.k1, integrator.u_1, prob.p, integrator.t_stage + integrator.dt * alg.c[i])
 
         @threaded for j in eachindex(integrator.u_tmp)
           integrator.u_tmp[j] = alg.alpha[i, 1] * integrator.u_tmp[j] + alg.alpha[i, 2] * integrator.u_1[j] + 
@@ -556,7 +599,7 @@ function solve!(integrator::FE2S_Integrator)
       end
 
       # Final Euler step with step length of dt (Due to form of stability polynomial)
-      integrator.f(integrator.du, integrator.u_1, prob.p, integrator.t_stage)
+      integrator.f(integrator.du, integrator.u_1, prob.p, integrator.t_stage + integrator.dt * alg.c[alg.Stages])
       @threaded for j in eachindex(integrator.du)
         integrator.u[j] += integrator.dt * integrator.du[j]
       end
