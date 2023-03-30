@@ -540,7 +540,7 @@ function solve!(integrator::FE2S_Integrator)
       integrator.t_stage = integrator.t
 
       ### Shu-Osher Form with two substages ###
-      # NOTE: No efficient implementation at this stage!
+      # TODO: Correct timestep!
       for i = 1:alg.Stages - 1
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
         integrator.f(integrator.k1, integrator.u_1, prob.p, integrator.t_stage)
