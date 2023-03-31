@@ -27,10 +27,11 @@ mutable struct SSPRKS3
   const kn::Int
   const mn::Int
 
+  c::Vector{Float64}
   function SSPRKS3(n_::Int)
 
     newSSPRKS3 = new(n_, n_*n_, n_*(n_+1)/2 + 1, (n_-1)*(n_-1)/2 + 1)
-
+    newSSPRKS3.c = ComputeTimeSteps(newSSPRKS3)
     return newSSPRKS3
   end
 end # struct SSPRKS3
@@ -120,6 +121,48 @@ function InternalAmpFactor(EigValsScaled::Vector{<:Complex}, alg::SSPRKS3)
   end
 
   return M
+end
+
+function ComputeTimeSteps(alg::SSPRKS3)
+  # Timestep computation: c = (I - alpha)^(-1) * beta * Vector{1}
+
+  # Compute (I - alpha)^(-1) = sum_{k=0}^{S-1} alpha^k 
+  InvIMinusAlpha = Matrix(1.0I, alg.S, alg.S)
+
+  alphaMat = zeros(alg.S, alg.S) # = alpha_{1:S}
+  betaMat  = zeros(alg.S, alg.S)
+
+  for i = 2:alg.kn - 1
+    alphaMat[i, i-1] = 1
+    betaMat[i, i-1]  = 1/(alg.S - alg.n)
+  end
+
+  alphaMat[alg.kn, alg.kn-1] = (alg.n - 1)/(2*alg.n - 1) 
+  alphaMat[alg.kn, alg.mn]   = alg.n/(2*alg.n - 1)
+
+  betaMat[alg.kn, alg.kn-1]  = 1/(alg.n*(2*alg.n - 1))
+
+  for i = alg.kn + 1:alg.S
+    alphaMat[i, i-1] = 1
+    betaMat[i, i-1]  = 1/(alg.S - alg.n)
+  end
+
+  c = (I - alphaMat) \ betaMat * ones(alg.S)
+
+  #=
+  c_control = zeros(n_SSPRKS3^2)
+  for i = 1:Int((n_SSPRKS3+2)*(n_SSPRKS3-1)/2)
+    c_control[i] = (i-1)/(n_SSPRKS3^2 - n_SSPRKS3)
+  end
+
+  # TODO: The formulas from the paper seem to be wrong, there is a gap between the for loops
+  for i = Int((n_SSPRKS3+2)*(n_SSPRKS3+1)/2):n_SSPRKS3^2
+    println(i)
+    c_control[i] = (i - n_SSPRKS3 - 1)/(n_SSPRKS3^2 - n_SSPRKS3)
+  end
+  =#
+  
+  return c
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
@@ -221,9 +264,9 @@ function solve!(integrator::SSPRKS3_Integrator)
         integrator.u_tmp[i] = integrator.u[i] # Used for incremental stage update
       end
       
-      for stage = 2:alg.mn # This is indeed a 2 (no typo)
+      for stage = 1:alg.mn # This is indeed a 2 (no typo)
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t + alg.c[stage] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
           integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]
@@ -237,7 +280,7 @@ function solve!(integrator::SSPRKS3_Integrator)
 
       for stage = alg.mn+1:alg.kn-1
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t + alg.c[stage] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
           integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]
@@ -245,7 +288,7 @@ function solve!(integrator::SSPRKS3_Integrator)
       end
 
       # kn'th step
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t + alg.c[alg.kn] * integrator.dt)
       @threaded for i in eachindex(integrator.du)
         integrator.u_tmp[i] *= (alg.n - 1)/(2*alg.n - 1)
         integrator.u_tmp[i] += alg.n / (2*alg.n - 1) * integrator.u_mn[i] + 
@@ -253,9 +296,9 @@ function solve!(integrator::SSPRKS3_Integrator)
       end
 
       # Remaining steps
-      for stage = alg.kn+1:alg.S+1
+      for stage = alg.kn+1:alg.S
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t + alg.c[stage] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
           integrator.u_tmp[i] += integrator.dt/(alg.S - alg.n) * integrator.du[i]

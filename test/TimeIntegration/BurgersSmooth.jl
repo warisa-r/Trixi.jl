@@ -140,7 +140,7 @@ n_SSPRKS3 = 99
 ode_algorithm = Trixi.SSPRKS3(n_SSPRKS3)
 dt = Trixi.MaxTimeStep(n_SSPRKS3, tspan[2], EigVals, ode_algorithm)
 
-M_SSPRKS3 = Trixi.InternalAmpFactor(EigVals * dtSSPRKS3, ode_algorithm)
+M_SSPRKS3 = Trixi.InternalAmpFactor(EigVals * dt, ode_algorithm)
 display(M_SSPRKS3 * 10^(-15))
 
 #M_UB = Trixi.InternalAmpFactor_UpperBnd(n_SSPRKS3)

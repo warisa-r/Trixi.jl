@@ -55,9 +55,7 @@ function ButcherForm(S::Int)
   b = beta_SPlus + alpha_SPlus * A
   c = A * ones(S)
 
-  display(A);
-  display(b);
-  display(c);
+  return A, b, c
 end
 
 function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS2)
@@ -194,7 +192,7 @@ function solve!(integrator::SSPRKS2_Integrator)
       
       for stage = 1:alg.NumStages
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t + integrator.dt * (stage - 1)/(alg.NumStages - 1))
 
         @threaded for i in eachindex(integrator.du)
           integrator.u_tmp[i] += integrator.dt/(alg.NumStages - 1) * integrator.du[i]
