@@ -24,8 +24,8 @@ CarpenterKennedy2N{54, 43} methods.
 mutable struct SSPRKS3
   const n::Int
   const S::Int
-  const kn::Float64
-  const mn::Float64
+  const kn::Int
+  const mn::Int
 
   function SSPRKS3(n_::Int)
 
@@ -35,8 +35,13 @@ mutable struct SSPRKS3
   end
 end # struct SSPRKS3
 
+# CARE: Works only fpr n >= 2
+function nu_n(n::Int, z::Complex)
+  return 1 + z / (n * (n - 1))
+end
+
 function StabPolySSPRKS3(n::Int, z::Complex)
-  return 1/(2*n - 1) * ((n-1) * (1 + z/(n^2 -n))^(n^2) + n * (1 + z/(n^2 -n))^((n-1)^2))
+  return 1/(2*n - 1) * ((n-1) * nu_n(n, z)^(n^2) + n * nu_n(n, z)^((n-1)^2))
 end
 
 function MaxTimeStep(n::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS3)
@@ -83,6 +88,38 @@ end
 function InternalAmpFactor_UpperBnd(n::Int)
   @assert n >= 9 "Bounds only valid for n >= 9!"
   return (1 + 1/(n*n) * (log(n) - log(log(n))/8))^((n*n-n)/2)
+end
+
+
+# More precise variant of the maximum internal aplification factor from https://doi.org/10.1137/130936245
+function InternalAmpFactor(EigValsScaled::Vector{<:Complex}, alg::SSPRKS3)
+  M = 0.0
+
+  Q = zeros(ComplexF64, alg.S)
+  for i in eachindex(EigValsScaled)
+    nu_n_i = nu_n(alg.n, EigValsScaled[i])
+    for stage = 2:alg.mn
+      Q[stage] = 1/(2*alg.n - 1) * ((alg.n - 1) * nu_n_i^(alg.S - stage + 1) + alg.n * nu_n_i^((alg.n-1)^2 - stage + 1))
+    end
+
+    for stage = alg.mn+1:alg.kn-1
+      Q[stage] = (alg.n - 1)/(2*alg.n - 1) * nu_n_i^(alg.S - stage + 1)
+    end
+
+    # Remaining steps
+    for stage = alg.kn+1:alg.S
+      Q[stage] = nu_n_i^(alg.S - stage + 1)
+    end
+
+    # Compute sum of Q_j of this eigenvalue
+    QSum = norm(Q, 1)
+
+    if QSum > M
+      M = QSum
+    end
+  end
+
+  return M
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
@@ -184,7 +221,7 @@ function solve!(integrator::SSPRKS3_Integrator)
         integrator.u_tmp[i] = integrator.u[i] # Used for incremental stage update
       end
       
-      for stage = 1:alg.mn
+      for stage = 2:alg.mn # This is indeed a 2 (no typo)
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
 
@@ -216,7 +253,7 @@ function solve!(integrator::SSPRKS3_Integrator)
       end
 
       # Remaining steps
-      for stage = alg.kn+1:alg.S
+      for stage = alg.kn+1:alg.S+1
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t)
 
