@@ -99,7 +99,7 @@ end
 @inline cons2entropy(u, ::LinearizedEulerEquations1D) = u
 
 function compute_char_initial_pos(x, t, equations::LinearizedEulerEquations1D)
-  return [x x x]' .- t * equations.EigVals 
+  return [x; x; x] .- t * equations.EigVals 
 end
 
 function compute_primal_sol(CharVars, equations::LinearizedEulerEquations1D)
@@ -117,9 +117,9 @@ function initial_condition_convergence_test(x, t, equations::LinearizedEulerEqua
 end
 
 function initial_condition_char_vars_convergence_test(x, p::Int, equations::LinearizedEulerEquations1D)
-  return equations.EigVecMatInv[p,:]' * [-1.0 * sinpi.(2*x);
-                                          0.0 * cospi.(2*x);
-                                         -1.0 * sinpi.(2*x)]
+  return transpose(equations.EigVecMatInv[p,:]) * [-1.0 * sinpi.(2*x);
+                                                    0.0 * cospi.(2*x);
+                                                   -1.0 * sinpi.(2*x)]
 end
 
 function initial_condition_entropy_wave(x, t, equations::LinearizedEulerEquations1D)
@@ -141,7 +141,11 @@ function initial_condition_char_vars_entropy_wave(x, p::Int, equations::Lineariz
   beta  = 250.0
   center = 0.5
 
-  return equations.EigVecMatInv[p,:]' * [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))]
+  # Equivalent to 
+  #W0 = equations.EigVecMatInv * [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))]
+  #return W0[p]
+
+  return dot(equations.EigVecMatInv[p,:], [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))])
 end
 
 function initial_condition_acoustic_wave(x, t, equations::LinearizedEulerEquations1D)
@@ -169,47 +173,9 @@ function initial_condition_char_vars_acoustic_wave(x, p::Int, equations::Lineari
 
   Gaussian = alpha * exp.(-beta * (x .- center).^2)
 
-  return equations.EigVecMatInv[p,:]' * [Direction * equations.rho_0 * Gaussian / equations.c_0; 
-                                         Gaussian; 
-                                         Direction * equations.rho_0 * Gaussian * equations.c_0]
-end
-
-function initial_condition_custom(x, t, equations::LinearizedEulerEquations1D)
-  # Parameters
-  alpha     = 1.0
-  beta      = 250.0
-  center    = 0.5
-  Direction = 1 # Intended to be either -1 or +1
-
-  Gaussian = alpha * exp(-beta * (x[1] - center)^2)
-
-  rho_prime = Direction * equations.rho_0 * Gaussian / equations.c_0
-  v_prime   = (x[1] >= center * 0.5 && x[1] <= center * 1.5) ? 1.0 : 0.0
-  p_prime   = Direction * equations.rho_0 * Gaussian * equations.c_0
-
-  return SVector(rho_prime, v_prime, p_prime)
-end
-
-function initial_condition_char_vars_custom(x, p::Int, equations::LinearizedEulerEquations1D)
-  # Parameters
-  alpha = 1.0
-  beta  = 250.0
-  center = 0.5
-  Direction = 1 # Intended to be either -1 or +1
-
-  Gaussian = alpha * exp.(-beta * (x .- center).^2)
-
-  indicator = similar(x)
-  for k in 1:length(x)
-    if x[k] >= center * 0.5 &&  x[k] <= center * 1.5
-      indicator[k] = 1.0
-    end
-  end
-
-
-  return equations.EigVecMatInv[p,:]' * [Direction * equations.rho_0 * Gaussian / equations.c_0; 
-                                        indicator; 
-                                        Direction * equations.rho_0 * Gaussian * equations.c_0]
+  return transpose(equations.EigVecMatInv[p,:]) * [Direction * equations.rho_0 * Gaussian / equations.c_0; 
+                                                   Gaussian; 
+                                                   Direction * equations.rho_0 * Gaussian * equations.c_0]
 end
 
 function initial_condition_rest(x, t, equations::LinearizedEulerEquations1D)
@@ -236,35 +202,6 @@ function boundary_condition_wall(u_inner, orientation, direction, x, t, surface_
   return flux
 end
 
-"""
-    Boundary Condition taken from https://www.sciencedirect.com/science/article/pii/B9780128199961000147?via%3Dihub
-Boundary conditions of Dirichlet type. In above source, called "Inlet wave modulation"
-"""
-function boundary_condition_inlet(x, t, equations::LinearizedEulerEquations1D)
-  # Parameters
-  Aplus  = 1.0
-
-  omega = 5.0
-
-  (; rho_0, v_0, c_0) = equations
-  
-  # CAVEAT: Hard-coded to x_0 = 0!
-  #=
-  #sine = sin(-omega * t)
-
-  v_prime   = 1.0 / (rho_0 * c_0) * (Aplus - Aminus) * sine
-  p_prime   = (Aplus + Aminus) * sine 
-  rho_prime = p_prime # As in convergence test
-  =#
-  
-  expontential = exp(-im * omega * t)
-  v_prime   = imag(1.0 / (rho_0 * c_0) * Aplus * exp(im * x[1])  * expontential)
-  p_prime   = imag(Aplus * exp(im * x[1])  * expontential)
-  #rho_prime = p_prime # As in convergence test
-  rho_prime = 0.0
-
-  return SVector(rho_prime, v_prime, p_prime)
-end
 
 end # muladd
   
