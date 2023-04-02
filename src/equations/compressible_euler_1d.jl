@@ -10,12 +10,12 @@
   
   The compressible Euler equations
   ```math
-  \partial t
+  \partial_t
   \begin{pmatrix}
   \rho \\ \rho v_1 \\ \rho e
   \end{pmatrix}
   +
-  \partial x
+  \partial_x
   \begin{pmatrix}
   \rho v_1 \\ \rho v_1^2 + p \\ (\rho e +p) v_1
   \end{pmatrix}

@@ -12,8 +12,8 @@ Shallow water equations (SWE) in one space dimension. The equations are given by
 ```math
 \begin{aligned}
   \frac{\partial h}{\partial t} + \frac{\partial}{\partial x}(h v) &= 0 \\
-    \frac{\partial}{\partial t}(h v) + \frac{\partial}{\partial x}\left(h v^2 + \frac{g}{2}h^2\right)
-    + g h \frac{\partial b}{\partial x} &= 0
+  \frac{\partial}{\partial t}(h v) + \frac{\partial}{\partial x}\left(h v^2 + \frac{g}{2}h^2\right)
+  + g h \frac{\partial b}{\partial x} &= 0
 \end{aligned}
 ```
 The unknown quantities of the SWE are the water height ``h`` and the velocity ``v``.
