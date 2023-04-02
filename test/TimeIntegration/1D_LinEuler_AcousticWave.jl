@@ -1,15 +1,15 @@
 
-using OrdinaryDiffEq, Plots, LinearAlgebra
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
 # semidiscretization of the 1 linearized Euler equations
 
-equations = LinearizedEulerEquations1D(1.0, 1.0, 0.1)
+equations = LinearizedEulerEquations1D(1.0, 1.0, 1.0)
 
-initial_condition = initial_condition_acoustic_wave
+initial_condition = initial_condition_entropy_wave
 
-solver = DGSEM(polydeg=2, surface_flux=flux_lax_friedrichs)
+solver = DGSEM(polydeg=2, surface_flux=flux_hll)
 
 coordinates_min = 0
 coordinates_max = 1
@@ -25,7 +25,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 10/1.1)
+tspan = (0.0, 0.4)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -38,7 +38,7 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval)
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback)
 
-stepsize_callback = StepsizeCallback(cfl=0.25)
+stepsize_callback = StepsizeCallback(cfl=1.0)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks_DE = CallbackSet(summary_callback, analysis_callback, stepsize_callback)                        
@@ -46,56 +46,18 @@ callbacks_DE = CallbackSet(summary_callback, analysis_callback, stepsize_callbac
 ###############################################################################
 # run the simulation
 
-
-dtRef = 0.022
-NumStagesRef = 16
-
-#CFL = 0.7
-CFL = 0.99
-NumStages = 120
-
-RefinementOpt = 7
-CFL_Refinement = 1.0 / 2^(RefinementLevel - RefinementOpt)
-
-CFL_Conv = 1/1
-
-dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Refinement * CFL_Conv
-
-#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Lin_Euler/Acoustic_Wave/")
-
-
-ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Lin_Euler/Acoustic_Wave/" * 
-                                string(NumStages) * "/")
-
-NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Lin_Euler/Acoustic_Wave/EigenvalueList_Refined7.txt", ComplexF64)  
-M = Trixi.MaxInternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin)
-
-sol = Trixi.solve(ode, ode_algorithm,
-                  #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  dt = dtOptMin,
-                  save_everystep=false, callback=callbacks);
-
-#=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
                   dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   save_everystep=false, callback=callbacks_DE);          
-=#
 
 plot(sol)
+pd = PlotData1D(sol)
+plot(pd["rho_prime"])
 
-A = jacobian_ad_forward(semi)
-Eigenvalues = eigvals(A)
-
-EigValsReal = real(Eigenvalues)
-
-println("Maximum real part of all EV of initial condiguration: ", maximum(EigValsReal))
-
-
-A = jacobian_ad_forward(semi, tspan[end], sol.u[end])
-Eigenvalues = eigvals(A)
-
-EigValsReal = real(Eigenvalues)
-
-println("Maximum real part of all EV of final condiguration: ", maximum(EigValsReal))
-
-summary_callback() # print the timer summary
+xeval = 0.9
+x_char = Trixi.compute_char_initial_pos(xeval, tspan[2], equations)
+w = zeros(3, 1)
+for p = 1:3
+  w[p] = Trixi.initial_condition_char_vars_entropy_wave(x_char[p], p, equations)
+end
+display(Trixi.compute_primal_sol(w, equations))
