@@ -25,7 +25,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.4)
+tspan = (0.0, 10)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -54,10 +54,24 @@ plot(sol)
 pd = PlotData1D(sol)
 plot(pd["rho_prime"])
 
-xeval = 0.9
+xeval = 0.5
 x_char = Trixi.compute_char_initial_pos(xeval, tspan[2], equations)
+
+# Enforce periodicity
+for p = 1:3
+  while x_char[p] < coordinates_min
+    x_char[p] += coordinates_max - coordinates_min
+  end
+  while x_char[p] > coordinates_max
+    x_char[p] -= coordinates_max - coordinates_min
+  end
+end
+
+display(x_char)
+
 w = zeros(3, 1)
 for p = 1:3
   w[p] = Trixi.initial_condition_char_vars_entropy_wave(x_char[p], p, equations)
 end
+
 display(Trixi.compute_primal_sol(w, equations))

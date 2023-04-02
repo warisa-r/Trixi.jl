@@ -145,7 +145,9 @@ function initial_condition_char_vars_entropy_wave(x, p::Int, equations::Lineariz
   #W0 = equations.EigVecMatInv * [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))]
   #return W0[p]
 
-  return dot(equations.EigVecMatInv[p,:], [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))])
+  #return dot(equations.EigVecMatInv[p,:], [alpha * exp.(-beta * (x .- center).^2); zeros(1, length(x)); zeros(1, length(x))])
+
+  return dot(equations.EigVecMatInv[p,:], initial_condition_entropy_wave(x, 0, equations))
 end
 
 function initial_condition_acoustic_wave(x, t, equations::LinearizedEulerEquations1D)
@@ -173,9 +175,9 @@ function initial_condition_char_vars_acoustic_wave(x, p::Int, equations::Lineari
 
   Gaussian = alpha * exp.(-beta * (x .- center).^2)
 
-  return transpose(equations.EigVecMatInv[p,:]) * [Direction * equations.rho_0 * Gaussian / equations.c_0; 
-                                                   Gaussian; 
-                                                   Direction * equations.rho_0 * Gaussian * equations.c_0]
+  return dot(equations.EigVecMatInv[p,:],  [Direction * equations.rho_0 * Gaussian / equations.c_0; 
+                                            Gaussian; 
+                                            Direction * equations.rho_0 * Gaussian * equations.c_0])
 end
 
 function initial_condition_rest(x, t, equations::LinearizedEulerEquations1D)
