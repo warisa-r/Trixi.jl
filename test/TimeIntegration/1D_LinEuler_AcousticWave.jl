@@ -1,13 +1,11 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
 # semidiscretization of the 1 linearized Euler equations
 
 equations = LinearizedEulerEquations1D(1.0, 1.0, 1.0)
-
-initial_condition = initial_condition_entropy_wave
 
 solver = DGSEM(polydeg=2, surface_flux=flux_hll)
 
@@ -18,14 +16,37 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=RefinementLevel,
                 n_cells_max=30_000)
 
+function initial_condition_char_vars_entropy_wave(x, t, equations::LinearizedEulerEquations1D)
+  # Trace back characteristics
+  x_char = Trixi.compute_char_initial_pos(x, t, equations)
 
+  # Employ periodicity
+  for p = 1:3
+    while x_char[p] < coordinates_min
+      x_char[p] += coordinates_max - coordinates_min
+    end
+    while x_char[p] > coordinates_max
+      x_char[p] -= coordinates_max - coordinates_min
+    end
+  end
+
+  # Set up characteristic variables
+  w = zeros(3)
+  for p = 1:3
+    w[p] = dot(equations.eigenvectors_inv[p,:], Trixi.initial_condition_entropy_wave(x_char[p], 0, equations)) # Assumes t_0 = 0
+  end
+
+  return Trixi.compute_primal_sol(w, equations)
+end                
+
+initial_condition = initial_condition_char_vars_entropy_wave
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 10)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -53,25 +74,3 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
 plot(sol)
 pd = PlotData1D(sol)
 plot(pd["rho_prime"])
-
-xeval = 0.5
-x_char = Trixi.compute_char_initial_pos(xeval, tspan[2], equations)
-
-# Enforce periodicity
-for p = 1:3
-  while x_char[p] < coordinates_min
-    x_char[p] += coordinates_max - coordinates_min
-  end
-  while x_char[p] > coordinates_max
-    x_char[p] -= coordinates_max - coordinates_min
-  end
-end
-
-display(x_char)
-
-w = zeros(3, 1)
-for p = 1:3
-  w[p] = Trixi.initial_condition_char_vars_entropy_wave(x_char[p], p, equations)
-end
-
-display(Trixi.compute_primal_sol(w, equations))
