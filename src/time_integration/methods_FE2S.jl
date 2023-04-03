@@ -333,11 +333,14 @@ function InternalAmpFactor(Stages::Int, alpha::Matrix{Float64}, beta::Matrix{Flo
     # Multiply beta with eigenvalue
     betaMatEV = betaMat * EigValsScaled[i]
 
+    #=
     Power = alphaMat + betaMatEV
     for i = 1:Stages-1
       Inv += Power
       Power *= alphaMat + betaMatEV
     end
+    =#
+    Inv = inv(I - alphaMat - betaMatEV)
 
     # Compute sum of Q_j of this eigenvalue
     QSum = sum(abs.((alpha_Splus + beta_Splus) * Inv))
