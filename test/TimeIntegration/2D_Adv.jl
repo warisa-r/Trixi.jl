@@ -71,12 +71,12 @@ CFL = 1.0
 NumStages = 60
 CFL = 1.0
 
-#=
-NumStages = 112
-CFL = 0.7
-=#
 
-CFL_Convergence = 1/2
+NumStages = 120
+CFL = 0.98
+
+
+CFL_Convergence = 1/32
 
 dtOptMin = dtRef * (NumStages / NumStagesRef) * CFL * CFLCells * CFL_a * CFL_Convergence
 
