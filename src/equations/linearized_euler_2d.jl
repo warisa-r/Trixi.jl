@@ -136,6 +136,16 @@ function initial_condition_convergence_test(x, t, equations::LinearizedEulerEqua
   return SVector(rho_prime, v1_prime, v2_prime, p_prime)
 end
 
+function initial_condition_entropy_wave(x, t, equations::LinearizedEulerEquations2D)
+  # Parameters
+  alpha = 1.0
+  beta  = 250.0
+  center = 0.5
+
+  rho_prime = alpha * exp(-beta * ((x[1] - center)^2 + (x[2] - center)^2))
+
+  return SVector(rho_prime, 0.0, 0.0, 0.0)
+end
 
 """
     Boundary Condition taken from "acoustic_perturbation_2d.jl"
