@@ -87,13 +87,6 @@ end
   end
 end
 
-# Calculate maximum wave speed in the normal direction for local Lax-Friedrichs-type dissipation
-# Analogous to "linear_scalar_advection_2d"
-@inline function max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector, equation::LinearizedEulerEquations2D)
-  (; v1_0, v2_0,) = equation
-  return abs(dot([v1_0, v2_0], normal_direction)) # velocity in normal direction
-end
-
 
 # Calculate minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_naive(u_ll, u_rr, orientation::Integer,
@@ -110,18 +103,6 @@ end
   return λ_min, λ_max
 end
 
-@inline function min_max_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
-                                     equations::LinearizedEulerEquations2D)
-  v_normal = equations.v1_0 * normal_direction[1] + equations.v2_0 * normal_direction[2]
-
-  norm_ = norm(normal_direction)
-  # The v_normals are already scaled by the norm
-  λ_min = v_normal - equations.c_0 * norm_
-  λ_max = v_normal + equations.c_0 * norm_
-
-  return λ_min, λ_max
-end
-
 # Convert conservative variables to primitive
 @inline cons2prim(u, equations::LinearizedEulerEquations2D) = cons2cons(u, equations)
 @inline cons2entropy(u, ::LinearizedEulerEquations2D) = u
@@ -131,6 +112,15 @@ function initial_condition_convergence_test(x, t, equations::LinearizedEulerEqua
   rho_prime = -cospi(2*t) * (sinpi(2*x[1]) + sinpi(2*x[2]))
   v1_prime = sinpi(2*t) * cospi(2*x[1])
   v2_prime = sinpi(2*t) * cospi(2*x[2])
+  p_prime = rho_prime
+
+  return SVector(rho_prime, v1_prime, v2_prime, p_prime)
+end
+
+function source_terms_convergence_test(u, x, t, equations::LinearizedEulerEquations2D)
+  rho_prime = -cospi(2*t) * (cospi(2*x[1]) + cospi(2*x[2])) * 2 * pi
+  v1_prime = -sinpi(2*t) * sinpi(2*x[1]) * 2 * pi
+  v2_prime = -sinpi(2*t) * sinpi(2*x[2]) * 2 * pi
   p_prime = rho_prime
 
   return SVector(rho_prime, v1_prime, v2_prime, p_prime)
