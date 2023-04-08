@@ -58,8 +58,11 @@ callbacksDE = CallbackSet(summary_callback, analysis_callback, alive_callback, s
 ###############################################################################
 # run the simulation
 
+# We run the optimization with a reduced system => reduce of timestep required 
+# (even for the polynomial obtained from opt. in monomials)
+CFL_Optim = 0.99
 
-dtRef = 0.0457468077940575338
+dtRef = 0.0457468077940575338 * CFL_Optim
 NumStagesRef = 16
 
 RefinementOpt = 3
@@ -67,28 +70,21 @@ CFL_Refinement = 1.0 / 2^(RefinementLevel - RefinementOpt)
 
 
 NumStages = 16
-CFL = 0.99
+CFL = 1.00
 
 
 NumStages = 32
-CFL = 0.99
+CFL = 1.0
 
 
-#=
-NumStages = 60
-CFL = 0.99
-=#
 
-#=
-NumStages = 96
-CFL = 0.73
-=#
+NumStages = 64
+CFL = 0.96
 
-#=
-# Seems not to converge
+
 NumStages = 128
-CFL = 0.73
-=#
+CFL = 0.81
+
 
 CFL_Convergence = 1/32
 
@@ -101,7 +97,7 @@ ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spec
                                 string(NumStages) * "/NegBeta/")
 
 
-#=               
+#=
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_LinEuler_ConvTest/EigenvalueList_Refined3.txt", ComplexF64)
 M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
 display(M * 10^(-15))

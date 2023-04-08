@@ -63,7 +63,7 @@ dtRef = 0.0360458314265997635
 NumStagesRef = 16
 
 CFL = 1.0
-NumStages = 104
+NumStages = 26
 
 CFL_Convergence = 1/1
 
