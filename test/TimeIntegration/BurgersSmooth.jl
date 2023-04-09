@@ -83,8 +83,6 @@ CFL = 0.79
 
 
 NumStages = 28
-# Positive beta
-CFL = 0.74
 # Negative beta
 CFL = 0.71
 # For testing internal stability vs. SSP
@@ -92,22 +90,17 @@ CFL = 0.71
 
 #=
 NumStages = 56
-# Positive beta (seems to converge with second order)
-#CFL = 0.67
 # Negative beta
 CFL = 0.69
 =#
 
 
 NumStages = 112
-# Positive beta
-CFL = 0.51
 # Negative beta
-CFL = 0.33
-CFL = 0.5
+CFL = 0.28
 
 
-CFL_Convergence = 1/1
+CFL_Convergence = 1/32
 
 dt = dtRef * NumStages/NumStagesRef * CFL * CFL_Convergence
         
