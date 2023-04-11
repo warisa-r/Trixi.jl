@@ -46,47 +46,22 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-tspan = (0.0, 5)
-#tspan = (0.0, 0.0) # To test discretization accuracy
+tspan = (0.0, 5.0)
+tspan = (0.0, 0.5) # To test discretization accuracy
 
 ode = semidiscretize(semi, tspan)
-
-#=
-NumStagesRef = 2
-dtRef = 5.88475704193115263e-05
-=#
-
-#=
-NumStagesRef = 3
-dtRef = 0.00047515869140625001
-=#
 
 
 NumStagesRef = 16
 dtRef = 0.00291312662768177694
 
-
-#=
-NumStages = 2
-CFL = 1.0
-=#
-
-#=
-NumStages = 3
-CFL = 0.96
-=#
-
-
 NumStages = 16
 CFL = 0.79
 
 
-
 NumStages = 28
 # Negative beta
-CFL = 0.71
-# For testing internal stability vs. SSP
-#CFL = 1.0
+CFL = 0.72
 
 #=
 NumStages = 56
@@ -94,13 +69,13 @@ NumStages = 56
 CFL = 0.69
 =#
 
-
+#=
 NumStages = 112
 # Negative beta
 CFL = 0.28
+=#
 
-
-CFL_Convergence = 1/32
+CFL_Convergence = 1/1
 
 dt = dtRef * NumStages/NumStagesRef * CFL * CFL_Convergence
         
@@ -116,25 +91,36 @@ NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneratio
 M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL)
 display(M * 10^(-15))
 display(dt^3)
-=#
 
-#=
-n_SSPRKS3 = 99
+n_SSPRKS3 = 15
 ode_algorithm = Trixi.SSPRKS3(n_SSPRKS3)
 dt = Trixi.MaxTimeStep(n_SSPRKS3, tspan[2], EigVals, ode_algorithm)
 
 M_SSPRKS3 = Trixi.InternalAmpFactor(EigVals * dt, ode_algorithm)
 display(M_SSPRKS3 * 10^(-15))
+display(dt^4) # Third order method => p + 1 = 4
 =#
-
-#M_UB = Trixi.InternalAmpFactor_UpperBnd(n_SSPRKS3)
-#display(n_SSPRKS3^2 * M_UB * 10^(-15))
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
 
 plot(sol)
+
+TV0 = 0
+for i in 1:length(sol.u[1])-1
+  TV0 += abs(sol.u[1][i+1] - sol.u[1][i])
+end
+
+println("Initial Total Variation:\t", TV0)
+
+TV = 0
+for i in 1:length(sol.u[end])-1
+  TV += abs(sol.u[end][i+1] - sol.u[end][i])
+end
+
+println("Final Total Variation:\t\t", TV)
+println("TV Difference:\t\t\t", TV - TV0)
 
 summary_callback() # print the timer summary
 
