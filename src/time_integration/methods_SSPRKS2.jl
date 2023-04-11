@@ -58,6 +58,32 @@ function ButcherForm(S::Int)
   return A, b, c
 end
 
+function nu_S(S::Int, z::Complex)
+  return 1 + z / (S-1)
+end
+
+# More precise variant of the maximum internal aplification factor from https://doi.org/10.1137/130936245
+function InternalAmpFactor(EigValsScaled::Vector{<:Complex}, alg::SSPRKS2)
+  M = 0.0
+
+  Q = zeros(ComplexF64, alg.NumStages)
+  for i in eachindex(EigValsScaled)
+    nu_S_i = nu_S(alg.NumStages, EigValsScaled[i])
+    for stage = 2:alg.NumStages
+      Q[stage] = (alg.NumStages - 1)/alg.NumStages * abs(nu_S_i)^(alg.NumStages - stage + 1)
+    end
+
+    # Compute sum of Q_j of this eigenvalue
+    QSum = norm(Q, 1)
+
+    if QSum > M
+      M = QSum
+    end
+  end
+
+  return M
+end
+
 function MaxTimeStep(NumStages::Int, dtMax::Float64, EigVals::Vector{<:ComplexF64}, alg::SSPRKS2)
   dtEps = 1e-9
   dt    = -1.0
