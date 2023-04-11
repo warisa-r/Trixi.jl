@@ -10,6 +10,10 @@ gamma = 1.4
 
 equations = CompressibleEulerEquations2D(gamma)
 
+EdgeLength = 10.0
+coordinates_min = (-EdgeLength, -EdgeLength)
+coordinates_max = ( EdgeLength,  EdgeLength)
+
 """
     initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
 
@@ -18,7 +22,7 @@ https://spectrum.library.concordia.ca/id/eprint/985444/1/Paired-explicit-Runge-K
 """
 function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
   # Evaluate error after full domain traversion
-  if t == 40
+  if t == 2 * EdgeLength
     t = 0
   end
 
@@ -54,13 +58,13 @@ function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerE
 end
 initial_condition = initial_condition_isentropic_vortex
 
-surf_flux = flux_lax_friedrichs # = Rusanov, originally used
-surf_flux = flux_hll # Better flux, allows much larger timesteps
+surf_flux = flux_hllc
+
 PolyDeg = 6
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
-coordinates_min = (-20.0, -20.0)
-coordinates_max = ( 20.0,  20.0)
+coordinates_min = (-EdgeLength, -EdgeLength)
+coordinates_max = ( EdgeLength,  EdgeLength)
 
 Refinement = 6
 mesh = TreeMesh(coordinates_min, coordinates_max,
@@ -72,21 +76,24 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 40.0)
+tspan = (0.0, 2 * EdgeLength)
+#tspan = (0.0, 0.0) # Test discretization accuracy
+
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
 analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                     extra_analysis_errors=(:conservation_error,),
-                                     extra_analysis_integrals=(entropy, energy_total,
-                                                               energy_kinetic, energy_internal))
+                                     extra_analysis_errors=(:conservation_error, :l1_error))
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback)
+
+stepsize_callback = StepsizeCallback(cfl=1.0)
+callbacksDE = CallbackSet(summary_callback, analysis_callback, stepsize_callback)                        
 
 ###############################################################################
 # run the simulation
@@ -95,40 +102,36 @@ NumCells = 2^Refinement
 NumCellsRef = 4
 
 
-NumBaseStages = 4
-NumDoublings = 3
-
-# CARE: For linea increasing PERK
-#NumDoublings = 12 # = Num Increases
+NumStagesRef = 16
+dtRef = 0.639758258377423731
 
 
-#=
-NumBaseStages = 32
-NumDoublings = 0
-=#
+NumStages = 16
+CFL_Stab = 0.85
 
-dtRefBase = 0.255777720361038519 # 4
+NumStages = 30
+CFL_Stab = 0.79
 
-CFL_Stability = 0.99
-CFL_Convergence = 1/7
+CFL_Convergence = 1/2
 
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL_Stability * CFL_Convergence
+dt = dtRef / (NumCells/NumCellsRef) * NumStages / NumStagesRef * CFL_Stab * CFL_Convergence
 
-ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/S32/")
 
-#=
-ode_algorithm = PERK(NumBaseStages, 
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/")
-=#
+#ode_algorithm = PERK(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/")
+
+ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
+                                string(NumStages) * "/NegBeta/")
 
 sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dtOptMin,
+                  dt = dt,
                   save_everystep=false, callback=callbacks);
 
+
+#=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt = 2.27e-3,
-            save_everystep=false, callback=callbacks);
+            dt = 42.0,
+            save_everystep=false, callback=callbacksDE);
+=#
 
 summary_callback() # print the timer summary
 plot(sol)
