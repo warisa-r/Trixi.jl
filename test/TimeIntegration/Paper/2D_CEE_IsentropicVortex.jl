@@ -112,7 +112,16 @@ CFL_Stab = 0.85
 NumStages = 30
 CFL_Stab = 0.79
 
-CFL_Convergence = 1/2
+
+NumStages = 60
+CFL_Stab = 0.65
+
+
+NumStages = 120
+CFL_Stab = 0.4
+
+
+CFL_Convergence = 1/1
 
 dt = dtRef / (NumCells/NumCellsRef) * NumStages / NumStagesRef * CFL_Stab * CFL_Convergence
 
@@ -122,10 +131,14 @@ dt = dtRef / (NumCells/NumCellsRef) * NumStages / NumStagesRef * CFL_Stab * CFL_
 ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/" * 
                                 string(NumStages) * "/NegBeta/")
 
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_IsentropicVortexAdvection/EigenvalueList_Refined2.txt", ComplexF64)
+M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL_Stab)
+display(M * 10^(-15))
+display(dt^3)
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
-
 
 #=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
