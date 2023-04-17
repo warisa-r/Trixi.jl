@@ -76,7 +76,7 @@ NumStages = 120
 CFL = 0.98
 
 
-CFL_Convergence = 1/32
+CFL_Convergence = 1/1
 
 dtOptMin = dtRef * (NumStages / NumStagesRef) * CFL * CFLCells * CFL_a * CFL_Convergence
 
@@ -86,6 +86,10 @@ dtOptMin = dtRef * (NumStages / NumStagesRef) * CFL * CFLCells * CFL_a * CFL_Con
 ode_algorithm = FE2S(NumStages, 
                      "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/" * string(NumStages) * "/NegBeta/")
 
+NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/EigenvalueList_24.txt", ComplexF64)
+M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * NumStages / NumStagesRef * dtRef * CFL * CFL_a)
+display(M * 10^(-15))
+display(dtOptMin^3)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,

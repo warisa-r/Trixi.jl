@@ -84,7 +84,7 @@ ode = semidiscretize(semi, tspan)
 summary_callback = SummaryCallback()
 
 analysis_interval = 1000
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      extra_analysis_errors=(:conservation_error, :l1_error))
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
