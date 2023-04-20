@@ -47,7 +47,7 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 tspan = (0.0, 5.0)
-tspan = (0.0, 0.5) # To test discretization accuracy
+#tspan = (0.0, 0.5) # To test discretization accuracy
 
 ode = semidiscretize(semi, tspan)
 
@@ -63,17 +63,17 @@ NumStages = 28
 # Negative beta
 CFL = 0.72
 
-#=
+
 NumStages = 56
 # Negative beta
 CFL = 0.69
-=#
 
-#=
+
+
 NumStages = 112
 # Negative beta
 CFL = 0.28
-=#
+
 
 CFL_Convergence = 1/1
 
@@ -105,12 +105,13 @@ sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
 
-plot(sol)
+#plot(sol)
 
 TV0 = 0
 for i in 1:length(sol.u[1])-1
   TV0 += abs(sol.u[1][i+1] - sol.u[1][i])
 end
+TV0 += abs(sol.u[1][1] - sol.u[1][end])
 
 println("Initial Total Variation:\t", TV0)
 
@@ -118,6 +119,7 @@ TV = 0
 for i in 1:length(sol.u[end])-1
   TV += abs(sol.u[end][i+1] - sol.u[end][i])
 end
+TV += abs(sol.u[end][1] - sol.u[end][end])
 
 println("Final Total Variation:\t\t", TV)
 println("TV Difference:\t\t\t", TV - TV0)
