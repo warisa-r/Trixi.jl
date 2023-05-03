@@ -1,4 +1,4 @@
-using OrdinaryDiffEq
+using OrdinaryDiffEq, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -85,12 +85,22 @@ callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
                         stepsize_callback)
 
+callbacksRED = CallbackSet(summary_callback,
+                           analysis_callback, alive_callback)
+
 ###############################################################################
 # run the simulation
 
+# TODO: Check with non SSP integrator - maybe possible to produce oscillations
 
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=42, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
+solHeun = Trixi.solve(ode, Trixi.Heun(), #CarpenterKennedy2N54(williamson_condition=false),
+            dt=1e-3, # solve needs some value here but it will be overwritten by the stepsize_callback
+            save_everystep=false, callback=callbacksRED);
+
+solSSPRKS2 = Trixi.solve(ode, Trixi.SSPRKS2(2), #CarpenterKennedy2N54(williamson_condition=false),
+            dt=1e-3, # solve needs some value here but it will be overwritten by the stepsize_callback
+            save_everystep=false, callback=callbacksRED);            
 
 summary_callback() # print the timer summary
+
+println(norm(solHeun.u[end] - solSSPRKS2.u[end]))

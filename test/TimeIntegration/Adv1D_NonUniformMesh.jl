@@ -8,12 +8,27 @@ using Trixi
 advection_velocity = 1
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
-# Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-
 PolyDeg = 3
 surface_flux = flux_lax_friedrichs
-solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 
+#=
+# Use shock capturing techniques to supress oscillations at discontinuities
+basis = LobattoLegendreBasis(PolyDeg)
+
+indicator_sc = IndicatorHennemannGassner(equations, basis,
+                                         alpha_max=1.0,
+                                         alpha_min=0.001,
+                                         alpha_smooth=true,
+                                         variable=first)
+
+volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
+                                                 volume_flux_dg=surface_flux,
+                                                 volume_flux_fv=surface_flux)
+                                                 
+solver = DGSEM(basis, surface_flux, volume_integral)
+=#
+
+solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 
 #=
 numerical_flux = flux_lax_friedrichs
@@ -25,22 +40,14 @@ solver = DGSEM(polydeg=PolyDeg, surface_flux=numerical_flux,
 coordinates_min = -1.0 # minimum coordinate
 coordinates_max =  1.0 # maximum coordinate
 
-InitialRefinement = 4
+InitialRefinement = 6
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-# Refine mesh locally 
-LLID = Trixi.local_leaf_cells(mesh.tree)
-num_leafs = length(LLID)
 
-# Refine right 3 quarters of mesh
-@assert num_leafs % 4 == 0
-Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])
-
-#=
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -63,7 +70,7 @@ Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 # For testing: Have transition: Coarse -> Fine (without medium in between - not supported by Trixi)
 #Trixi.refine!(mesh.tree, LLID[5 : Int(3*num_leafs/4)])
 
-
+#=
 # Third refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -82,7 +89,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 1.5
+EndTime = 10 * rand()
 
 
 # Create ODEProblem
@@ -114,12 +121,13 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 
 #dtOptMin = 0.05
 # For s = 4
-#dtOptMin = 0.0545930 / (2^(InitialRefinement - 4))
-dtOptMin = 0.0545930
+dtOptMin = 0.0545930 / (2^(InitialRefinement - 4)) * 0.99
 
+# s = 8
+#dtOptMin = 0.115024386876939388 / (2^(InitialRefinement - 4)) * 0.99
 
-ode_algorithm = PERK_Multi(4, 1, 
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_ConvergenceTest/")
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
+#ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
 #=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
