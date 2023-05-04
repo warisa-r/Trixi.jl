@@ -11,34 +11,10 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 PolyDeg = 3
 surface_flux = flux_lax_friedrichs
 
-#=
-# Use shock capturing techniques to supress oscillations at discontinuities
-basis = LobattoLegendreBasis(PolyDeg)
-
-indicator_sc = IndicatorHennemannGassner(equations, basis,
-                                         alpha_max=1.0,
-                                         alpha_min=0.001,
-                                         alpha_smooth=true,
-                                         variable=first)
-
-volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
-                                                 volume_flux_dg=surface_flux,
-                                                 volume_flux_fv=surface_flux)
-                                                 
-solver = DGSEM(basis, surface_flux, volume_integral)
-=#
-
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 
-#=
-numerical_flux = flux_lax_friedrichs
-PolyDeg = 0
-solver = DGSEM(polydeg=PolyDeg, surface_flux=numerical_flux,
-               volume_integral=VolumeIntegralPureLGLFiniteVolume(numerical_flux))
-=#
-
-coordinates_min = -1.0 # minimum coordinate
-coordinates_max =  1.0 # maximum coordinate
+coordinates_min = -5.0 # minimum coordinate
+coordinates_max =  5.0 # maximum coordinate
 
 InitialRefinement = 6
 # Create a uniformly refined mesh with periodic boundaries
@@ -65,10 +41,7 @@ num_leafs = length(LLID)
 
 @assert num_leafs % 4 == 0
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
-Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
-
-# For testing: Have transition: Coarse -> Fine (without medium in between - not supported by Trixi)
-#Trixi.refine!(mesh.tree, LLID[5 : Int(3*num_leafs/4)])
+Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4)+1 : Int(3*num_leafs/4)])
 
 #=
 # Third refinement
@@ -76,11 +49,13 @@ Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 
-Trixi.refine!(mesh.tree, LLID[18 : 22])
+@assert num_leafs % 4 == 0
+# Refine third quarter to ensure we have only transitions from coarse->medium->fine
+Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
 =#
 
 initial_condition = initial_condition_convergence_test
-#initial_condition = initial_condition_gauss
+initial_condition = initial_condition_gauss
 
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -90,7 +65,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 StartTime = 0.0
 EndTime = 10 * rand()
-
+#EndTime = 1.5
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -121,12 +96,17 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 
 #dtOptMin = 0.05
 # For s = 4
-dtOptMin = 0.0545930 / (2^(InitialRefinement - 4)) * 0.99
+dtOptMin = 0.0545930 / (2^(InitialRefinement - 4)) * 0.99 * coordinates_max
 
 # s = 8
 #dtOptMin = 0.115024386876939388 / (2^(InitialRefinement - 4)) * 0.99
 
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
+b1   = 0.5
+#b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+
+ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", bS, cEnd)
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
 #=

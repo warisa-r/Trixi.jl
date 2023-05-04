@@ -95,6 +95,71 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   return AMatrices, c, ActiveLevels
 end
 
+function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
+                                          bS::Float64, cEnd::Float64)
+
+  # c Vector form Butcher Tableau (defines timestep per stage)
+  c = zeros(Float64, NumStages)
+  for k in 2:NumStages
+    c[k] = cEnd * (k - 1)/(NumStages - 1)
+  end
+  println("Timestep-split: "); display(c); println("\n")
+
+  SE_Factors = bS * reverse(c[2:end-1])
+
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK_Multi specific)
+  CoeffsMax = NumStages - 2
+
+  AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
+  for i = 1:NumDoublings+1
+    AMatrices[i, :, 1] = c[3:end]
+  end
+
+  ActiveLevels = [Vector{Int}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  ActiveLevels[1] = 1:NumDoublings+1
+
+  for level = 1:NumDoublings + 1
+    
+    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
+    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
+    @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
+    A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), SE_Factors, MonCoeffs)
+
+    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
+    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
+
+    # CARE: For linear PERK family: 4,5,6, and not 4, 8, 16, ...
+    #=
+    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages - level + 1)) * ".txt"
+    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
+    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 1] -= A
+    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 2]  = A
+    =#
+
+    # Add refinement levels to stages
+    for stage = NumStages:-1:NumStages-NumMonCoeffs
+      push!(ActiveLevels[stage], level)
+    end
+  end
+
+  for i = 1:NumDoublings+1
+    println("A-Matrix of Butcher tableau of level " * string(i))
+    display(AMatrices[i, :, :]); println()
+  end
+
+  println("Check violation of internal consistency")
+  for i = 1:NumDoublings+1
+    for j = 1:i
+      display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
+    end
+  end
+
+  println("\nActive Levels:"); display(ActiveLevels); println()
+
+  return AMatrices, c, ActiveLevels
+end
+
 
 """
     PERK_Multi()
@@ -119,7 +184,7 @@ mutable struct PERK_Multi
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
-                      BasePathMonCoeffs_::AbstractString)
+                      BasePathMonCoeffs_::AbstractString, bS::Float64, cEnd::Float64)
 
     newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
@@ -129,7 +194,7 @@ mutable struct PERK_Multi
                         #NumStageEvalsMin_ + NumDoublings_)
 
     newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
-      ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_)
+      ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS, cEnd)
 
     return newPERK_Multi
   end
@@ -906,7 +971,8 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += integrator.k_higher[i]
+        #integrator.u[i] += integrator.k_higher[i]
+        integrator.u[i] += 0.5 * (integrator.k1[i] + integrator.k_higher[i])
       end
     end # PERK_Multi step
 
