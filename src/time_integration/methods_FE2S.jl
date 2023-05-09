@@ -65,9 +65,6 @@ function ComputeTimeSteps(Stages::Int, NumTrueComplex::Int,
   for i = 2:NumTrueComplex + 1
     c_combined[i] = c[2*i - 1] + c[2*i]
   end
-  #display(c_combined)
-
-  # TODO: Implement sorting of two stage steps based on combined timesteps!
 
   return c
 end
@@ -107,9 +104,6 @@ function ComputeTimeSteps(Stages::Int, NumTrueComplex::Int,
   for i = 2:NumTrueComplex + 1
     c_combined[i] = c[2*i - 1] + c[2*i]
   end
-  #display(c_combined)
-
-  # TODO: Implement sorting of two stage steps based on combined timesteps!
 
   return c
 end
@@ -586,7 +580,6 @@ function solve!(integrator::FE2S_Integrator)
       integrator.t_stage = integrator.t
 
       ### Shu-Osher Form with two substages ###
-      # TODO: Correct timestep!
       for i = 1:alg.Stages - 1
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage + integrator.dt * alg.c[i])
         integrator.f(integrator.k1, integrator.u_1, prob.p, integrator.t_stage + integrator.dt * alg.c[i])
