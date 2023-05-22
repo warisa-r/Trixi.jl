@@ -60,12 +60,14 @@ initial_condition = initial_condition_gauss
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
+A_ODE = jacobian_ad_forward(semi)
+
 ###############################################################################
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 10 * rand()
-#EndTime = 1.5
+#EndTime = 10 * rand()
+EndTime = 0.0545930 / (2^(InitialRefinement - 4)) * 0.99 * coordinates_max
 
 # Create ODEProblem
 ode = semidiscretize(semi, (StartTime, EndTime));
@@ -101,12 +103,12 @@ dtOptMin = 0.0545930 / (2^(InitialRefinement - 4)) * 0.99 * coordinates_max
 # s = 8
 #dtOptMin = 0.115024386876939388 / (2^(InitialRefinement - 4)) * 0.99
 
-b1   = 0.5
+b1   = 0.0
 #b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", bS, cEnd)
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", bS, cEnd)
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
 #=
@@ -114,6 +116,15 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt = 1e-2/2,
             save_everystep=false, callback=callbacks);
 =#
+
+A_OneStep = Trixi.ComputePERKSysMat(ode, ode_algorithm, A_ODE, dt = dtOptMin, save_everystep=false, callback=callbacks)
+all(y->y>=0, A_OneStep)
+plot(A_OneStep, st=:surface)
+
+N = size(A_OneStep, 1)
+for i = 1:N
+  println(i, " ", sum(A_OneStep[i, :]), " ", norm(A_OneStep[i, :], 1))
+end
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
@@ -128,6 +139,7 @@ summary_callback()
 
 plot(sol)
 
+display(norm(sol.u[end] - A_OneStep * sol.u[1], Inf))
 
 pd = PlotData1D(sol)
 plot!(getmesh(pd))
