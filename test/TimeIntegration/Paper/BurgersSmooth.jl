@@ -56,6 +56,7 @@ NumStagesRef = 16
 dtRef = 0.00291312662768177694
 
 NumStages = 16
+# P-ERK
 CFL = 0.79
 
 
@@ -67,7 +68,6 @@ CFL = 0.72
 NumStages = 56
 # Negative beta
 CFL = 0.69
-
 
 
 NumStages = 112

@@ -59,6 +59,8 @@ callbacks_DE = CallbackSet(summary_callback, analysis_callback, stepsize_callbac
 ###############################################################################
 # run the simulation
 
+# p = 2
+#=
 dtRef = 0.0360458314265997635
 NumStagesRef = 16
 
@@ -68,10 +70,22 @@ NumStages = 26
 CFL_Convergence = 1/1
 
 dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence
+=#
 
+# p = 3
+dtRef = 0.284636020657671907
+NumStagesRef = 16
 
-ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * 
-                                string(NumStages) * "/NegBeta/")
+CFL = 0.99
+NumStages = 26
+
+CFL_Convergence = 1/1
+
+dtOptMin = NumStages / NumStagesRef * dtRef * CFL * CFL_Convergence / (2^(InitialRefinement - 6))
+
+ode_algorithm = FE2S(NumStages, 
+                    #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/" * string(NumStages) * "/NegBeta/")
+                    "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/3rdOrder/" * string(NumStages) * "/")
 
 
 #=
@@ -79,10 +93,11 @@ ode_algorithm = FE2S(NumStages, "/home/daniel/git/MA/EigenspectraGeneration/Spec
                                 string(NumStages) * "/NonLebedev/")
 =#
 
+
 NumEigVals, EigVals = Trixi.read_file("/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/EigenvalueList_Refined9.txt", ComplexF64)
 M = Trixi.InternalAmpFactor(NumStages, ode_algorithm.alpha, ode_algorithm.beta, EigVals * dtOptMin)
 display(M * 10^(-15))
-display(dtOptMin^3)
+display(dtOptMin^4)
 
 
 sol = Trixi.solve(ode, ode_algorithm,

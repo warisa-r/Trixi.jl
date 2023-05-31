@@ -972,6 +972,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
+        # TODO: Adapt to b1 != 0, bS != 1 !
         integrator.u[i] += integrator.k_higher[i]
         #integrator.u[i] += 0.5 * (integrator.k1[i] + integrator.k_higher[i])
       end
@@ -1043,6 +1044,7 @@ function Base.resize!(integrator::PERK_Multi_Integrator, new_size)
   resize!(integrator.k1, new_size)
   resize!(integrator.k_higher, new_size)
 end
+
 
 function ComputePERKSysMat(ode::ODEProblem, alg::PERK_Multi, A_ODE::Matrix;
                            dt, callback=nothing, kwargs...)
