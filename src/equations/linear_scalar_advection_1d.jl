@@ -173,5 +173,9 @@ end
 @inline energy_total(u::Real, ::LinearScalarAdvectionEquation1D) = 0.5 * u^2
 @inline energy_total(u, equation::LinearScalarAdvectionEquation1D) = energy_total(u[1], equation)
 
+# For shock capturing
+@inline function scalar(u, equations::LinearScalarAdvectionEquation1D)
+  return u[1]
+end
 
 end # @muladd

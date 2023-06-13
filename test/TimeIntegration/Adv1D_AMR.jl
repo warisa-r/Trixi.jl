@@ -8,16 +8,30 @@ using Trixi
 advection_velocity = 1.0
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
-# Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
 PolyDegree = 3
 
+
+surface_flux = flux_lax_friedrichs
+volume_flux  = flux_central
+basis = LobattoLegendreBasis(PolyDegree)
+indicator_sc = IndicatorHennemannGassner(equations, basis,
+                                         alpha_max=0.5,
+                                         alpha_min=0.001,
+                                         alpha_smooth=false,
+                                         variable=Trixi.scalar)
+volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
+                                                 volume_flux_dg=volume_flux,
+                                                 volume_flux_fv=surface_flux)
+
+solver = DGSEM(basis, surface_flux, volume_integral)
+
+
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
-#solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_godunov) # Equivalent
 
 coordinates_min = -5.0 # minimum coordinate
 coordinates_max =  5.0 # maximum coordinate
 
-InitialRefinement = 9
+InitialRefinement = 6
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
@@ -29,11 +43,47 @@ initial_condition = initial_condition_gauss
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
+#=
+A = jacobian_ad_forward(semi)
+
+Eigenvalues = eigvals(A)
+
+# Complex conjugate eigenvalues have same modulus
+Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
+
+# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
+Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
+
+EigValsReal = real(Eigenvalues)
+EigValsImag = imag(Eigenvalues)
+
+plotdata = nothing
+plotdata = scatter(EigValsReal, EigValsImag, label = "Spectrum")
+display(plotdata)
+
+EigValFile = "EigenvalueList.txt"
+ofstream = open(EigValFile, "w")
+for i in eachindex(Eigenvalues)
+  realstring = string(EigValsReal[i])
+  write(ofstream, realstring)
+
+  write(ofstream, "+")
+
+  imstring = string(EigValsImag[i])
+  write(ofstream, imstring)
+  write(ofstream, "i") # Cpp uses "I" for the imaginary unit
+  if i != length(Eigenvalues)
+    write(ofstream, "\n")
+  end
+end
+close(ofstream)
+=#
+
 ###############################################################################
 # ODE solvers, callbacks etc.
 
 StartTime = 0.0
-EndTime = 100
+EndTime = 10
 
 
 # Create ODEProblem
@@ -71,48 +121,33 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, 
-                        analysis_callback)
-                        #amr_callback)
+                        analysis_callback,
+                        amr_callback)
 
 #callbacks = CallbackSet(summary_callback, analysis_callback)
 
-stepsize_callback = StepsizeCallback(cfl=0.56)                    
+stepsize_callback = StepsizeCallback(cfl=0.5)                    
 callbacksSSPRK22 = CallbackSet(summary_callback,
                                amr_callback,
-                               #analysis_callback
+                               analysis_callback,
                                stepsize_callback)         
 
 ###############################################################################
 # run the simulation
 
-#ode_algorithm = Trixi.CarpenterKennedy2N54()
+# S_base = 4, Shock-Capturing
+dtOptMin = 0.0842359527669032104 / (2.0^(InitialRefinement - 6))
+CFL = 0.5
 
-#=
-#0.0545930727967061102
-dtOptMin = 0.0545930 / (2.0^(InitialRefinement - 4)) * 5
-#dtOptMin = 0.0545930 * 5
+# S_base = 4, optimized for NO Shock-Capturing 
+dtOptMin = 0.06823193651780457 / (2.0^(InitialRefinement - 6))
+#CFL = 0.8
+CFL = 1.0 # No Shock capturing turned on
 
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_3rd/", 
+                           1.0, 0.5)
 
-CFL_Convergence = 0.61 # Initial refinement: 6, 4 Levels
-
-CFL_Convergence = 1 # 3 levels: 4, 8, 16
-CFL_Convergence = 1.2 # 3 levels: 8, 16, 32 (= 2* 0.61)
-
-ode_algorithm = PERK_Multi(8, 2,
-                #"/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_ConvergenceTest/S32/")
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/1D_Adv_ConvergenceTest/")
-=#
-
-dtOptMin = 0.0433
-CFL_Convergence = 5.0
-
-ode_algorithm = FE2S(96, "/home/daniel/git/MT/PlotScripts/StabBndsManyStage/1D_Adv_ConstSpeed/")
-
-sol = Trixi.solve(ode, ode_algorithm,
-                  #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  dt = dtOptMin * CFL_Convergence,
-                  save_everystep=false, callback=callbacks);
-
+sol = Trixi.solve(ode, ode_algorithm, dt = dtOptMin * CFL, save_everystep=false, callback=callbacks)
 
 #=
 sol = solve(ode, SSPRK22(),

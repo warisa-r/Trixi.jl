@@ -49,6 +49,7 @@ function (indicator_hg::IndicatorHennemannGassner)(u, mesh::Union{TreeMesh{1}, S
     for i in eachnode(dg)
       u_local = get_node_vars(u, equations, dg, i, element)
       indicator[i] = indicator_hg.variable(u_local, equations)
+      #indicator[i] = indicator_hg.variable(u_local, equations).value
     end
 
     # Convert to modal representation
