@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, LinearAlgebra
+using OrdinaryDiffEq
 using Trixi
 
 ###############################################################################
