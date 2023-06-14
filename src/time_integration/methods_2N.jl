@@ -23,8 +23,9 @@ struct CarpenterKennedy2N54 <: SimpleAlgorithm2N
   a::SVector{5, Float64}
   b::SVector{5, Float64}
   c::SVector{5, Float64}
+  stage_callbacks
 
-  function CarpenterKennedy2N54()
+  function CarpenterKennedy2N54(; stage_callbacks=nothing)
     a = SVector(0.0, 567301805773.0 / 1357537059087.0,2404267990393.0 / 2016746695238.0,
                 3550918686646.0 / 2091501179385.0, 1275806237668.0 / 842570457699.0)
     b = SVector(1432997174477.0 / 9575080441755.0, 5161836677717.0 / 13612068292357.0,
@@ -33,7 +34,7 @@ struct CarpenterKennedy2N54 <: SimpleAlgorithm2N
     c = SVector(0.0, 1432997174477.0 / 9575080441755.0, 2526269341429.0 / 6820363962896.0,
                 2006345519317.0 / 3224310063776.0, 2802321613138.0 / 2924317926251.0)
 
-    new(a, b, c)
+    new(a, b, c, stage_callbacks)
   end
 end
 
@@ -159,6 +160,10 @@ function solve!(integrator::SimpleIntegrator2N)
           integrator.u_tmp[i] = integrator.du[i] - integrator.u_tmp[i] * a_stage
           integrator.u[i] += integrator.u_tmp[i] * b_stage_dt
         end
+      end
+
+      for stage_callback in alg.stage_callbacks
+        stage_callback(integrator.u, integrator, prob.p, t_stage)
       end
     end
     integrator.iter += 1
