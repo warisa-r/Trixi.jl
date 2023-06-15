@@ -161,122 +161,6 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 end
 
 
-function minmod(a::Vector{Float64})
-  if all(>=(0), a)
-    return minimum(abs.(a))
-  elseif all(<(0), a)
-    -minimum(abs.(a))
-  else
-    return 0
-  end
-end
-
-function Limiter!(u, integrator::PERK_Multi_Integrator)
-  @unpack solver = integrator.p
-  Weights = solver.basis.weights
-  Nodes   = solver.basis.nodes
-  NumNodes = length(Nodes)
-
-  NumElements = Int(length(u)/NumNodes)
-
-  # TODO: Get troubled elements from indicator!
-  #TroubledElements = [14, 15]
-  TroubledElements = 1:NumElements
-  #TroubledElements = integrator.level_info_elements_acc[1]
-
-  u_avg = zeros(NumElements, 1)
-  for i in TroubledElements
-    for j = 1:NumNodes
-      u_avg[i] += Weights[j] * u[NumNodes * (i-1) + j]
-    end
-    u_avg[i] *= 0.5 # For 1D
-  end
-
-  # Deltas
-  u_Delta = zeros(NumElements, 2)
-  for i in TroubledElements
-    # Left
-    # Assume periodicity
-    if i == 1
-      u_Delta[i, 1] = u_avg[i, 1] - u_avg[NumElements, 1]
-    else
-      u_Delta[i, 1] = u_avg[i, 1] - u_avg[i-1, 1]
-    end
-
-    # Right
-    # Assume periodicity
-    if i == NumElements
-      u_Delta[i, 2] = u_avg[1, 1] - u_avg[NumElements, 1]
-    else
-      u_Delta[i, 2] = u_avg[i+1, 1] - u_avg[i, 1]
-    end
-  end
-
-  trace_values = zeros(NumElements, 2)
-  for i in TroubledElements
-    # Left
-    trace_values[i, 1] = u[NumNodes * (i-1) + 1]
-    # Right
-    trace_values[i, 2] = u[NumNodes * i]
-  end
-
-  # Bar-quantities
-  u_bar = zeros(NumElements, 2)
-
-  #=
-  # p = 1
-  for i in TroubledElements
-    # Left
-    u_bar[i, 1] = 0.5 *(integrator.u[NumNodes * (i-1) + 1] - integrator.u[NumNodes * i])
-
-    # Right
-    u_bar[i, 2] = 0.5 *(integrator.u[NumNodes * i] - integrator.u[NumNodes * (i-1) + 1])
-  end
-  =#
-
-  
-  # For p=2 polynomial
-  ALegendre = [1 Nodes[1] 0.5 * (3*Nodes[1]^2 - 1)
-               1 Nodes[2] 0.5 * (3*Nodes[2]^2 - 1)
-               1 Nodes[3] 0.5 * (3*Nodes[3]^2 - 1)]
-  
-  for i in TroubledElements
-    ULegendre = ALegendre\u[NumNodes * (i-1) + 1:NumNodes * i]
-
-    # Left
-    u_bar[i, 1] = ULegendre[2] * (-1) + ULegendre[3] * 0.5 *(3*1 - 1)
-
-    # Right
-    u_bar[i, 2] = ULegendre[2] *   1 + ULegendre[3] * 0.5 *(3*1 - 1)
-  end
-  
-
-  # Tilde-quantities
-  u_tilde = zeros(NumElements, 2)
-  for i in TroubledElements
-    # Left
-    u_tilde[i, 1] = minmod([u_bar[i, 1], u_Delta[i, 1], u_Delta[i, 2]])
-    # Right
-    u_tilde[i, 2] = minmod([u_bar[i, 2], u_Delta[i, 1], u_Delta[i, 2]])
-  end
-
-  
-  for i in TroubledElements
-    u[NumNodes * (i-1) + 1] = -u_tilde[i, 1] + u_avg[i]
-    u[NumNodes * i]         =  u_tilde[i, 2] + u_avg[i]
-  end
-  
-  #=
-  # For p = 2 also required
-  for i in TroubledElements
-    # Conservation of Mass
-    u[NumNodes * (i-1) + 2] = (2*u_avg[i] - Weights[1] * u[NumNodes * (i-1) + 1] 
-                                                         - Weights[3] * u[NumNodes * i]) / Weights[2]
-  end
-  =#
-end
-
-
 """
     PERK_Multi()
 
@@ -951,6 +835,159 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   solve!(integrator)
 end
 
+
+function minmod(a::Vector{Float64})
+  if all(>=(0), a)
+    return minimum(abs.(a))
+  elseif all(<(0), a)
+    -minimum(abs.(a))
+  else
+    return 0
+  end
+end
+
+function Limiterp1!(u, integrator::PERK_Multi_Integrator)
+  @unpack solver = integrator.p
+  Weights = solver.basis.weights
+  Nodes   = solver.basis.nodes
+  NumNodes = length(Nodes)
+
+  NumElements = Int(length(u)/NumNodes)
+
+  # TODO: Get troubled elements from indicator!
+  TroubledElements = [15, 16]
+  #TroubledElements = 1:NumElements
+  #TroubledElements = integrator.level_info_elements_acc[1]
+
+  u_avg = zeros(NumElements, 1)
+  for i in TroubledElements
+    for j = 1:NumNodes
+      u_avg[i] += Weights[j] * u[NumNodes * (i-1) + j]
+    end
+    u_avg[i] *= 0.5 # For 1D on [-1, 1] reference element
+  end
+
+  # Deltas
+  u_Delta = zeros(NumElements, 2)
+  for i in TroubledElements
+    # Left
+    # Assume periodicity
+    if i == 1
+      u_Delta[i, 1] = u_avg[i, 1] - u_avg[NumElements, 1]
+    else
+      u_Delta[i, 1] = u_avg[i, 1] - u_avg[i-1, 1]
+    end
+
+    # Right
+    # Assume periodicity
+    if i == NumElements
+      u_Delta[i, 2] = u_avg[1, 1] - u_avg[NumElements, 1]
+    else
+      u_Delta[i, 2] = u_avg[i+1, 1] - u_avg[i, 1]
+    end
+  end
+
+  sigma = zeros(NumElements)
+  for i in TroubledElements
+    sigma[i] = minmod(u_Delta[i,:])*0.5
+  end
+
+  
+  for i in TroubledElements
+    u[NumNodes * (i-1) + 1] = u_avg[i] - sigma[i] / sqrt(3)
+    u[NumNodes * i]         = u_avg[i] + sigma[i] / sqrt(3)
+  end
+end
+
+function Limiterp2!(u, integrator::PERK_Integrator)
+  @unpack solver = integrator.p
+  Weights = solver.basis.weights
+  Nodes   = solver.basis.nodes
+  NumNodes = length(Nodes)
+
+  NumElements = Int(length(u)/NumNodes)
+
+  #TroubledElements = [14, 15]
+  TroubledElements = 1:NumElements
+  #TroubledElements = integrator.level_info_elements_acc[1]
+
+  u_avg = zeros(NumElements, 1)
+  for i in TroubledElements
+    for j = 1:NumNodes
+      u_avg[i] += Weights[j] * u[NumNodes * (i-1) + j]
+    end
+    u_avg[i] *= 0.5 # For 1D on [-1, 1] reference element
+  end
+
+  # Deltas
+  u_Delta = zeros(NumElements, 2)
+  for i in TroubledElements
+    # Left
+    # Assume periodicity
+    if i == 1
+      u_Delta[i, 1] = u_avg[i, 1] - u_avg[NumElements, 1]
+    else
+      u_Delta[i, 1] = u_avg[i, 1] - u_avg[i-1, 1]
+    end
+
+    # Right
+    # Assume periodicity
+    if i == NumElements
+      u_Delta[i, 2] = u_avg[1, 1] - u_avg[NumElements, 1]
+    else
+      u_Delta[i, 2] = u_avg[i+1, 1] - u_avg[i, 1]
+    end
+  end
+
+  # TODO: Seems wrong!
+  trace_values = zeros(NumElements, 2)
+  for i in TroubledElements
+    # Left
+    trace_values[i, 1] = u[NumNodes * (i-1) + 1]
+    # Right
+    trace_values[i, 2] = u[NumNodes * i]
+  end
+
+  # Bar-quantities
+  u_bar = zeros(NumElements, 2)
+
+  ALegendre = [1 Nodes[1] 0.5 * (3*Nodes[1]^2 - 1)
+               1 Nodes[2] 0.5 * (3*Nodes[2]^2 - 1)
+               1 Nodes[3] 0.5 * (3*Nodes[3]^2 - 1)]
+  
+  for i in TroubledElements
+    ULegendre = ALegendre\u[NumNodes * (i-1) + 1:NumNodes * i]
+
+    # Left
+    u_bar[i, 1] = ULegendre[2] * (-1) + ULegendre[3] * 0.5 *(3*1 - 1)
+
+    # Right
+    u_bar[i, 2] = ULegendre[2] *   1 + ULegendre[3] * 0.5 *(3*1 - 1)
+  end 
+
+  # Tilde-quantities
+  u_tilde = zeros(NumElements, 2)
+  for i in TroubledElements
+    # Left
+    u_tilde[i, 1] = minmod([u_bar[i, 1], u_Delta[i, 1], u_Delta[i, 2]])
+    # Right
+    u_tilde[i, 2] = minmod([u_bar[i, 2], u_Delta[i, 1], u_Delta[i, 2]])
+  end
+
+  for i in TroubledElements
+    u[NumNodes * (i-1) + 1] = -u_tilde[i, 1] + u_avg[i]
+    u[NumNodes * i]         =  u_tilde[i, 2] + u_avg[i]
+  end
+  
+  # For p = 2 also required
+  for i in TroubledElements
+    # Conservation of Mass
+    u[NumNodes * (i-1) + 2] = (2*u_avg[i] - Weights[1] * u[NumNodes * (i-1) + 1] 
+                                          - Weights[3] * u[NumNodes * i]) / Weights[2]
+  end
+end
+
+
 function solve!(integrator::PERK_Multi_Integrator)
   @unpack prob = integrator.sol
   @unpack alg = integrator
@@ -1052,6 +1089,8 @@ function solve!(integrator::PERK_Multi_Integrator)
             end
           end
         end
+
+        Limiterp2!(integrator.u_tmp, integrator)
 
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 

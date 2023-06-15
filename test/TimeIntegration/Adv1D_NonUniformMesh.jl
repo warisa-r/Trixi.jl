@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots, LinearAlgebra
+using OrdinaryDiffEq, Plots, LinearAlgebra, DelimitedFiles
 using Trixi
 
 ###############################################################################
@@ -12,15 +12,17 @@ PolyDeg = 2
 surface_flux = flux_lax_friedrichs
 # surface_flux = flux_godunov # Cannot extract jacobian for this
 
-#=
-volume_flux  = flux_central
-#volume_flux  = flux_lax_friedrichs
+
 basis = LobattoLegendreBasis(PolyDeg)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
-                                         alpha_max=0.5,
+                                         alpha_max=1.0,
                                          alpha_min=0.001,
                                          alpha_smooth=false,
                                          variable=Trixi.scalar)
+
+#=
+volume_flux  = flux_central
+#volume_flux  = flux_lax_friedrichs
 volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
                                                  volume_flux_dg=volume_flux,
                                                  volume_flux_fv=surface_flux)
@@ -33,7 +35,7 @@ solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 coordinates_min = -5.0 # minimum coordinate
 coordinates_max =  5.0 # maximum coordinate
 
-InitialRefinement = 6
+InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
@@ -83,9 +85,20 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
+CFL = 1.0
+
+# S=4, D=1
+#dt = 0.3125 / (2.0^(InitialRefinement - 6)) * CFL
+
+# S=4, D=2
+dt = 0.116318721309653483 / (2.0^(InitialRefinement - 6)) * CFL
+
+# S=4, D=3
+#dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
+
 StartTime = 0.0
-EndTime = 10
-#EndTime = 0.116318721309653483 / (2.0^(InitialRefinement - 6))
+#EndTime = 10
+EndTime = dt
 
 
 # Create ODEProblem
@@ -110,18 +123,16 @@ save_solution = SaveSolutionCallback(interval=1,
 #callbacks = CallbackSet(summary_callback, analysis_callback, stepsize_callback)
 #callbacks = CallbackSet(summary_callback, analysis_callback)
 
+indicator_max = IndicatorMax(semi, variable=first)
+indicator_löhner = IndicatorLöhner(semi, variable=Trixi.scalar)
+
+limiterp1_callback = Trixi.Limiterp1Callback(indicator_löhner)
+
+#callbacks = CallbackSet(summary_callback, analysis_callback, limiterp1_callback)
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
-
-CFL = 1.0
-
-# S=4, D=1
-#dt = 0.3125 / (2.0^(InitialRefinement - 6)) * CFL
-
-# S=4, D=2
-dt = 0.116318721309653483 / (2.0^(InitialRefinement - 6)) * CFL
 
 b1   = 0.0
 #b1   = 0.0
@@ -131,8 +142,8 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", 
                                  #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_Shared/",
                                  #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/Joint/",
-                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D1/", 
-                                 "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D2/", 
+                                 "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D1/", 
+                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D2/", 
                            bS, cEnd)
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
