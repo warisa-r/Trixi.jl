@@ -8,7 +8,7 @@ using Trixi
 advection_velocity = 1
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
-PolyDeg = 3
+PolyDeg = 2
 surface_flux = flux_lax_friedrichs
 # surface_flux = flux_godunov # Cannot extract jacobian for this
 
@@ -85,7 +85,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 StartTime = 0.0
 EndTime = 10
-EndTime = 0.037978948004762 / (2^(InitialRefinement - 4)) * coordinates_max
+#EndTime = 0.116318721309653483 / (2.0^(InitialRefinement - 6))
 
 
 # Create ODEProblem
@@ -115,35 +115,24 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 ###############################################################################
 # run the simulation
 
-CFL = 0.99
+CFL = 1.0
 
-# s = 2
-dtOptMin = 0.00277018416018108853 / (2^(InitialRefinement - 4)) * CFL * coordinates_max
+# S=4, D=1
+#dt = 0.3125 / (2.0^(InitialRefinement - 6)) * CFL
 
-# For s = 4
-dtOptMin = 0.0545930 / (2^(InitialRefinement - 4)) * CFL * coordinates_max
-# Joint opt
-dtOptMin = 0.037978948004762 / (2^(InitialRefinement - 4)) * CFL * coordinates_max
-
-#dtOptMin = 0.04 / (2^(InitialRefinement - 4)) * coordinates_max * CFL
-
-# s = 8, c = 1 through one shared coefficient
-#dtOptMin = 0.110754311858320 / (2^(InitialRefinement - 4)) * CFL * coordinates_max
-
-# s = 8
-#dtOptMin = 0.115024386876939388 / (2^(InitialRefinement - 4)) * CFL * coordinates_max
-
-CourantNumberMax = advection_velocity * dtOptMin / ((coordinates_max - coordinates_min) / 2^(InitialRefinement+2))
-CourantNumberMin = advection_velocity * dtOptMin / ((coordinates_max - coordinates_min) / 2^(InitialRefinement))
+# S=4, D=2
+dt = 0.116318721309653483 / (2.0^(InitialRefinement - 6)) * CFL
 
 b1   = 0.0
 #b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", 
+ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", 
                                  #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_Shared/",
-                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/Joint/", 
+                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/Joint/",
+                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D1/", 
+                                 "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D2/", 
                            bS, cEnd)
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
@@ -192,7 +181,7 @@ end
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  dt = dtOptMin,
+                  dt = dt,
                   save_everystep=false, callback=callbacks);
 
 # Print the timer summary

@@ -368,7 +368,7 @@ function get_data_1d(original_nodes, unstructured_data, nvisnodes)
 
   # Set the amount of nodes visualized according to nvisnodes.
   if nvisnodes === nothing
-    max_nvisnodes = 2 * n_nodes
+    max_nvisnodes = n_nodes # 2 * n_nodes
   elseif nvisnodes == 0
     max_nvisnodes = n_nodes
   else
@@ -385,7 +385,7 @@ function get_data_1d(original_nodes, unstructured_data, nvisnodes)
   end
 
   nodes_in, _ = gauss_lobatto_nodes_weights(n_nodes)
-  nodes_out = collect(range(-1, 1, length = max_nvisnodes))
+  nodes_out, _ = gauss_lobatto_nodes_weights(max_nvisnodes)#collect(range(-1, 1, length = max_nvisnodes))
 
   # Calculate vandermonde matrix for interpolation.
   vandermonde = polynomial_interpolation_matrix(nodes_in, nodes_out)
