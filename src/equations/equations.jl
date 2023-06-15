@@ -414,4 +414,8 @@ include("linearized_euler_2d.jl")
 
 abstract type AbstractEquationsParabolic{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
 
+# Moshpit Equations
+abstract type AbstractMoshpitEquations{NDIMS, NVARS} <: AbstractEquations{NDIMS, NVARS} end
+include("moshpit_1d.jl")
+
 end # @muladd
