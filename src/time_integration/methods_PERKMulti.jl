@@ -177,6 +177,7 @@ mutable struct PERK_Multi
   const NumStageEvalsMin::Int64
   const NumDoublings::Int64
   const NumStages::Int64
+  stage_callbacks
 
   AMatrices::Array{Float64, 3}
   c::Vector{Float64}
@@ -184,12 +185,14 @@ mutable struct PERK_Multi
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
-                      BasePathMonCoeffs_::AbstractString, bS::Float64, cEnd::Float64)
+                      BasePathMonCoeffs_::AbstractString, bS::Float64, cEnd::Float64;
+                      stage_callbacks=nothing)
 
     newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        NumStageEvalsMin_ * 2^NumDoublings_)
+                        NumStageEvalsMin_ * 2^NumDoublings_,
+                        stage_callbacks)
                         # CARE: Hack to eanble linear increasing PERK
                         #NumStageEvalsMin_ + NumDoublings_)
 
@@ -1131,6 +1134,12 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.u[i] += integrator.k_higher[i]
         #integrator.u[i] += 0.5 * (integrator.k1[i] + integrator.k_higher[i])
       end
+
+      #=
+      for stage_callback in alg.stage_callbacks
+        stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
+      end
+      =#
     end # PERK_Multi step
 
     #Limiterp1!(integrator.u, integrator)
@@ -1145,6 +1154,10 @@ function solve!(integrator::PERK_Multi_Integrator)
           cb.affect!(integrator)
         end
       end
+    end
+
+    for stage_callback in alg.stage_callbacks
+      stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
     end
 
     #=

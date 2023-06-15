@@ -52,7 +52,7 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (-2.0,)
 coordinates_max = ( 2.0,)
-InitialRef = 5
+InitialRef = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRef,
                 n_cells_max=10_000)
@@ -132,7 +132,9 @@ plotdata = nothing
 ode_algorithm = PERK_Multi(4, 2, 
                            "/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/", 
                            #"/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/Joint/", 
-                           1.0, 0.5)
+                           1.0, 0.5,
+                           stage_callbacks=(PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6, 5.0e-6),
+                                            variables=(Trixi.density, pressure)),))
 
 # S_base = 3
 dtOptMin = 0.0184927567373961221 / (2.0^(InitialRef - 6))
@@ -142,7 +144,7 @@ CFL = 0.26
 # S_base = 4
 dtOptMin = 0.0245742732349754078 / (2.0^(InitialRef - 6))
 #dtOptMin = 0.012899075796546 / (2.0^(InitialRef - 6))
-CFL = 0.2
+CFL = 0.23
 
 
 #=
