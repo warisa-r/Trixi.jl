@@ -855,8 +855,8 @@ function Limiterp1!(u, integrator::PERK_Multi_Integrator)
   NumElements = Int(length(u)/NumNodes)
 
   # TODO: Get troubled elements from indicator!
-  TroubledElements = [15, 16]
-  #TroubledElements = 1:NumElements
+  #TroubledElements = [15, 16]
+  TroubledElements = 1:NumElements
   #TroubledElements = integrator.level_info_elements_acc[1]
 
   u_avg = zeros(NumElements, 1)
@@ -1090,7 +1090,7 @@ function solve!(integrator::PERK_Multi_Integrator)
           end
         end
 
-        Limiterp2!(integrator.u_tmp, integrator)
+        #Limiterp2!(integrator.u_tmp, integrator)
 
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
@@ -1133,7 +1133,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
     end # PERK_Multi step
 
-    #Limiter!(integrator.u, integrator)
+    #Limiterp1!(integrator.u, integrator)
 
     integrator.iter += 1
     integrator.t += integrator.dt
