@@ -45,10 +45,24 @@ function boundary_condition_outflow(u_inner, orientation, normal_direction, x, t
 end
 
 # TODO: Work out reflective BC!
-function boundary_condition_reflect(u_inner, orientation, normal_direction, x, t,
-  surface_flux_function, equations::Trixi.MoshpitEquations1D)
+function boundary_condition_reflect(u_inner, orientation_or_normal, direction,
+                                    x, t,
+                                    surface_flux_function,
+                                    equations::Trixi.MoshpitEquations1D)
 
-  return SVector(u_inner[1], - u_inner[2])
+  #return SVector(u_inner[1], - u_inner[2])
+    # create the "external" boundary solution state
+    u_boundary = SVector(u_inner[1],
+                        -u_inner[2])
+
+  # calculate the boundary flux
+  if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
+    flux = surface_flux_function(u_inner, u_boundary, orientation_or_normal, equations)
+  else # u_boundary is "left" of boundary, u_inner is "right" of boundary
+    flux = surface_flux_function(u_boundary, u_inner, orientation_or_normal, equations)
+  end
+
+  return flux
 end
 
 function boundary(x, t, equations::Trixi.MoshpitEquations1D)
@@ -57,8 +71,8 @@ end
 boundary_condition_const = BoundaryConditionDirichlet(boundary)
 
 
-boundary_conditions = (x_neg=boundary_condition_const,
-                       x_pos=boundary_condition_const)
+boundary_conditions = (x_neg=boundary_condition_reflect,
+                       x_pos=boundary_condition_reflect)
                        
 initial_condition = initial_condition_shock
 
@@ -69,7 +83,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.8)
+tspan = (0.0, 2.5)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -81,7 +95,7 @@ stepsize_callback = StepsizeCallback(cfl=0.8)
 
 
 callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback,
+                        analysis_callback,
                         stepsize_callback)
 
 ###############################################################################
