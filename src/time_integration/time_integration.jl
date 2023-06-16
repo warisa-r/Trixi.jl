@@ -24,6 +24,6 @@ include("methods_PERKMulti.jl")
 include("methods_FE2S.jl")
 
 include("Heun.jl")
-
+include("methods_PartitionedRK.jl")
 
 end # @muladd

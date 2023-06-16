@@ -6,162 +6,6 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-
-function ComputePRK_Coefficients(StagesMin::Int, NumDoublings::Int, PathPseudoExtrema::AbstractString,
-                                  TrueComplexPEMax::Int)
-
-  ForwardEulerWeights = zeros(NumDoublings+1)
-  a  = zeros(TrueComplexPEMax, NumDoublings+1)
-  b1 = zeros(TrueComplexPEMax, NumDoublings+1)
-  b2 = zeros(TrueComplexPEMax, NumDoublings+1)
-
-  ### Set RKM / Butcher Tableau parameters corresponding to Base-Case (Minimal number stages) ### 
-
-  PathPureReal = PathPseudoExtrema * "PureReal" * string(StagesMin) * ".txt"
-  NumPureReal, PureReal = read_file(PathPureReal, Float64)
-
-  @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-  @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
-  ForwardEulerWeights[1] = -1.0 / PureReal[1]
-
-  PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(StagesMin) * ".txt"
-  NumTrueComplex, TrueComplex = read_file(PathTrueComplex, ComplexF64)
-  @assert NumTrueComplex == StagesMin / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-
-  # Sort ascending => ascending timesteps (real part is always negative)
-  perm = sortperm(real.(TrueComplex))
-  TrueComplex = TrueComplex[perm]
-
-  # Find first element where a timestep would be greater 1 => Special treatment
-  IndGreater1 = findfirst(x->real(x) > -1.0, TrueComplex)
-
-  if IndGreater1 === nothing
-    # Easy: All can use negated inverse root as timestep/entry
-    IndGreater1 = NumTrueComplex + 1
-  end
-
-  for i = 1:IndGreater1 - 1
-    a[i, 1]  = -1.0 / real(TrueComplex[i])
-    b1[i, 1] = -real(TrueComplex[i]) / (abs(TrueComplex[i]) .* abs.(TrueComplex[i]))
-    b2[i, 1] = b1[i, 1]
-  end
-
-  # To avoid timesteps > 1, compute difference between current maximum timestep = a[IndGreater1 - 1] +  and 1.
-  dtGreater1 = (1.0 - a[IndGreater1 - 1, 1]) / (NumTrueComplex - IndGreater1 + 1)
-
-  for i = IndGreater1:NumTrueComplex
-    # Fill gap a[IndGreater1 - 1] to 1 equidistantly
-    a[i, 1]  = a[IndGreater1 - 1, 1] + dtGreater1 * (i - IndGreater1 + 1)
-
-    b2[i, 1] = 1.0 / (abs(TrueComplex[i]) * abs(TrueComplex[i]) * a[i, 1])
-    b1[i, 1] = -2.0 * real(TrueComplex[i]) / (abs(TrueComplex[i]) * abs(TrueComplex[i])) - b2[i, 1]
-  end
-
-  # Combine distinct (!) timesteps of pure real and true complex roots
-  c = vcat(ForwardEulerWeights[1], a[:, 1])
-
-  ### Set RKM / Butcher Tableau parameters corresponding for higher stages ### 
-
-  for i = 1:NumDoublings
-    Degree = StagesMin * 2^i
-
-    PathPureReal = PathPseudoExtrema * "PureReal" * string(Degree) * ".txt"
-    NumPureReal, PureReal = read_file(PathPureReal, Float64)
-
-    @assert NumPureReal == 1 "Assume that there is only one pure real pseudo-extremum"
-    @assert PureReal[1] <= -1.0 "Assume that pure-real pseudo-extremum is smaller then 1.0"
-    ForwardEulerWeights[i+1] = -1.0 / PureReal[1]
-
-    PathTrueComplex = PathPseudoExtrema * "TrueComplex" * string(Degree) * ".txt"
-    NumTrueComplex, TrueComplex = read_file(PathTrueComplex, Complex{Float64})
-    @assert NumTrueComplex == Degree / 2 - 1 "Assume that all but one pseudo-extremum are complex"
-
-    # Sort ascending => ascending timesteps (real part is always negative)
-    perm = sortperm(real.(TrueComplex))
-    TrueComplex = TrueComplex[perm]
-
-    # Different (!) timesteps of higher degree RKM
-    c_higher = zeros(Int(Degree / 2))
-    c_higher[1] = ForwardEulerWeights[i+1]
-    for j = 2:Int(Degree / 2)
-      if j % 2 == 0 # Copy timestep from lower degree
-        c_higher[j] = c[Int(j / 2)]
-      else # Interpolate timestep
-        c_higher[j] = c[Int((j-1)/2)] + 0.5 * (c[Int((j+1)/2)] - c[Int((j-1)/2)])
-      end
-    end
-    c = copy(c_higher)
-
-    for j = 1:length(c_higher) - 1
-      a[j, i+1]  = c_higher[j+1]
-      b2[j, i+1] = 1.0 / (abs(TrueComplex[j]) * abs(TrueComplex[j]) * a[j, i+1])
-      b1[j, i+1] = -2.0 * real(TrueComplex[j]) / (abs(TrueComplex[j]) * abs(TrueComplex[j])) - b2[j, i+1]
-    end
-  end
-
-  # Re-order columns to comply with the level structure of the mesh quantities
-  perm = Vector(NumDoublings+1:-1:1)
-  permute!(ForwardEulerWeights, perm)
-  Base.permutecols!!(a, perm)
-
-  perm = Vector(NumDoublings+1:-1:1) # 'permutecols!!' "deletes" perm it seems
-  Base.permutecols!!(b1, perm)
-  
-  perm = Vector(NumDoublings+1:-1:1) # 'permutecols!!' "deletes" perm it seems
-  Base.permutecols!!(b2, perm)
-
-  println("ForwardEulerWeights:\n"); display(ForwardEulerWeights); println("\n")
-  println("a:\n"); display(a); println("\n")
-  println("b1:\n"); display(b1); println("\n")
-  println("b2:\n"); display(b2); println("\n")
-  # CARE: Here, c_i is not sum_j a_{ij} !
-  println("c:\n"); display(c); println("\n")
-
-  # Compatibility condition (https://link.springer.com/article/10.1007/BF01395956)
-  println("Sum of ForwardEuleWeight and b1, b2 pairs:")
-  display(transpose(ForwardEulerWeights) + sum(b1, dims=1) + sum(b2, dims=1)); println()
-
-  return ForwardEulerWeights, a, b1, b2, c
-end
-
-function BuildButcherTableaus(ForwardEulerWeights::Vector{Float64}, a::Matrix{Float64}, 
-                              b1::Matrix{Float64}, b2::Matrix{Float64}, c_::Vector{Float64}, 
-                              StagesMin::Int, NumDoublings::Int)
-  StagesMax = StagesMin * 2^NumDoublings
-
-  b = zeros(StagesMax)
-  b[StagesMax] = 1
-
-  c    = zeros(StagesMax)
-  c[2] = c_[1] # Smalles forward Euler (time)step
-  for i in 2:length(c_)
-    c[2*i - 1] = c_[i]
-    c[2*i]     = c_[i]
-  end
-  display(c); println()
-
-  A = zeros(NumDoublings+1, StagesMin * 2^NumDoublings, StagesMin * 2^NumDoublings)
-
-  # Try doing forward Euler step "one earlier"
-  A[2, 3, 1] = ForwardEulerWeights[2]
-  for i = 1:NumDoublings+1
-    # Forward Euler contribution
-    A[i, 2*i:end, 1] .= ForwardEulerWeights[i]
-
-    # Intermediate two-step submethods
-    for j = 1:Int((StagesMin * 2^(NumDoublings + 1 - i) - 2)/2)
-      A[i, 2^i + 2^i*j - 1, 2^i * j] = a[j, i]
-
-      A[i, (2^i + 2^i * j):end, 2^i * j]         .= b1[j, i]
-      A[i, (2^i + 2^i * j):end, 2^i + 2^i*j - 1] .= b2[j, i]
-    end
-    display(A[i, :, :]); println()
-    println("Sum of last row of A: ", sum(A[i, StagesMax, :], dims=1))
-  end
-
-  return A
-end
-
 ### Based on file "methods_2N.jl", use this as a template for P-ERK RK methods
 
 """
@@ -175,62 +19,37 @@ CarpenterKennedy2N{54, 43} methods.
 """
 
 mutable struct PRK
-  # Reference = minimum number of stages
-  StagesMin::Int
-  # Determines how often one doubles the number of stages 
-  # Number of methods = NumDoublings +1 
-  NumDoublings::Int
-  # Maximum number of stages = StagesMin * 2^NumDoublings
-  StagesMax::Int
-  # Maximum Number of True Complex Pseudo Extrema, relevant for many datastructures
-  TrueComplexPEMax::Int
-  # Timestep corresponding to lowest number of stages
-  dtOptMin::Real
-  # TODO:Add StagesMax member variable
-
-  ForwardEulerWeights::Vector{Float64}
-  a::Matrix{Float64}
-  b1::Matrix{Float64}
-  b2::Matrix{Float64}
-  c::Vector{Float64}
-
-  CommonStages::Vector{Int64}
-  ActiveLevels::Vector{Vector{Int64}}
+  Stages::Int
+  R::Int # Number partitions
 
   A::Array{Float64} # Butcher Tableaus
+  b::Vector{Float64}
+  c::Vector{Float64}
 
   # Constructor for previously computed A Coeffs
-  function PRK(StagesMin_::Int, NumDoublings_::Int, dtOptMin_::Real, 
-                PathPseudoExtrema_::AbstractString)
-    newPRK = new(StagesMin_, NumDoublings_, StagesMin_ * 2^NumDoublings_, 
-                  Int((StagesMin_ * 2^NumDoublings_ - 2)/2), dtOptMin_)
+  function PRK()
 
-    newPRK.ForwardEulerWeights, newPRK.a, newPRK.b1, newPRK.b2, newPRK.c = 
-      ComputePRK_Coefficients(StagesMin_, NumDoublings_, PathPseudoExtrema_, 
-                               newPRK.TrueComplexPEMax)
+    Stages = 4
+    R = 2
+    # Store from a_{3,j} row-wise, until a_{i,i-1} (explicit method)
+    A = zeros(R, Stages-2, Stages-1)
+    A[1, 1, 1] = 0.656796879144715
+    A[1, 1, 2] = 0.343201934078188
+    A[1, 2, 1] = 0.537422905930307
+    A[1, 2, 2] = 0.251418725645745
+    A[1, 2, 3] = 0.211157181642298
 
-    # Stages at that we have to take common steps                                 
-    newPRK.CommonStages = [4] # Forward Euler step
-    for i = 1:Int((newPRK.StagesMax / 2 - 2)/2)
-      push!(newPRK.CommonStages, 3 + i * 4)
-      push!(newPRK.CommonStages, 4 + i * 4)
+    A[2, 1, 1] = 1.0
+    A[2, 2, 1] = 1.0
+
+    b = [0.499999406841893; 0.220692431117136; 0.151540432848441; 0.127767729206276]
+    c = [1; 1; 1; 1]
+
+
+    for r = 1:R
+      display(A[r, :, :])
     end
-    println("Commonstages"); display(newPRK.CommonStages); println()
-
-    # TODO: Generalize this!
-    newPRK.ActiveLevels = [Vector{Int}() for _ in 1:newPRK.StagesMax]
-    newPRK.ActiveLevels[1] = Vector(1:newPRK.NumDoublings+1)
-    newPRK.ActiveLevels[2] = [1]
-    newPRK.ActiveLevels[3] = [1]
-    newPRK.ActiveLevels[4] = [1, 2]
-    newPRK.ActiveLevels[5] = [1]
-    newPRK.ActiveLevels[6] = [1]
-    newPRK.ActiveLevels[7] = [1, 2]
-    newPRK.ActiveLevels[8] = [1, 2]
-
-
-    newPRK.A = BuildButcherTableaus(newPRK.ForwardEulerWeights, newPRK.a, newPRK.b1, newPRK.b2, newPRK.c, 
-    StagesMin_, NumDoublings_)
+    newPRK = new(Stages, R, A, b, c)
 
     return newPRK
   end
@@ -288,8 +107,9 @@ end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
 function solve(ode::ODEProblem, alg::PRK;
-               dt::Real, callback=nothing, kwargs...)
-  u0 = copy(ode.u0) # Initial value
+               dt, callback=nothing, kwargs...)
+
+  u0 = copy(ode.u0)
   du = similar(u0)
   u_tmp = similar(u0)
 
@@ -308,7 +128,7 @@ function solve(ode::ODEProblem, alg::PRK;
   max_level = maximum_level(mesh.tree)
   n_levels = max_level - min_level + 1
 
-
+  # NOTE: Next-to-fine is NOT integrated with fine integrator
   
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
@@ -328,10 +148,12 @@ function solve(ode::ODEProblem, alg::PRK;
       push!(level_info_elements_acc[l], element_id)
     end
   end
-  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
+  @assert length(level_info_elements_acc[end]) == 
+    n_elements "highest level should contain all elements"
 
 
   # Use sets first to avoid double storage of interfaces
+  level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
   level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
   # Determine level for each interface
   for interface_id in 1:n_interfaces
@@ -347,6 +169,9 @@ function solve(ode::ODEProblem, alg::PRK;
     level_id_left  = max_level + 1 - level_left
     level_id_right = max_level + 1 - level_right
 
+    push!(level_info_interfaces_set[level_id_left], interface_id)
+    push!(level_info_interfaces_set[level_id_right], interface_id)
+
     # Add to accumulated container
     for l in level_id_left:n_levels
       push!(level_info_interfaces_set_acc[l], interface_id)
@@ -356,12 +181,18 @@ function solve(ode::ODEProblem, alg::PRK;
     end
   end
 
+  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+  end
+
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
   level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
-  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+  @assert length(level_info_interfaces_acc[end]) == 
+    n_interfaces "highest level should contain all interfaces"
 
 
   # Use sets first to avoid double storage of boundaries
@@ -394,7 +225,8 @@ function solve(ode::ODEProblem, alg::PRK;
   for level in 1:n_levels
     level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
   end
-  @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
+  @assert length(level_info_boundaries_acc[end]) == 
+    n_boundaries "highest level should contain all boundaries"
 
   level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
 
@@ -426,11 +258,12 @@ function solve(ode::ODEProblem, alg::PRK;
         push!(level_info_mortars_acc[l], mortar_id)
       end
     end
-    @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
+    @assert length(level_info_mortars_acc[end]) == 
+      n_mortars "highest level should contain all mortars"
   end
   
-
-
+  
+  # NOTE: Next-to-fine is also integrated with fine integrator
   #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors
@@ -461,12 +294,14 @@ function solve(ode::ODEProblem, alg::PRK;
       push!(level_info_elements_set_acc[l], element_id_right)
     end
   end
+  
   # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
   level_info_elements = [Vector{Int}() for _ in 1:n_levels]
   for level in 1:n_levels
     # Make sure elements are only stored once: In the finest level
     for fine_level in 1:level-1
-      level_info_elements_set[level] = setdiff(level_info_elements_set[level], level_info_elements_set[fine_level])
+      level_info_elements_set[level] = setdiff(level_info_elements_set[level], 
+                                               level_info_elements_set[fine_level])
     end
 
     level_info_elements[level] = sort(collect(level_info_elements_set[level]))
@@ -485,9 +320,11 @@ function solve(ode::ODEProblem, alg::PRK;
   for level in 1:n_levels
     level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
   end
-  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
+  @assert length(level_info_elements_acc[end]) == 
+    n_elements "highest level should contain all elements"
 
   # Use sets first to avoid double storage of interfaces
+  level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
   level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
   # Determine ODE level for each interface
   for interface_id in 1:n_interfaces
@@ -496,7 +333,6 @@ function solve(ode::ODEProblem, alg::PRK;
     element_id_right = interfaces.neighbor_ids[2, interface_id]
 
     # Interface neighboring two distinct ODE levels belong to fines one
-    
     ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
                     get(element_ODE_level_dict, element_id_right, -1))
     
@@ -505,21 +341,53 @@ function solve(ode::ODEProblem, alg::PRK;
                     get(element_ODE_level_dict, element_id_right, -1))                              
     =#
 
-    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"
+    
+    push!(level_info_interfaces_set[ode_level], interface_id)
+
+    #=
+    # TODO: Not sure if correct in this setting
+    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+    level_id_left  = max_level + 1 - level_left
+    level_id_right = max_level + 1 - level_right
+    push!(level_info_interfaces_set[level_id_left], interface_id)
+    push!(level_info_interfaces_set[level_id_right], interface_id)
+    =#
 
     # Add to accumulated container
     for l in ode_level:n_levels
       push!(level_info_interfaces_set_acc[l], interface_id)
     end
   end
+
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    # Make sure elements are only stored once: In the finest level
+    for fine_level in 1:level-1
+      level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], 
+                                                 level_info_interfaces_set[fine_level])
+    end
+
+    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+  end
+
+  #=
+  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+  for level in 1:n_levels
+    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+  end 
+  =#
+
   level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
-  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+  @assert length(level_info_interfaces_acc[end]) == 
+    n_interfaces "highest level should contain all interfaces"
 
-
+  
   # Use sets first to avoid double storage of boundaries
   level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
   # Determine level for each boundary
@@ -585,9 +453,98 @@ function solve(ode::ODEProblem, alg::PRK;
     @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
   =#
-
+  
   println("n_elements: ", n_elements)
   println("\nn_interfaces: ", n_interfaces)
+
+  println("level_info_elements:")
+  display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
+
+  println("level_info_interfaces:")
+  display(level_info_interfaces); println()
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
+
+  println("level_info_boundaries_acc:")
+  display(level_info_boundaries_acc); println()
+
+  println("level_info_mortars_acc:")
+  display(level_info_mortars_acc); println()
+
+  
+  # Set initial distribution of DG Base function coefficients 
+  @unpack equations, solver = ode.p
+  u = wrap_array(u0, mesh, equations, solver, cache)
+
+  level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
+
+  # Have if outside for performance reasons (this is also used in the AMR calls)
+  if dimensions == 1
+    for level in 1:n_levels
+      for element_id in level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  elseif dimensions == 2
+    for level in 1:n_levels
+      for element_id in level_info_elements[level]
+        indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  end
+  display(level_u_indices_elements); println()
+  
+
+  #=
+  # CARE: Hard-coded "artificial" mesh splitting in two halves
+  @assert n_elements % 4 == 0
+  level_info_elements = [Vector(Int(n_elements/2) + 1:Int(3*n_elements/4)),
+                          vcat(Vector(Int(n_elements/4) + 1:Int(n_elements/2)), 
+                              Vector(Int(3*n_elements/4) + 1:n_elements)),
+                          Vector(1:Int(n_elements/4))]
+  level_info_elements_acc = [level_info_elements[1], 
+                              vcat(level_info_elements[1], level_info_elements[2]),
+                              Vector(1:n_elements)]
+
+  element_ODE_level_dict = Dict{Int, Int}()
+  for level in 1:length(level_info_elements)
+    for element_id in level_info_elements[level]
+      push!(element_ODE_level_dict, element_id=>level)
+    end
+  end
+  display(element_ODE_level_dict); println()                              
+
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:length(level_info_elements)]
+  # Determine ODE level for each interface
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Interface neighboring two distinct ODE levels belong to finest one
+    ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
+                    get(element_ODE_level_dict, element_id_right, -1))                           
+    
+    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+
+    # Add to accumulated container
+    for l in ode_level:length(level_info_elements)
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+  end
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  for level in 1:length(level_info_elements)
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_mortars_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
 
   println("level_info_elements:")
   display(level_info_elements); println()
@@ -599,31 +556,115 @@ function solve(ode::ODEProblem, alg::PRK;
 
   println("level_info_boundaries_acc:")
   display(level_info_boundaries_acc); println()
-  
-  
+
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
   u = wrap_array(u0, mesh, equations, solver, cache)
-
-  level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
-  for level in 1:n_levels
+  level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  for level in 1:length(level_info_elements)
     for element_id in level_info_elements[level]
       indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
       append!(level_u_indices_elements[level], indices)
     end
   end
   display(level_u_indices_elements); println()
+  =#
 
+  #=
+  # CARE: Distribute level assignment randomly
+  Random.seed!(42); # Needed to fix error constant
+  level_info_elements     = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
+  level_info_elements_acc = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
+  
+  for element_id in 1:n_elements
+    level_id = Int(mod(round(1000 * rand()), alg.NumDoublings+1)) + 1
 
-  integrator = PRK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, 
-                 ode.p, # the semidiscretization
-                 (prob=ode,), # Not really sure whats going on here
-                 ode.f, # the right-hand-side of the ODE u' = f(u, p, t)
-                 alg, # The ODE integration algorithm/method
-                 PRK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
-                 level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
-                 level_info_mortars_acc, level_u_indices_elements)
+    push!(level_info_elements[level_id], element_id)
+    # Add to accumulated container
+    for l in level_id:alg.NumDoublings+1
+      push!(level_info_elements_acc[l], element_id)
+    end  
+  end
+  @assert length(level_info_elements_acc[end]) == n_elements "highest level should contain all elements"
 
+  element_ODE_level_dict = Dict{Int, Int}()
+  for level in 1:length(level_info_elements)
+    for element_id in level_info_elements[level]
+      push!(element_ODE_level_dict, element_id=>level)
+    end
+  end
+  display(element_ODE_level_dict); println()
+
+  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:length(level_info_elements)]
+  # Determine ODE level for each interface
+  for interface_id in 1:n_interfaces
+    # Get element ids
+    element_id_left  = interfaces.neighbor_ids[1, interface_id]
+    element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+    # Interface neighboring two distinct ODE levels belong to finest one
+    ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
+                    get(element_ODE_level_dict, element_id_right, -1))                           
+    
+    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"           
+
+    # Add to accumulated container
+    for l in ode_level:length(level_info_elements)
+      push!(level_info_interfaces_set_acc[l], interface_id)
+    end
+  end
+  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  for level in 1:length(level_info_elements)
+    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+  end
+  @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
+
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_mortars_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+
+  println("level_info_elements:")
+  display(level_info_elements); println()
+  println("level_info_elements_acc:")
+  display(level_info_elements_acc); println()
+
+  println("level_info_interfaces_acc:")
+  display(level_info_interfaces_acc); println()
+
+  println("level_info_boundaries_acc:")
+  display(level_info_boundaries_acc); println()
+
+  # Set initial distribution of DG Base function coefficients 
+  @unpack equations, solver = ode.p
+  u = wrap_array(u0, mesh, equations, solver, cache)
+  level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  dimensions = ndims(mesh.tree) # Spatial dimension
+  if dimensions == 1
+    for level in 1:alg.NumDoublings+1
+      for element_id in level_info_elements[level]
+        indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  elseif dimensions == 2
+    for level in 1:alg.NumDoublings+1
+      for element_id in level_info_elements[level]
+        indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+    end
+  end
+  display(level_u_indices_elements); println()
+  =#
+
+  ### Done with setting up for handling of level-dependent integration ###
+
+  integrator = PRK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+                (prob=ode,), ode.f, alg,
+                PERK_Multi_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
+                level_info_mortars_acc, level_u_indices_elements)
+            
   # initialize callbacks
   if callback isa CallbackSet
     for cb in callback.continuous_callbacks
@@ -636,7 +677,7 @@ function solve(ode::ODEProblem, alg::PRK;
     error("unsupported")
   end
 
-  # TODO: Not really elegant way, maybe try to bundle 'indices' datastructures into 'integrator' 
+  # Start actual solve
   solve!(integrator)
 end
 
@@ -661,7 +702,7 @@ function solve!(integrator::PRK_Integrator)
     end
 
     # Hard-code consistent, but not conservative RK (Tang & Warnecke)
-    
+    #=
     alg.StagesMax = 2
     alg.CommonStages = [1]
 
@@ -671,7 +712,7 @@ function solve!(integrator::PRK_Integrator)
 
     alg.A[2, :, :] = [0 0
                       0.5 0]
-    
+    =#
 
     # Osher & Sanders: Conservative, but not internally consistent
     #=
@@ -689,73 +730,47 @@ function solve!(integrator::PRK_Integrator)
     # TODO: Use this not in the multilevel context, but only throughout the entire domain to showcase optimization
 
     # TODO: Multi-threaded execution as implemented for other integrators instead of vectorized operations
-    @trixi_timeit timer() "Forward Euler Two Stage ODE integration step" begin
+    @trixi_timeit timer() "PRK" begin
       # Butcher-Tableau based approach
-      kfast = zeros(length(integrator.u), alg.StagesMax)
-      kslow = zeros(length(integrator.u), alg.StagesMax)
+      kfast = zeros(length(integrator.u), alg.Stages)
+      kslow = zeros(length(integrator.u), alg.Stages)
       
       # k1: Computed on all levels simultaneously
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       kfast[integrator.level_u_indices_elements[1], 1] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
       kslow[integrator.level_u_indices_elements[2], 1] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
 
-      for i = 2:alg.StagesMax
-        tmp = integrator.u
+      # k2: same action for all levels
+      tmp = copy(integrator.u)
+      tmp += alg.c[2] * kfast[:, 1] + alg.c[2] * kslow[:, 1]
+      integrator.f(integrator.du, tmp, prob.p, integrator.t)
+      kfast[integrator.level_u_indices_elements[1], 2] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
+      kslow[integrator.level_u_indices_elements[2], 2] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
 
+      for i = 3:alg.Stages
+        tmp = copy(integrator.u)
         # Partitioned Runge-Kutta approach: One state that contains updates from all levels
         for j = 1:i-1
-          tmp += alg.A[1, i, j] * kfast[:, j] + alg.A[2, i, j] * kslow[:, j]
+          tmp += alg.A[1, i-2, j] * kfast[:, j] + alg.A[2, i-2, j] * kslow[:, j]
         end
 
-        if i in alg.CommonStages
-          # Evaluate f with all elements
-          integrator.f(integrator.du, tmp, prob.p, integrator.t)
-          kfast[integrator.level_u_indices_elements[1], i] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
-          kslow[integrator.level_u_indices_elements[2], i] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
-        else
-          # Evaluate only fine level
-          integrator.f(integrator.du, tmp, prob.p, integrator.t,
-                       integrator.level_info_elements_acc[1],
-                       integrator.level_info_interfaces_acc[1],
-                       integrator.level_info_boundaries_acc[1],
-                       integrator.level_info_mortars_acc[1])
+        # Evaluate f with all elements
+        integrator.f(integrator.du, tmp, prob.p, integrator.t)
+        kfast[integrator.level_u_indices_elements[1], i] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
+        kslow[integrator.level_u_indices_elements[2], i] = integrator.du[integrator.level_u_indices_elements[2]] * integrator.dt
 
-          kfast[integrator.level_u_indices_elements[1], i] = integrator.du[integrator.level_u_indices_elements[1]] * integrator.dt
-        end
       end
 
-      #integrator.u += kfast[:, alg.StagesMax] + kslow[:, alg.StagesMax]
-
       # For Tang & Warneke
-      integrator.u += kslow[:, 1] + 0.5 *(kfast[:, 1] + kfast[:, 2])
+      #integrator.u += kslow[:, 1] + 0.5 *(kfast[:, 1] + kfast[:, 2])
 
       # For Osher & Sanders
       #integrator.u += 0.5 *(kslow[:, 1] + kslow[:, 2]) + 0.5 *(kfast[:, 1] + kfast[:, 2])
       
-      
-      #=
-      # First Forward Euler step
-      t_stage = integrator.t
-      integrator.f(integrator.du, integrator.u, prob.p, t_stage) # du = k1
-      integrator.u_tmp = integrator.u + alg.ForwardEulerWeight * integrator.dt * integrator.du
-      t_stage += alg.ForwardEulerWeight * integrator.dt
-
-      # Intermediate "two-step" sub methods
-      for i in eachindex(alg.a)
-        # Low-storage implementation (only one k = du):
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # du = k1
-
-        integrator.u_tmp += integrator.dt * alg.b1[i] * integrator.du
-
-        t_stage += alg.a[i] * integrator.dt
-        integrator.f(integrator.du, integrator.u_tmp + integrator.dt *(alg.a[i] - alg.b1[i]) * integrator.du, 
-                     prob.p, t_stage) # du = k2
-        integrator.u_tmp .+= integrator.dt .* alg.b2[i] .* integrator.du
+      for i = 1:alg.Stages
+        integrator.u += alg.b[i] * (kfast[:, i] + kslow[:, i])
       end
-      # Final Euler step with step length of dt (Due to form of stability polynomial)
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, t_stage) # k1
-      ntegrator.u += integrator.dt * integrator.du
-      =#
+      
     end # PRK step
 
     integrator.iter += 1
