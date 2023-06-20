@@ -13,7 +13,7 @@ solver = DGSEM(polydeg=3, surface_flux=flux_lax_friedrichs)
 
 coordinates_min = 0.0
 coordinates_max = 1.0
-InitialRefinement = 6
+InitialRefinement = 5
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=10_000)
@@ -23,14 +23,14 @@ num_leafs = length(LLID)
 
 # Refine right 3 quarters of mesh
 @assert num_leafs % 4 == 0
-Trixi.refine!(mesh.tree, LLID[Int(3*num_leafs/4)+1 : num_leafs])
+Trixi.refine!(mesh.tree, LLID[Int(round(4*num_leafs/5))+1 : num_leafs])
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.13)
+tspan = (0.0, 0.15)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -67,7 +67,18 @@ plot(sol)
 ode_algorithm = Trixi.PRK()
 
 CFL = 0.8
-dt = 0.00164648025747737847 * CFL / (2.0^(InitialRefinement - 8))
+# S = 3, p = 2
+dt = 0.00104291357216425242 / (2.0^(InitialRefinement - 7)) * CFL
+
+# S = 5, p = 2
+dt = 0.00186384918051771823 / (2.0^(InitialRefinement - 7)) * CFL
+
+# S = 8, p = 2
+dt = 0.00312564895721152431 / (2.0^(InitialRefinement - 7)) * CFL
+
+ode_algorithm = PERK_Multi(8, 1, 
+                           "/home/daniel/git/MA/EigenspectraGeneration/BurgersShock/", 
+                           1.0, 0.5, stage_callbacks = ())
 
 sol = Trixi.solve(ode, ode_algorithm,
                   #dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback

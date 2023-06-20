@@ -101,7 +101,7 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           variable=density_pressure)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRef,
-                                      max_level=InitialRef+2, max_threshold=0.01)
+                                      max_level=InitialRef+1, max_threshold=0.01)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
                            adapt_initial_condition=true,
@@ -129,22 +129,29 @@ plot(sol)
 
 plotdata = nothing
 
-ode_algorithm = PERK_Multi(4, 2, 
+#=
+ode_algorithm = PERK_Multi(3, 2, 
                            "/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/", 
                            #"/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/Joint/", 
                            1.0, 0.5,
                            stage_callbacks=(PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6, 5.0e-6),
                                             variables=(Trixi.density, pressure)),))
+=#
+
+ode_algorithm = PERK_Multi(3, 1, 
+                           "/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/", 
+                           #"/home/daniel/git/MA/EigenspectraGeneration/SedovBlast/Joint/", 
+                           1.0, 0.5, stage_callbacks = ())
 
 # S_base = 3
 dtOptMin = 0.0184927567373961221 / (2.0^(InitialRef - 6))
-CFL = 0.26
+CFL = 0.46
 
 
 # S_base = 4
-dtOptMin = 0.0245742732349754078 / (2.0^(InitialRef - 6))
+#dtOptMin = 0.0245742732349754078 / (2.0^(InitialRef - 6))
 #dtOptMin = 0.012899075796546 / (2.0^(InitialRef - 6))
-CFL = 0.23
+#CFL = 0.23
 
 
 #=
