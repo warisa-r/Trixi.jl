@@ -11,19 +11,19 @@ equations = Trixi.MoshpitEquations1D()
 solver = DGSEM(polydeg=0, surface_flux=flux_lax_friedrichs)
 
 coordinate_min = 0.0
-coordinate_max = 2.0
+coordinate_max = 5.0
 
 # Make sure to turn periodicity explicitly off as special boundary conditions are specified
 mesh = TreeMesh(coordinate_min, coordinate_max,
-                initial_refinement_level=7,
+                initial_refinement_level=8,
                 n_cells_max=10_000,
                 periodicity=false)
 
 function initial_condition_shock(x, t, equation::Trixi.MoshpitEquations1D)
-  rho = x[1] <= 0.2 || x[1] >= 1.8 ? 5.0 : 0.01
-  if x[1] <= 0.2
+  rho = x[1] <= 1.0 || x[1] >= 4.0 ? 6.0 : 0.01
+  if x[1] <= 1.0
     v = 1.0
-  elseif  x[1] >= 1.8
+  elseif  x[1] >= 4.0
     v = -1.0
   else
     v = 0.0
