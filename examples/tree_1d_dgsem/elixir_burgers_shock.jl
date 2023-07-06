@@ -137,9 +137,12 @@ dt = 0.00220876038747519488 / (2.0^(InitialRefinement - 6)) * CFL
 
 # D = 0
 
+# S = 1 (Forward Euler)
+dt = 0.00596821892657317234 # Essentially same as for S=2, p=2
+
 # S = 2
 CFL = 1.0 # Standard P-ERK
-CFL = 0.598 # Negative c
+CFL = 0.598 # Negative c (but still stable)
 dt = 0.00596821892668231158 / (2.0^(InitialRefinement - 6)) * CFL
 
 sol = Trixi.solve(ode, ode_algorithm,
