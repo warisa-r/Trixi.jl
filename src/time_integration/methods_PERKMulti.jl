@@ -100,9 +100,18 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
                                      
   # c Vector form Butcher Tableau (defines timestep per stage)
   c = zeros(Float64, NumStages)
+  #=
   for k in 2:NumStages
     c[k] = cEnd * (k - 1)/(NumStages - 1)
   end
+  =#
+  # CARE: Deliberately using negative timestep to have bad TV properties
+  
+  for k in 2:NumStages
+    c[k] = -1 * cEnd * (k - 1)/(NumStages - 1)
+  end
+  c[NumStages] = cEnd
+  
   println("Timestep-split: "); display(c); println("\n")
 
   SE_Factors = bS * reverse(c[2:end-1])
@@ -1156,9 +1165,11 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
     end
 
+    #=
     for stage_callback in alg.stage_callbacks
       stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
     end
+    =#
 
     #=
     TV = 0

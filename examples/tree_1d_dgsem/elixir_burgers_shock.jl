@@ -1,4 +1,4 @@
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -6,6 +6,7 @@ using Trixi
 
 equations = InviscidBurgersEquation1D()
 
+#=
 basis = LobattoLegendreBasis(3)
 # Use shock capturing techniques to supress oscillations at discontinuities
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -22,15 +23,29 @@ volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
                                                  volume_flux_fv=surface_flux)
                                                  
 solver = DGSEM(basis, surface_flux, volume_integral)
+=#
+
+solver = DGSEM(polydeg=0, surface_flux=flux_lax_friedrichs)
 
 coordinate_min = 0.0
 coordinate_max = 1.0
 
 # Make sure to turn periodicity explicitly off as special boundary conditions are specified
+InitialRefinement = 7
 mesh = TreeMesh(coordinate_min, coordinate_max,
-                initial_refinement_level=6,
+                initial_refinement_level=InitialRefinement,
                 n_cells_max=10_000,
-                periodicity=false)
+                #periodicity=false)
+                periodicity=true) # To be able to use P-ERK which does not yet support boundary conditions
+
+# First refinement
+# Refine mesh locally 
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+
+# Refine middle of mesh
+@assert num_leafs % 4 == 0
+Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])                
 
 # Discontinuous initial condition (Riemann Problem) leading to a shock to test e.g. correct shock speed.
 function initial_condition_shock(x, t, equation::InviscidBurgersEquation1D)
@@ -62,13 +77,13 @@ boundary_conditions = (x_neg=boundary_condition_inflow,
 initial_condition = initial_condition_shock
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
-                                    boundary_conditions=boundary_conditions)
-
+                                    #boundary_conditions=boundary_conditions)
+                                   ) # To be able to use P-ERK which does not yet support boundary conditions
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.2)
+tspan = (0.0, 0.25)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -92,7 +107,7 @@ callbacksRED = CallbackSet(summary_callback,
 # run the simulation
 
 # TODO: Check with non SSP integrator - maybe possible to produce oscillations
-
+#=
 solHeun = Trixi.solve(ode, Trixi.Heun(), #CarpenterKennedy2N54(williamson_condition=false),
             dt=1e-3, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacksRED);
@@ -104,3 +119,31 @@ solSSPRKS2 = Trixi.solve(ode, Trixi.SSPRKS2(2), #CarpenterKennedy2N54(williamson
 summary_callback() # print the timer summary
 
 println(norm(solHeun.u[end] - solSSPRKS2.u[end]))
+=#
+
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+
+ode_algorithm = PERK_Multi(2, 1, "/home/daniel/git/MA/EigenspectraGeneration/BurgersShock/D0/",
+                           bS, cEnd)
+
+# D=3, with Shock-Capturing
+
+# S = 2
+#CFL = 0.4 # Standard P-ERK
+CFL = 0.13 # Negative c
+dt = 0.00220876038747519488 / (2.0^(InitialRefinement - 6)) * CFL
+
+# D = 0
+
+# S = 2
+CFL = 1.0 # Standard P-ERK
+CFL = 0.598 # Negative c
+dt = 0.00596821892668231158 / (2.0^(InitialRefinement - 6)) * CFL
+
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = dt,
+                  save_everystep=false, callback=callbacksRED);
+plot(sol)
+plot!(getmesh(PlotData1D(sol)))

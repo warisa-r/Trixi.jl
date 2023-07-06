@@ -779,8 +779,11 @@ function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              level_info_elements_acc::Vector{Int64},
                              level_info_boundaries_acc::Vector{Int64})
   # TODO: Not sure if this is correct!
-  @unpack surface_flux_values = cache.elements[level_info_elements_acc]
-  @unpack n_boundaries_per_direction = cache.boundaries[level_info_boundaries_acc]
+  @unpack surface_flux_values = cache.elements
+  surface_flux_values = surface_flux_values[level_info_elements_acc]
+  
+  @unpack n_boundaries_per_direction = cache.boundaries
+  n_boundaries_per_direction = cache.n_boundaries_per_direction[level_info_boundaries_acc]
 
   # Calculate indices
   # TODO: Probably not that easy
