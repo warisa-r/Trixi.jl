@@ -78,7 +78,7 @@ https://spectrum.library.concordia.ca/id/eprint/985444/1/Paired-explicit-Runge-K
 """
 function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
   # Evaluate error after full domain traversion
-  if t == 40
+  if t == 20
     t = 0
   end
 
@@ -114,25 +114,24 @@ function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerE
 end
 initial_condition = initial_condition_isentropic_vortex
 
-surf_flux = flux_lax_friedrichs # = Rusanov, originally used
-surf_flux = flux_hll # Better flux, allows much larger timesteps
-PolyDeg = 6
+surf_flux = flux_hllc # Better flux, allows much larger timesteps
+PolyDeg = 3
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
-coordinates_min = (-20.0, -20.0)
-coordinates_max = ( 20.0,  20.0)
+coordinates_min = (-10.0, -10.0)
+coordinates_max = ( 10.0,  10.0)
 
 Refinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
-                n_cells_max=30_000)
+                n_cells_max=100_000)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 40.0)
+tspan = (0.0, 20.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -180,29 +179,38 @@ callbacksSSPRK22 = CallbackSet(summary_callback,
 NumCells = 2^Refinement
 NumCellsRef = 4
 
-dtRefBase = 0.255777720361038519 # 4
+# S = 4
+dtRefBase = 0.415213931783000589
 
-NumBaseStages = 8
+NumBaseStages = 4
 NumDoublings = 2
+CFL = 0.65 # Ref level: 4, S_base = 4
+#CFL = 0.67 # Ref level: 5, S_base = 4
+
+# Shared 
+#dtRefBase = 0.256993495486920
 
 #=
-NumBaseStages = 8
-NumDoublings = 2
+NumBaseStages = 4
+NumDoublings = 3
+CFL = 0.32 # Ref level: 4, S_base = 4
+CFL = 0.32 # Ref level: 3, S_base = 4
 =#
 
-CFL_Stability = 0.99
+dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL
 
-#CFL_Convergence = 0.34 # For four levels, base refinement: 4
-CFL_Convergence = 0.54 # For three levels: 4, 8, 16, base refinement: 4
-CFL_Convergence = 0.7 # For three levels: 8, 16, 32, base refinement: 4
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
 
-CFL_Stage = 1
 
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL_Stability * CFL_Convergence * CFL_Stage
+stage_limiter = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-2, 5.0e-2),
+                                                     variables=(Trixi.density, pressure)),)
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
-                "/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/S32/")
-                #"/home/daniel/Desktop/git/MA/EigenspectraGeneration/Spectra/2D_ComprEuler_Vortex/4Cells/")
+                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/",
+                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/Shared/",
+                           bS, cEnd, stage_callbacks = stage_limiter)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
@@ -212,6 +220,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 sol = solve(ode, SSPRK22(),
             dt = 42.0,
             save_everystep=false, callback=callbacksSSPRK22);
+
 
 summary_callback() # print the timer summary
 plot(sol)

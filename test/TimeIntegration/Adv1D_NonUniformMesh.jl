@@ -52,7 +52,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
 
-#=
+
 # Second refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -61,7 +61,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4)+1 : Int(3*num_leafs/4)])
-=#
+
 
 #=
 # Third refinement
@@ -87,17 +87,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 CFL = 1.0
 
-# S = 2, D = 3
-dt = 0.00318884535317920381 / (2.0^(InitialRefinement - 6)) * CFL * coordinates_max
-
-# S=4, D=1
-#dt = 0.3125 / (2.0^(InitialRefinement - 6)) * CFL
-
-# S=4, D=2
-#dt = 0.116318721309653483 / (2.0^(InitialRefinement - 6)) * CFL
-
 # S=4, D=3
-#dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
+dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
 
 StartTime = 0.0
 EndTime = 10 * rand()
@@ -138,18 +129,15 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 # run the simulation
 
 b1   = 0.0
-#b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-#=
-ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", 
-                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_Shared/",
-                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/Joint/",
-                                 "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D1/", 
-                                 #"/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_D2/", 
-                           bS, cEnd)
-=#
-ode_algorithm = Trixi.PRK()               
+
+callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
+
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
+                           bS, cEnd, stage_callbacks = callbacks_Stage)
+
+#ode_algorithm = Trixi.PRK()               
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
 
 #=
@@ -205,8 +193,8 @@ summary_callback()
 #PlotData = plot(sol)
 #savefig(PlotData, string(i) * ".png")
 
-#plot(sol)
-scatter(sol)
+plot(sol)
+#scatter(sol)
 pd = PlotData1D(sol)
 plot!(getmesh(pd))
 

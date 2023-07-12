@@ -10,22 +10,6 @@ equations = LinearScalarAdvectionEquation1D(advection_velocity)
 
 PolyDegree = 3
 
-
-surface_flux = flux_lax_friedrichs
-volume_flux  = flux_central
-basis = LobattoLegendreBasis(PolyDegree)
-indicator_sc = IndicatorHennemannGassner(equations, basis,
-                                         alpha_max=0.5,
-                                         alpha_min=0.001,
-                                         alpha_smooth=false,
-                                         variable=Trixi.scalar)
-volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
-                                                 volume_flux_dg=volume_flux,
-                                                 volume_flux_fv=surface_flux)
-
-solver = DGSEM(basis, surface_flux, volume_integral)
-
-
 solver = DGSEM(polydeg=PolyDegree, surface_flux=flux_lax_friedrichs)
 
 coordinates_min = -5.0 # minimum coordinate
@@ -43,41 +27,6 @@ initial_condition = initial_condition_gauss
 # A semidiscretization collects data structures and functions for the spatial discretization
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
-#=
-A = jacobian_ad_forward(semi)
-
-Eigenvalues = eigvals(A)
-
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = nothing
-plotdata = scatter(EigValsReal, EigValsImag, label = "Spectrum")
-display(plotdata)
-
-EigValFile = "EigenvalueList.txt"
-ofstream = open(EigValFile, "w")
-for i in eachindex(Eigenvalues)
-  realstring = string(EigValsReal[i])
-  write(ofstream, realstring)
-
-  write(ofstream, "+")
-
-  imstring = string(EigValsImag[i])
-  write(ofstream, imstring)
-  write(ofstream, "i") # Cpp uses "I" for the imaginary unit
-  if i != length(Eigenvalues)
-    write(ofstream, "\n")
-  end
-end
-close(ofstream)
-=#
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -116,7 +65,7 @@ amr_controller = ControllerThreeLevel(semi,
 
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=Interval,
+                           interval=5,
                            adapt_initial_condition=false) # Adaption of initial condition not yet supported
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
@@ -135,19 +84,17 @@ callbacksSSPRK22 = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-# S_base = 4, Shock-Capturing
-dtOptMin = 0.0842359527669032104 / (2.0^(InitialRefinement - 6))
-CFL = 0.5
+# S=4, D=3
+CFL = 0.7
+dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
 
-# S_base = 4, optimized for NO Shock-Capturing 
-dtOptMin = 0.06823193651780457 / (2.0^(InitialRefinement - 6))
-#CFL = 0.8
-CFL = 1.0 # No Shock capturing turned on
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", 
+                           bS, cEnd, stage_callbacks = ())
 
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv_3rd/", 
-                           1.0, 0.5)
-
-sol = Trixi.solve(ode, ode_algorithm, dt = dtOptMin * CFL, save_everystep=false, callback=callbacks)
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 #=
 sol = solve(ode, SSPRK22(),

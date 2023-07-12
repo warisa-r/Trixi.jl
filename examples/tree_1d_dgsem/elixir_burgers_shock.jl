@@ -17,13 +17,15 @@ indicator_sc = IndicatorHennemannGassner(equations, basis,
 
 volume_flux  = flux_ec
 surface_flux = flux_lax_friedrichs
+#surface_flux = flux_godunov
 
 volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
                                                  volume_flux_dg=surface_flux,
-                                                 volume_flux_fv=volume_flux)
+                                                 #volume_flux_fv=volume_flux) # This gives a spike for some reason
+                                                 volume_flux_fv=surface_flux)
                                                  
 solver = DGSEM(basis, surface_flux, volume_integral)
-solver = DGSEM(polydeg=PolyDeg, surface_flux=flux_lax_friedrichs)
+#solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 
 coordinate_min = 0.0
 coordinate_max = 1.0
@@ -34,9 +36,8 @@ mesh = TreeMesh(coordinate_min, coordinate_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=10_000,
                 periodicity=false)
-                #periodicity=true) # To be able to use P-ERK which does not yet support boundary conditions
 
-
+#=
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -45,6 +46,7 @@ num_leafs = length(LLID)
 # Refine middle of mesh
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : Int(3*num_leafs/4)])                
+=#
 
 # Discontinuous initial condition (Riemann Problem) leading to a shock to test e.g. correct shock speed.
 function initial_condition_shock(x, t, equation::InviscidBurgersEquation1D)
@@ -78,7 +80,6 @@ initial_condition = initial_condition_shock
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
-                                   #) # To be able to use P-ERK which does not yet support boundary conditions                                   
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -95,13 +96,25 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=0.9)
 
+amr_controller = ControllerThreeLevel(semi, 
+                                      #IndicatorMax(semi, variable=first),
+                                      indicator_sc,
+                                      base_level=InitialRefinement,
+                                      med_level=InitialRefinement+1, med_threshold=0.1, #0.1
+                                      max_level=InitialRefinement+2, max_threshold=0.6) #0.6
+
+
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=5,
+                           adapt_initial_condition=false) # Adaption of initial condition not yet supported
+
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
                         stepsize_callback)
 
 callbacksRED = CallbackSet(summary_callback,
-                           analysis_callback, alive_callback)
+                           analysis_callback, alive_callback, amr_callback)
 
 ###############################################################################
 # run the simulation
@@ -121,19 +134,24 @@ summary_callback() # print the timer summary
 println(norm(solHeun.u[end] - solSSPRKS2.u[end]))
 =#
 
-b1   = 0.0
+b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-ode_algorithm = PERK_Multi(4, 1, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/BurgersRiemannProb/",
                            bS, cEnd, stage_callbacks = ())
 
-# D=3, with Shock-Capturing
-
 # S = 2
-#CFL = 0.4 # Standard P-ERK
-CFL = 0.13 # Negative c
-dt = 0.00220876038747519488 / (2.0^(InitialRefinement - 6)) * CFL
+CFL = 0.39 # NOTE: Almost same CFL as for S=4 => I attribute this to the optimization
+dt = 0.00289164227200672036 / (2.0^(InitialRefinement - 6)) * CFL
+
+
+# S = 4
+#CFL = 0.4 # S = 4, standalone
+CFL = 0.33 # Two levels
+CFL = 0.23 # Three levels
+dt  = 0.00632331863453146105 / (2.0^(InitialRefinement - 6)) * CFL
+
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
