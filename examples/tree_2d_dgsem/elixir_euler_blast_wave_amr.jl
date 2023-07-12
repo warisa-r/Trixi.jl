@@ -36,7 +36,8 @@ function initial_condition_blast_wave(x, t, equations::CompressibleEulerEquation
 end
 initial_condition = initial_condition_blast_wave
 
-surface_flux = flux_lax_friedrichs
+#surface_flux = flux_lax_friedrichs
+surface_flux = flux_hlle
 volume_flux  = flux_ranocha
 basis = LobattoLegendreBasis(3)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -51,8 +52,9 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (-2.0, -2.0)
 coordinates_max = ( 2.0,  2.0)
+InitialRefinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=6,
+                initial_refinement_level=InitialRefinement,
                 n_cells_max=10_000)
 
 
@@ -62,7 +64,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 12.5)
+tspan = (0.0, 1.5)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -82,9 +84,11 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_min=0.001,
                                           alpha_smooth=true,
                                           variable=density_pressure)
+
+MaxRefinement = InitialRefinement + 2
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level=4,
-                                      max_level =6, max_threshold=0.01)
+                                      base_level=InitialRefinement,
+                                      max_level =MaxRefinement, max_threshold=0.01)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
                            adapt_initial_condition=true,
@@ -92,16 +96,45 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 stepsize_callback = StepsizeCallback(cfl=0.9)
 
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback,
-                        save_solution,
+callbacks_Step = CallbackSet(summary_callback,
+                        alive_callback,
                         amr_callback, stepsize_callback)
 
+callbacks = CallbackSet(summary_callback,
+                        alive_callback,
+                        amr_callback)
 
 ###############################################################################
 # run the simulation
-
+#=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
+            save_everystep=false, callback=callbacks_Step);
+=#
+
+#=
+CFL = 0.33
+dt = 0.115520691731217091 / (2.0^(InitialRefinement - 3)) * CFL
+
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_BlastWave/",
+                           bS, cEnd, stage_callbacks = ())
+=#
+
+CFL = 0.94
+dt = 0.115520691731217091 / (2.0^(MaxRefinement - 3)) * CFL                           
+ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_BlastWave/")
+
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = dt,
+                  save_everystep=false, callback=callbacks);
+
 summary_callback() # print the timer summary
+plot(sol)
+
+pd = PlotData2D(sol)
+plot(pd["p"])
+plot!(getmesh(pd))

@@ -134,7 +134,7 @@ summary_callback() # print the timer summary
 println(norm(solHeun.u[end] - solSSPRKS2.u[end]))
 =#
 
-b1   = 0.5
+b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
@@ -148,10 +148,19 @@ dt = 0.00289164227200672036 / (2.0^(InitialRefinement - 6)) * CFL
 
 # S = 4
 #CFL = 0.4 # S = 4, standalone
-CFL = 0.33 # Two levels
-CFL = 0.23 # Three levels
-dt  = 0.00632331863453146105 / (2.0^(InitialRefinement - 6)) * CFL
+CFL = 0.33 # Two levels, b1 = 0.5
+CFL = 0.23 # Three levels, b1 = 0.5
 
+CFL = 0.4 # Two levels, b1 = 0.0
+CFL = 0.26 # Three Levels, b1 = 0.0 (actually CFL = 0.27 possible, but then the mesh is only once refined)
+
+
+# S = 4 only
+CFL = 0.51
+
+dt  = 0.00632331863453146105 / (2.0^(InitialRefinement+2 - 6)) * CFL
+
+ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/BurgersRiemannProb/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
