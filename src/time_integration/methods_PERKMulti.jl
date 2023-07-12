@@ -100,18 +100,18 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
                                      
   # c Vector form Butcher Tableau (defines timestep per stage)
   c = zeros(Float64, NumStages)
-  #=
+  
   for k in 2:NumStages
     c[k] = cEnd * (k - 1)/(NumStages - 1)
   end
-  =#
-  # CARE: Deliberately using negative timestep to have bad TV properties
   
+  # CARE: Deliberately using negative timestep to have bad TV properties
+  #=
   for k in 2:NumStages
     c[k] = -1 * cEnd * (k - 1)/(NumStages - 1)
   end
   c[NumStages] = cEnd
-  
+  =#
   println("Timestep-split: "); display(c); println("\n")
 
   SE_Factors = bS * reverse(c[2:end-1])
@@ -287,14 +287,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
   n_elements   = length(elements.cell_ids)
   n_interfaces = length(interfaces.orientations)
-  n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate
+  n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
 
   min_level = minimum_level(mesh.tree)
   max_level = maximum_level(mesh.tree)
   n_levels = max_level - min_level + 1
 
   # NOTE: Next-to-fine is NOT integrated with fine integrator
-  #=
+  
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors (Especially for interfaces)
   level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
@@ -363,7 +363,9 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   # Use sets first to avoid double storage of boundaries
   level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
   # Determine level for each boundary
+
   for boundary_id in 1:n_boundaries
+    #=
     # Get element ids
     element_id_left  = boundaries.neighbor_ids[1, boundary_id]
     element_id_right = boundaries.neighbor_ids[2, boundary_id]
@@ -381,6 +383,22 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       push!(level_info_boundaries_set_acc[l], boundary_id)
     end
     for l in level_id_right:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+    =#
+
+    # CARE: May be only valid for 1D
+    # Get element id
+    element_id = boundaries.neighbor_ids[boundary_id]
+
+    # Determine level
+    level  = mesh.tree.levels[elements.cell_ids[element_id]]
+
+    # Convert to level id
+    level_id  = max_level + 1 - level
+
+    # Add to accumulated container
+    for l in level_id:n_levels
       push!(level_info_boundaries_set_acc[l], boundary_id)
     end
   end
@@ -426,10 +444,10 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     @assert length(level_info_mortars_acc[end]) == 
       n_mortars "highest level should contain all mortars"
   end
-  =#
+  
   
   # NOTE: Next-to-fine is also integrated with fine integrator
-  
+  #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors
   level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -557,6 +575,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
+    #=
     # Get element ids
     element_id_left  = boundaries.neighbor_ids[1, boundary_id]
     element_id_right = boundaries.neighbor_ids[2, boundary_id]
@@ -574,6 +593,22 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       push!(level_info_boundaries_set_acc[l], boundary_id)
     end
     for l in level_id_right:n_levels
+      push!(level_info_boundaries_set_acc[l], boundary_id)
+    end
+    =#
+
+    # CARE: May be only valid for 1D
+    # Get element id
+    element_id = boundaries.neighbor_ids[boundary_id]
+
+    # Determine level
+    level  = mesh.tree.levels[elements.cell_ids[element_id]]
+
+    # Convert to level id
+    level_id  = max_level + 1 - level
+
+    # Add to accumulated container
+    for l in level_id:n_levels
       push!(level_info_boundaries_set_acc[l], boundary_id)
     end
   end
@@ -617,7 +652,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
     @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
-  
+  =#
   
   println("n_elements: ", n_elements)
   println("\nn_interfaces: ", n_interfaces)
@@ -1066,6 +1101,12 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
       end
 
+      #=
+      for stage_callback in alg.stage_callbacks
+        stage_callback(integrator.u_tmp, integrator, prob.p, integrator.t_stage)
+      end
+      =#
+
       #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)  
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
@@ -1121,7 +1162,12 @@ function solve!(integrator::PERK_Multi_Integrator)
           end
         end
 
-
+        #=
+        for stage_callback in alg.stage_callbacks
+          stage_callback(integrator.u_tmp, integrator, prob.p, integrator.t_stage)
+        end
+        =#
+        
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
@@ -1144,11 +1190,11 @@ function solve!(integrator::PERK_Multi_Integrator)
         #integrator.u[i] += 0.5 * (integrator.k1[i] + integrator.k_higher[i])
       end
 
-      #=
+      
       for stage_callback in alg.stage_callbacks
         stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
       end
-      =#
+      
     end # PERK_Multi step
 
     #Limiterp1!(integrator.u, integrator)

@@ -152,7 +152,7 @@ function rhs!(du, u, t,
   # Calculate boundary fluxes
   @trixi_timeit timer() "boundary flux" calc_boundary_flux!(
     cache, t, boundary_conditions, mesh,
-    equations, dg.surface_integral, dg, level_info_elements_acc, level_info_boundaries_acc)
+    equations, dg.surface_integral, dg, level_info_boundaries_acc)
 
   # Calculate surface integrals
   @trixi_timeit timer() "surface integral" calc_surface_integral!(
@@ -776,27 +776,25 @@ end
 # TODO: Not sure if correct!
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
-                             level_info_elements_acc::Vector{Int64},
                              level_info_boundaries_acc::Vector{Int64})
   # TODO: Not sure if this is correct!
-  @unpack surface_flux_values = cache.elements
-  surface_flux_values = surface_flux_values[level_info_elements_acc]
-  
-  @unpack n_boundaries_per_direction = cache.boundaries
-  n_boundaries_per_direction = cache.n_boundaries_per_direction[level_info_boundaries_acc]
+  if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level
+    @unpack surface_flux_values = cache.elements
+    @unpack n_boundaries_per_direction = cache.boundaries
 
-  # Calculate indices
-  # TODO: Probably not that easy
-  lasts = accumulate(+, n_boundaries_per_direction)
-  firsts = lasts - n_boundaries_per_direction .+ 1
+    # Calculate indices
+    # TODO: Probably not that easy
+    lasts = accumulate(+, n_boundaries_per_direction)
+    firsts = lasts - n_boundaries_per_direction .+ 1
 
-  # Calc boundary fluxes in each direction
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
-                                   have_nonconservative_terms(equations), equations, surface_integral, dg, cache,
-                                   1, firsts[1], lasts[1])
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
-                                   have_nonconservative_terms(equations), equations, surface_integral, dg, cache,
-                                   2, firsts[2], lasts[2])
+    # Calc boundary fluxes in each direction
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
+                                    have_nonconservative_terms(equations), equations, surface_integral, dg, cache,
+                                    1, firsts[1], lasts[1])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
+                                    have_nonconservative_terms(equations), equations, surface_integral, dg, cache,
+                                    2, firsts[2], lasts[2])
+  end
 end
 
 

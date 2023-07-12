@@ -32,7 +32,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         n_levels = max_level - min_level + 1
 
 
-        #=
+        # Next to fine NOT integrated with fine scheme
         # Initialize storage for level-wise information
         # Set-like datastructures more suited then vectors (Especially for interfaces)
         level_info_elements                = [Vector{Int}() for _ in 1:n_levels]
@@ -93,23 +93,40 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
+          #=
           # Get element ids
           element_id_left  = boundaries.neighbor_ids[1, boundary_id]
           element_id_right = boundaries.neighbor_ids[2, boundary_id]
-    
+
           # Determine level
           level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
           level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
-    
+
           # Convert to level id
           level_id_left  = max_level + 1 - level_left
           level_id_right = max_level + 1 - level_right
-    
+
           # Add to accumulated container
           for l in level_id_left:n_levels
             push!(level_info_boundaries_set_acc[l], boundary_id)
           end
           for l in level_id_right:n_levels
+            push!(level_info_boundaries_set_acc[l], boundary_id)
+          end
+          =#
+
+          # CARE: May be only valid for 1D
+          # Get element id
+          element_id = boundaries.neighbor_ids[boundary_id]
+
+          # Determine level
+          level  = mesh.tree.levels[elements.cell_ids[element_id]]
+
+          # Convert to level id
+          level_id  = max_level + 1 - level
+
+          # Add to accumulated container
+          for l in level_id:n_levels
             push!(level_info_boundaries_set_acc[l], boundary_id)
           end
         end
@@ -156,9 +173,10 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           @assert length(integrator.level_info_mortars_acc[end]) == 
             n_mortars "highest level should contain all mortars"
         end
-        =#
-
         
+
+        # Next to fine integrated with fine scheme
+        #=
         # Initialize storage for level-wise information
         # Set-like datastructures more suited then vectors (Especially for interfaces)
         level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
@@ -246,6 +264,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
+          #=
           # Get element ids
           element_id_left  = boundaries.neighbor_ids[1, boundary_id]
           element_id_right = boundaries.neighbor_ids[2, boundary_id]
@@ -263,6 +282,22 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
             push!(level_info_boundaries_set_acc[l], boundary_id)
           end
           for l in level_id_right:n_levels
+            push!(level_info_boundaries_set_acc[l], boundary_id)
+          end
+          =#
+
+          # CARE: May be only valid for 1D
+          # Get element id
+          element_id = boundaries.neighbor_ids[boundary_id]
+
+          # Determine level
+          level  = mesh.tree.levels[elements.cell_ids[element_id]]
+
+          # Convert to level id
+          level_id  = max_level + 1 - level
+
+          # Add to accumulated container
+          for l in level_id:n_levels
             push!(level_info_boundaries_set_acc[l], boundary_id)
           end
         end
@@ -307,7 +342,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           @assert length(integrator.level_info_mortars_acc[end]) == 
             n_mortars "highest level should contain all mortars"
         end
-        
+        =#
     
         u = wrap_array(u_ode, mesh, equations, solver, cache)
     

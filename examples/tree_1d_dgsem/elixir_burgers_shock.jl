@@ -6,8 +6,8 @@ using Trixi
 
 equations = InviscidBurgersEquation1D()
 
-#=
-basis = LobattoLegendreBasis(3)
+PolyDeg = 3
+basis = LobattoLegendreBasis(PolyDeg)
 # Use shock capturing techniques to supress oscillations at discontinuities
 indicator_sc = IndicatorHennemannGassner(equations, basis,
                                          alpha_max=1.0,
@@ -20,23 +20,22 @@ surface_flux = flux_lax_friedrichs
 
 volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
                                                  volume_flux_dg=surface_flux,
-                                                 volume_flux_fv=surface_flux)
+                                                 volume_flux_fv=volume_flux)
                                                  
 solver = DGSEM(basis, surface_flux, volume_integral)
-=#
-
-solver = DGSEM(polydeg=0, surface_flux=flux_lax_friedrichs)
+solver = DGSEM(polydeg=PolyDeg, surface_flux=flux_lax_friedrichs)
 
 coordinate_min = 0.0
 coordinate_max = 1.0
 
 # Make sure to turn periodicity explicitly off as special boundary conditions are specified
-InitialRefinement = 7
+InitialRefinement = 6
 mesh = TreeMesh(coordinate_min, coordinate_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=10_000,
-                #periodicity=false)
-                periodicity=true) # To be able to use P-ERK which does not yet support boundary conditions
+                periodicity=false)
+                #periodicity=true) # To be able to use P-ERK which does not yet support boundary conditions
+
 
 # First refinement
 # Refine mesh locally 
@@ -53,6 +52,7 @@ function initial_condition_shock(x, t, equation::InviscidBurgersEquation1D)
 
   return SVector(scalar)
 end
+
 
 ###############################################################################
 # Specify non-periodic boundary conditions
@@ -77,8 +77,8 @@ boundary_conditions = (x_neg=boundary_condition_inflow,
 initial_condition = initial_condition_shock
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
-                                    #boundary_conditions=boundary_conditions)
-                                   ) # To be able to use P-ERK which does not yet support boundary conditions
+                                    boundary_conditions=boundary_conditions)
+                                   #) # To be able to use P-ERK which does not yet support boundary conditions                                   
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -125,8 +125,8 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-ode_algorithm = PERK_Multi(2, 1, "/home/daniel/git/MA/EigenspectraGeneration/BurgersShock/D0/",
-                           bS, cEnd)
+ode_algorithm = PERK_Multi(4, 1, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
+                           bS, cEnd, stage_callbacks = ())
 
 # D=3, with Shock-Capturing
 
@@ -134,16 +134,6 @@ ode_algorithm = PERK_Multi(2, 1, "/home/daniel/git/MA/EigenspectraGeneration/Bur
 #CFL = 0.4 # Standard P-ERK
 CFL = 0.13 # Negative c
 dt = 0.00220876038747519488 / (2.0^(InitialRefinement - 6)) * CFL
-
-# D = 0
-
-# S = 1 (Forward Euler)
-dt = 0.00596821892657317234 # Essentially same as for S=2, p=2
-
-# S = 2
-CFL = 1.0 # Standard P-ERK
-CFL = 0.598 # Negative c (but still stable)
-dt = 0.00596821892668231158 / (2.0^(InitialRefinement - 6)) * CFL
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
