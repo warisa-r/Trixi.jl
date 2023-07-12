@@ -186,6 +186,8 @@ mutable struct PERK_Multi
   const NumStageEvalsMin::Int64
   const NumDoublings::Int64
   const NumStages::Int64
+  const b1::Float64
+  const bS::Float64
   stage_callbacks
 
   AMatrices::Array{Float64, 3}
@@ -194,19 +196,20 @@ mutable struct PERK_Multi
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
-                      BasePathMonCoeffs_::AbstractString, bS::Float64, cEnd::Float64;
-                      stage_callbacks=nothing)
+                      BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64;
+                      stage_callbacks=())
 
     newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
                         NumStageEvalsMin_ * 2^NumDoublings_,
+                        1.0-bS_, bS_,
                         stage_callbacks)
                         # CARE: Hack to eanble linear increasing PERK
                         #NumStageEvalsMin_ + NumDoublings_)
 
     newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
-      ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS, cEnd)
+      ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
 
     return newPERK_Multi
   end
@@ -700,7 +703,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   
 
   #=
-  # CARE: Hard-coded "artificial" mesh splitting in two halves
+  # CARE: Hard-coded "artificial" mesh splitting in two halves (although mesh is uniform)
   @assert n_elements % 4 == 0
   level_info_elements = [Vector(Int(n_elements/2) + 1:Int(3*n_elements/4)),
                           vcat(Vector(Int(n_elements/4) + 1:Int(n_elements/2)), 
@@ -1185,9 +1188,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
-        # TODO: Adapt to b1 != 0, bS != 1 !
-        integrator.u[i] += integrator.k_higher[i]
-        #integrator.u[i] += 0.5 * (integrator.k1[i] + integrator.k_higher[i])
+        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
       end
 
       
