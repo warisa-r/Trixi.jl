@@ -124,6 +124,9 @@ include("callbacks_stage/callbacks_stage.jl")
 include("semidiscretization/semidiscretization_euler_gravity.jl")
 include("time_integration/time_integration.jl")
 
+# TODO: Quick & dirty include of AMR_PERK after definition of "PERK_Multi_Integrator"
+include("callbacks_step/amr_PERK.jl")
+
 # `trixi_include` and special elixirs such as `convergence_test`
 include("auxiliary/special_elixirs.jl")
 
@@ -254,6 +257,8 @@ export trixi_include, examples_dir, get_examples, default_example,
        default_example_unstructured, ode_default_options
 
 export ode_norm, ode_unstable_check
+
+export PERK, PERK_Multi
 
 export convergence_test, jacobian_fd, jacobian_ad_forward, linear_structure
 
