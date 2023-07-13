@@ -754,7 +754,6 @@ function prolong2interfaces!(cache, u,
     @unpack interfaces = cache
     @unpack orientations = interfaces
 
-    # TODO: Not sure if you can do this that easy for multiple levels
     @threaded for interface in level_info_interfaces_acc
         left_element = interfaces.neighbor_ids[1, interface]
         right_element = interfaces.neighbor_ids[2, interface]
@@ -1025,7 +1024,6 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
 end
 
 # TODO: Taal dimension agnostic
-# TODO: Probably not working yet
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
                              level_info_elements_acc::Vector{Int64},
@@ -1033,6 +1031,7 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
     @assert isempty(eachboundary(dg, cache))
 end
 
+# TODO: P-ERK equivalent needed!
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG)
     @unpack surface_flux_values = cache.elements
