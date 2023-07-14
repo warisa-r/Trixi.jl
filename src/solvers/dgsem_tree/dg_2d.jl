@@ -186,7 +186,7 @@ function rhs!(du, u, t,
               level_info_boundaries_acc::Vector{Int64},
               level_info_mortars_acc::Vector{Int64})
     # Reset du
-    @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, dg, cache)
+    @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
 
     # Calculate volume integral
     @trixi_timeit timer() "volume integral" begin 
