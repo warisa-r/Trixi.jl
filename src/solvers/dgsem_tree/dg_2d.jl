@@ -233,7 +233,6 @@ function rhs!(du, u, t,
                           boundary_conditions, mesh,
                           equations,
                           dg.surface_integral, dg,
-                          level_info_elements_acc,
                           level_info_boundaries_acc)
     end
 
@@ -1026,12 +1025,10 @@ end
 # TODO: Taal dimension agnostic
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
-                             level_info_elements_acc::Vector{Int64},
                              level_info_boundaries_acc::Vector{Int64})
     @assert isempty(eachboundary(dg, cache))
 end
 
-# TODO: P-ERK equivalent needed!
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG)
     @unpack surface_flux_values = cache.elements
@@ -1058,6 +1055,39 @@ function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                                      have_nonconservative_terms(equations),
                                      equations, surface_integral, dg, cache,
                                      4, firsts[4], lasts[4])
+end
+
+function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
+                             mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
+                             level_info_boundaries_acc::Vector{Int64})
+
+  # TODO: Not most efficient approach!
+  if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level                        
+    @unpack surface_flux_values = cache.elements
+    @unpack n_boundaries_per_direction = cache.boundaries
+
+    # Calculate indices
+    lasts = accumulate(+, n_boundaries_per_direction)
+    firsts = lasts - n_boundaries_per_direction .+ 1
+
+    # Calc boundary fluxes in each direction
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     1, firsts[1], lasts[1])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     2, firsts[2], lasts[2])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[3],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     3, firsts[3], lasts[3])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[4],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     4, firsts[4], lasts[4])
+  end
 end
 
 function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any, 4},

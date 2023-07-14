@@ -187,7 +187,8 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
         calc_boundary_flux_divergence!(cache_parabolic, t,
                                        boundary_conditions_parabolic, mesh,
                                        equations_parabolic,
-                                       dg.surface_integral, dg)
+                                       dg.surface_integral, dg,
+                                       level_info_boundaries_acc)
     end
 
     # TODO: parabolic; extend to mortars
@@ -653,6 +654,15 @@ function calc_boundary_flux_divergence!(cache, t,
     return nothing
 end
 
+function calc_boundary_flux_divergence!(cache, t,
+                                        boundary_conditions_parabolic::BoundaryConditionPeriodic,
+                                        mesh::TreeMesh{2},
+                                        equations_parabolic::AbstractEquationsParabolic,
+                                        surface_integral, dg::DG,
+                                        level_info_boundaries_acc::Vector{Int64})
+    return nothing
+end
+
 function calc_boundary_flux_gradients!(cache, t,
                                        boundary_conditions_parabolic::NamedTuple,
                                        mesh::TreeMesh{2},
@@ -767,6 +777,46 @@ function calc_boundary_flux_divergence!(cache, t,
                                                 dg, cache,
                                                 4, firsts[4], lasts[4])
 end
+
+function calc_boundary_flux_divergence!(cache, t,
+                                        boundary_conditions_parabolic::NamedTuple,
+                                        mesh::TreeMesh{2},
+                                        equations_parabolic::AbstractEquationsParabolic,
+                                        surface_integral, dg::DG,
+                                        level_info_boundaries_acc::Vector{Int64})
+    # TODO: Not most efficient approach!
+    if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level                                        
+        @unpack surface_flux_values = cache.elements
+        @unpack n_boundaries_per_direction = cache.boundaries
+
+        # Calculate indices
+        lasts = accumulate(+, n_boundaries_per_direction)
+        firsts = lasts - n_boundaries_per_direction .+ 1
+
+        # Calc boundary fluxes in each direction
+        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                    boundary_conditions_parabolic[1],
+                                                    equations_parabolic, surface_integral,
+                                                    dg, cache,
+                                                    1, firsts[1], lasts[1])
+        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                    boundary_conditions_parabolic[2],
+                                                    equations_parabolic, surface_integral,
+                                                    dg, cache,
+                                                    2, firsts[2], lasts[2])
+        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                    boundary_conditions_parabolic[3],
+                                                    equations_parabolic, surface_integral,
+                                                    dg, cache,
+                                                    3, firsts[3], lasts[3])
+        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                    boundary_conditions_parabolic[4],
+                                                    equations_parabolic, surface_integral,
+                                                    dg, cache,
+                                                    4, firsts[4], lasts[4])
+    end
+end
+
 function calc_boundary_flux_by_direction_divergence!(surface_flux_values::AbstractArray{
                                                                                         <:Any,
                                                                                         4

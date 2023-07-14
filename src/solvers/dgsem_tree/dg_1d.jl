@@ -752,7 +752,6 @@ function prolong2boundaries!(cache, u,
     return nothing
 end
 
-# TODO: Probably not working yet (never tested)
 function prolong2boundaries!(cache, u,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
                              level_info_boundaries_acc::Vector{Int64})
@@ -785,7 +784,6 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
 end
 
 # TODO: Taal dimension agnostic
-# TODO: Probably not working yet
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
                              level_info_boundaries_acc::Vector{Int64})
@@ -812,11 +810,10 @@ function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                                      2, firsts[2], lasts[2])
 end
 
-# TODO: Not sure if correct!
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
                              level_info_boundaries_acc::Vector{Int64})
-    # TODO: Not sure if this is correct!
+    # TODO: Not most efficient approach!
     if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level
         @unpack surface_flux_values = cache.elements
         @unpack n_boundaries_per_direction = cache.boundaries
