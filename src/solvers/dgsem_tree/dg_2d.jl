@@ -188,7 +188,7 @@ function rhs!(du, u, t,
   # Calculate boundary fluxes
   @trixi_timeit timer() "boundary flux" calc_boundary_flux!(
     cache, t, boundary_conditions, mesh, equations, dg.surface_integral, dg,
-    level_info_elements_acc, level_info_boundaries_acc)
+    level_info_boundaries_acc)
 
   # Prolong solution to mortars
   @trixi_timeit timer() "prolong2mortars" prolong2mortars!(
@@ -948,10 +948,8 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
 end
 
 # TODO: Taal dimension agnostic
-# TODO: Probably not working yet
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
-                             level_info_elements_acc::Vector{Int64}, 
                              level_info_boundaries_acc::Vector{Int64})
   @assert isempty(eachboundary(dg, cache))
 end
@@ -980,33 +978,33 @@ function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                                    4, firsts[4], lasts[4])
 end
 
-# TODO: Probably not correct!
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
-                             level_info_elements_acc::Vector{Int64},
                              level_info_boundaries_acc::Vector{Int64})
   
-  # TODO: Not sure if this is correct!
-  @unpack surface_flux_values = cache.elements[level_info_elements_acc]
-  @unpack n_boundaries_per_direction = cache.boundaries[level_info_boundaries_acc]
+  # TODO: Not most efficient way!
+  if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level
+    @unpack surface_flux_values = cache.elements
+    @unpack n_boundaries_per_direction = cache.boundaries
 
-  # Calculate indices
-  lasts = accumulate(+, n_boundaries_per_direction)
-  firsts = lasts - n_boundaries_per_direction .+ 1
+    # Calculate indices
+    lasts = accumulate(+, n_boundaries_per_direction)
+    firsts = lasts - n_boundaries_per_direction .+ 1
 
-  # Calc boundary fluxes in each direction
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
-                                   equations, surface_integral, dg, cache,
-                                   1, firsts[1], lasts[1])
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
-                                   equations, surface_integral, dg, cache,
-                                   2, firsts[2], lasts[2])
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[3],
-                                   equations, surface_integral, dg, cache,
-                                   3, firsts[3], lasts[3])
-  calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[4],
-                                   equations, surface_integral, dg, cache,
-                                   4, firsts[4], lasts[4])
+    # Calc boundary fluxes in each direction
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
+                                    equations, surface_integral, dg, cache,
+                                    1, firsts[1], lasts[1])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
+                                    equations, surface_integral, dg, cache,
+                                    2, firsts[2], lasts[2])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[3],
+                                    equations, surface_integral, dg, cache,
+                                    3, firsts[3], lasts[3])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[4],
+                                    equations, surface_integral, dg, cache,
+                                    4, firsts[4], lasts[4])
+  end
 end
 
 function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any,4}, t,
