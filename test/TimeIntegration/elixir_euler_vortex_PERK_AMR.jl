@@ -213,7 +213,7 @@ ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings,
                            bS, cEnd, stage_callbacks = stage_limiter)
 
                           
-ode_algorithm = PERK(NumBaseStages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
+#ode_algorithm = PERK(NumBaseStages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
 #ode_algorithm = PERK(Int(NumBaseStages*2^NumDoublings), "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
 
 CFL_AMR = 0.25
@@ -226,12 +226,6 @@ dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacksPERK);
-
-
-sol = solve(ode, SSPRK22(),
-            dt = 42.0,
-            save_everystep=false, callback=callbacksSSPRK22);
-
 
 summary_callback() # print the timer summary
 plot(sol)
