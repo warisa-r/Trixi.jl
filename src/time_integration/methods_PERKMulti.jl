@@ -182,13 +182,13 @@ This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods
 CarpenterKennedy2N{54, 43} methods.
 """
 
-mutable struct PERK_Multi
+mutable struct PERK_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
   const NumDoublings::Int64
   const NumStages::Int64
   const b1::Float64
   const bS::Float64
-  stage_callbacks
+  stage_callbacks::StageCallbacks
 
   AMatrices::Array{Float64, 3}
   c::Vector{Float64}
@@ -199,7 +199,7 @@ mutable struct PERK_Multi
                       BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64;
                       stage_callbacks=())
 
-    newPERK_Multi = new(NumStageEvalsMin_, NumDoublings_,
+    newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
                         NumStageEvalsMin_ * 2^NumDoublings_,
@@ -1036,12 +1036,10 @@ function solve!(integrator::PERK_Multi_Integrator)
       @threaded for i in eachindex(integrator.u)
         integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
       end
-
       
       for stage_callback in alg.stage_callbacks
         stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
       end
-      
     end # PERK_Multi step
 
     integrator.iter += 1
