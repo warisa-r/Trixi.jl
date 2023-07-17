@@ -286,6 +286,7 @@ function semidiscretize(semi::SemidiscretizationHyperbolicParabolic, tspan)
     return SplitODEProblem{iip}(rhs_parabolic!, rhs!, u0_ode, tspan, semi)
 end
 
+# TODO: Pass indix arrays in
 function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
 
@@ -302,6 +303,7 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     return nothing
 end
 
+# TODO: Pass indix arrays in
 function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     @unpack mesh, equations_parabolic, initial_condition, boundary_conditions_parabolic, source_terms, solver, solver_parabolic, cache, cache_parabolic = semi
 
