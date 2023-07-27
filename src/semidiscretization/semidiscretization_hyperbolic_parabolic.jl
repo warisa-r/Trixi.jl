@@ -337,10 +337,10 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
     return nothing
 end
 
-function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
-    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin 
-        # TODO: Avoid allocations, make member variable of something? 
-        # -> Could reside in (PERK) integrator, then pass in similar to indices of PERK
+function rhs_hyperbolic_parabolic!(du_ode, u_ode,
+                                   semi::SemidiscretizationHyperbolicParabolic, t)
+    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin
+        # Implementation of split ODE problem in OrdinaryDiffEq
         du_ode_hyp = similar(du_ode)
         rhs!(du_ode_hyp, u_ode, semi, t)
         rhs_parabolic!(du_ode, u_ode, semi, t)
@@ -422,6 +422,16 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                        level_info_mortars_acc)
         du_ode .+= du_ode_hyp
     end
+end
+
+function _jacobian_ad_forward(semi::SemidiscretizationHyperbolicParabolic, t0, u0_ode,
+                              du_ode, config)
+    new_semi = remake(semi, uEltype = eltype(config))
+    J = ForwardDiff.jacobian(du_ode, u0_ode, config) do du_ode, u_ode
+        Trixi.rhs_hyperbolic_parabolic!(du_ode, u_ode, new_semi, t0)
+    end
+
+    return J
 end
 
 end # @muladd
