@@ -172,7 +172,7 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
-function prolong2interfaces!(cache_parabolic, flux_viscous,
+function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
                              mesh::TreeMesh{3},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache)
@@ -262,7 +262,7 @@ function calc_interface_flux!(surface_flux_values,
 end
 
 # This is the version used when calculating the divergence of the viscous fluxes
-function prolong2boundaries!(cache_parabolic, flux_viscous,
+function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
                              mesh::TreeMesh{3},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache)

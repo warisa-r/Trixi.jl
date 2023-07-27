@@ -348,6 +348,17 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode,
     end
 end
 
+function rhs_hyperbolic_parabolic!(du_ode, u_ode,
+                                   semi::SemidiscretizationHyperbolicParabolic, t,
+                                   du_ode_hyp)
+    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin
+        # Implementation of split ODE problem in OrdinaryDiffEq
+        rhs!(du_ode_hyp, u_ode, semi, t)
+        rhs_parabolic!(du_ode, u_ode, semi, t)
+        du_ode .+= du_ode_hyp
+    end
+end
+
 # RHS for PERK integrator
 
 function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,

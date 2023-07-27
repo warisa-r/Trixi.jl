@@ -130,8 +130,11 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
                         level_info_interfaces_acc::Vector{Int64},
                         level_info_boundaries_acc::Vector{Int64},
                         level_info_mortars_acc::Vector{Int64})
-    (; u_transformed, gradients, flux_viscous) = cache_parabolic
+    #(; u_transformed, gradients, flux_viscous) = cache_parabolic
+    @unpack cache_viscous = cache_parabolic
+    @unpack u_transformed, gradients, flux_viscous = cache_viscous
 
+    
     # Convert conservative variables to a form more suitable for viscous flux calculations
     @trixi_timeit timer() "transform variables" begin
         transform_variables!(u_transformed, u, mesh, equations_parabolic,
@@ -143,14 +146,14 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
     @trixi_timeit timer() "calculate gradient" begin
         calc_gradient!(gradients, u_transformed, t, mesh, equations_parabolic,
                        boundary_conditions_parabolic, dg, cache, cache_parabolic,
-                       level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc)
+                       level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc, level_info_mortars_acc)
     end
 
     # Compute and store the viscous fluxes
     @trixi_timeit timer() "calculate viscous fluxes" begin
-        calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh,
-                             equations_parabolic, dg, cache, cache_parabolic,
-                             level_info_elements_acc)
+    calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh,
+                            equations_parabolic, dg, cache, cache_parabolic,
+                            level_info_elements_acc)
     end
 
     # The remainder of this function is essentially a regular rhs! for parabolic
@@ -336,7 +339,8 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
-function prolong2interfaces!(cache_parabolic, flux_viscous,
+function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
+                             #flux_viscous,
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache)
@@ -375,7 +379,7 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
-function prolong2interfaces!(cache_parabolic, flux_viscous,
+function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
@@ -491,7 +495,8 @@ function calc_interface_flux!(surface_flux_values,
 end
 
 # This is the version used when calculating the divergence of the viscous fluxes
-function prolong2boundaries!(cache_parabolic, flux_viscous,
+function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
+                             #flux_viscous,
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache)
@@ -540,7 +545,7 @@ function prolong2boundaries!(cache_parabolic, flux_viscous,
 end
 
 # This is the version used when calculating the divergence of the viscous fluxes
-function prolong2boundaries!(cache_parabolic, flux_viscous,
+function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
@@ -1416,8 +1421,8 @@ function calc_gradient!(gradients, u_transformed, t,
 
     # Reset du
     @trixi_timeit timer() "reset gradients" begin
-        reset_du!(gradients_x, dg, cache)
-        reset_du!(gradients_y, dg, cache)
+        reset_du!(gradients_x, level_info_elements_acc)
+        reset_du!(gradients_y, level_info_elements_acc)
     end
 
     # Calculate volume integral

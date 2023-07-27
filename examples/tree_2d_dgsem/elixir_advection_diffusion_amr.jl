@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -6,7 +6,7 @@ using Trixi
 
 advection_velocity = (1.5, 1.0)
 equations = LinearScalarAdvectionEquation2D(advection_velocity)
-diffusivity() = 5.0e-2
+diffusivity() = 1.0e-2
 equations_parabolic = LaplaceDiffusion2D(diffusivity(), equations)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -16,10 +16,16 @@ coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
 coordinates_max = ( 1.0,  1.0) # maximum coordinates (max(x), max(y))
 
 # Create a uniformly refined mesh with periodic boundaries
+InitialRefinement = 3
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=InitialRefinement,
                 periodicity=true,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
+
+LLID = Trixi.local_leaf_cells(mesh.tree)
+num_leafs = length(LLID)
+@assert num_leafs % 8 == 0
+Trixi.refine!(mesh.tree, LLID[1:Int(num_leafs/8)])                
 
 # Define initial condition
 function initial_condition_diffusive_convergence_test(x, t, equation::LinearScalarAdvectionEquation2D)
@@ -48,6 +54,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh,
                                              boundary_conditions=(boundary_conditions,
                                                                   boundary_conditions_parabolic))
 
+A = jacobian_ad_forward(semi)                                                                  
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -71,7 +78,7 @@ amr_controller = ControllerThreeLevel(semi,
                                       IndicatorMax(semi, variable=first),
                                       base_level=3,
                                       med_level=4, med_threshold=0.8,
-                                      max_level=5, max_threshold=1.2)
+                                      max_level=5, max_threshold=1.45)
 
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
@@ -79,12 +86,27 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback, amr_callback)
+#callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback)
 
 
 ###############################################################################
 # run the simulation
 
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
+#=
+CFL = 0.7
+dt = 0.0980254953143230487 / (2.0^(InitialRefinement - 2)) * CFL
+
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv_Diff/", 
+                           bS, cEnd, stage_callbacks = ())
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+=#
+
+
 alg = RDPK3SpFSAL49()
 time_int_tol = 1.0e-11
 sol = solve(ode, alg; abstol=time_int_tol, reltol=time_int_tol,
