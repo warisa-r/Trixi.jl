@@ -300,7 +300,6 @@ function semidiscretize(semi::SemidiscretizationHyperbolicParabolic, tspan;
     end
 end
 
-# TODO: Pass indix arrays in
 function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
 
@@ -317,7 +316,6 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     return nothing
 end
 
-# TODO: Pass indix arrays in
 function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     @unpack mesh, equations_parabolic, initial_condition, boundary_conditions_parabolic, source_terms, solver, solver_parabolic, cache, cache_parabolic = semi
 
@@ -349,4 +347,81 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
         du_ode .+= du_ode_hyp
     end
 end
+
+# RHS for PERK integrator
+
+function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
+              level_info_elements_acc::Vector{Int64},
+              level_info_interfaces_acc::Vector{Int64},
+              level_info_boundaries_acc::Vector{Int64},
+              level_info_mortars_acc::Vector{Int64})
+    @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
+
+    u = wrap_array(u_ode, mesh, equations, solver, cache)
+    du = wrap_array(du_ode, mesh, equations, solver, cache)
+
+    # TODO: Taal decide, do we need to pass the mesh?
+    time_start = time_ns()
+    @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition,
+                                      boundary_conditions, source_terms, solver, cache,
+                                      level_info_elements_acc,
+                                      level_info_interfaces_acc,
+                                      level_info_boundaries_acc,
+                                      level_info_mortars_acc)
+    runtime = time_ns() - time_start
+    put!(semi.performance_counter.counters[1], runtime)
+
+    return nothing
+end
+
+function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
+                        level_info_elements_acc::Vector{Int64},
+                        level_info_interfaces_acc::Vector{Int64},
+                        level_info_boundaries_acc::Vector{Int64},
+                        level_info_mortars_acc::Vector{Int64})
+    @unpack mesh, equations_parabolic, initial_condition, boundary_conditions_parabolic, source_terms, solver, solver_parabolic, cache, cache_parabolic = semi
+
+    u = wrap_array(u_ode, mesh, equations_parabolic, solver, cache_parabolic)
+    du = wrap_array(du_ode, mesh, equations_parabolic, solver, cache_parabolic)
+
+    # TODO: Taal decide, do we need to pass the mesh?
+    time_start = time_ns()
+    @trixi_timeit timer() "parabolic rhs!" rhs_parabolic!(du, u, t, mesh,
+                                                          equations_parabolic,
+                                                          initial_condition,
+                                                          boundary_conditions_parabolic,
+                                                          source_terms,
+                                                          solver, solver_parabolic,
+                                                          cache, cache_parabolic,
+                                                          level_info_elements_acc,
+                                                          level_info_interfaces_acc,
+                                                          level_info_boundaries_acc,
+                                                          level_info_mortars_acc)
+    runtime = time_ns() - time_start
+    put!(semi.performance_counter.counters[2], runtime)
+
+    return nothing
+end
+
+function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
+                                   level_info_elements_acc::Vector{Int64},
+                                   level_info_interfaces_acc::Vector{Int64},
+                                   level_info_boundaries_acc::Vector{Int64},
+                                   level_info_mortars_acc::Vector{Int64},
+                                   du_ode_hyp)
+    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin 
+        # TODO: Avoid allocations, make member variable of something? 
+        # -> Could reside in (PERK) integrator, then pass in similar to indices of PERK
+        rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
+             level_info_interfaces_acc,
+             level_info_boundaries_acc,
+             level_info_mortars_acc)
+        rhs_parabolic!(du_ode, u_ode, semi, t, level_info_elements_acc,
+                       level_info_interfaces_acc,
+                       level_info_boundaries_acc,
+                       level_info_mortars_acc)
+        du_ode .+= du_ode_hyp
+    end
+end
+
 end # @muladd
