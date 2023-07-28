@@ -5,9 +5,9 @@ using Trixi
 ###############################################################################
 # semidiscretization of the linear advection diffusion equation
 
-advection_velocity = 0.1
+advection_velocity = 1
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
-diffusivity() = 0.1
+diffusivity() = 2e-3
 equations_parabolic = LaplaceDiffusion1D(diffusivity(), equations)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -89,12 +89,24 @@ callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback, amr
 ###############################################################################
 # run the simulation
 
+CFL = 0.5
+dt = 0.180811925990383315 / (2.0^(InitialRefinement - 4)) * CFL
+
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff/", 
+                           bS, cEnd, stage_callbacks = ())
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+
+#=
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
 time_int_tol = 1.0e-10
 time_abs_tol = 1.0e-10
 sol = solve(ode, KenCarp4(autodiff=false), abstol=time_abs_tol, reltol=time_int_tol,
             save_everystep=false, callback=callbacks)
-
+=#
 # Print the timer summary
 summary_callback()
 plot(sol)

@@ -6,7 +6,7 @@ using Trixi
 
 advection_velocity = (1.5, 1.0)
 equations = LinearScalarAdvectionEquation2D(advection_velocity)
-diffusivity() = 1.0e-2
+diffusivity() = 1.0e-3
 equations_parabolic = LaplaceDiffusion2D(diffusivity(), equations)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -54,7 +54,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh,
                                              boundary_conditions=(boundary_conditions,
                                                                   boundary_conditions_parabolic))
 
-A = jacobian_ad_forward(semi)                                                                  
+#A = jacobian_ad_forward(semi)                                                                  
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -93,9 +93,9 @@ callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback, amr
 # run the simulation
 
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
-#=
+
 CFL = 0.7
-dt = 0.0980254953143230487 / (2.0^(InitialRefinement - 2)) * CFL
+dt = 0.0454358300175954355 / (2.0^(InitialRefinement - 3)) * CFL
 
 b1   = 0.0
 bS   = 1.0 - b1
@@ -104,7 +104,7 @@ ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spe
                            bS, cEnd, stage_callbacks = ())
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-=#
+
 
 
 alg = RDPK3SpFSAL49()
