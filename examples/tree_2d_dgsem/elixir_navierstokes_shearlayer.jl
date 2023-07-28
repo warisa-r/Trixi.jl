@@ -34,6 +34,7 @@ solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
+InitialRefinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=100_000)
@@ -57,12 +58,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
-amr_indicator = IndicatorHennemannGassner(semi,
-                                          alpha_max=0.5,
-                                          alpha_min=0.001,
-                                          alpha_smooth=true,
-                                          variable=density_pressure)
-amr_indicator = IndicatorLöhner(semi, variable=v1)                                          
+amr_indicator = IndicatorLöhner(semi, variable=v_x)                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=4,
                                       med_level = 5, med_threshold=0.05,
@@ -80,10 +76,24 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
+CFL = 0.5
+dt = 0.00320512892678380019  / (2.0^(InitialRefinement - 3)) * CFL
+
+
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
+                           bS, cEnd, stage_callbacks = ())
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+
+#=
 time_int_tol = 1e-8
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 summary_callback() # print the timer summary
+=#
 plot(sol)
 pd = PlotData2D(sol)
 plot!(getmesh(pd))
