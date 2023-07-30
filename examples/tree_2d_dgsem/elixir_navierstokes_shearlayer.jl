@@ -47,7 +47,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 1.0)
-ode = semidiscretize(semi, tspan; split_form = false)
+ode = semidiscretize(semi, tspan; split_form = true)
 
 summary_callback = SummaryCallback()
 
@@ -76,24 +76,28 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-CFL = 0.5
+
+CFL = 0.5 # b1 = 0
+CFL = 0.57 # b1 = 0.5
 dt = 0.00320512892678380019  / (2.0^(InitialRefinement - 3)) * CFL
 
-
-b1   = 0.0
+#=
+b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            bS, cEnd, stage_callbacks = ())
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+=#
 
-#=
-time_int_tol = 1e-8
+time_int_tol = 1e-6
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
+
+
 summary_callback() # print the timer summary
-=#
+
 plot(sol)
 pd = PlotData2D(sol)
 plot!(getmesh(pd))
