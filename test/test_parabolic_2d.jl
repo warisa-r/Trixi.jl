@@ -159,6 +159,10 @@ isdir(outdir) && rm(outdir, recursive=true)
   @trixi_testset "TreeMesh2D: elixir_navierstokes_convergence.jl" begin
     @test_trixi_include(joinpath(examples_dir(), "tree_2d_dgsem", "elixir_navierstokes_convergence.jl"),
       initial_refinement_level = 2, tspan=(0.0, 0.1),
+      analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
+      extra_analysis_integrals=(energy_kinetic,
+                                energy_internal,
+                                enstrophy)),
       l2 = [0.002111672530658797, 0.0034322351490857846, 0.0038742528195910416, 0.012469246082568561],
       linf = [0.012006418939223495, 0.035520871209746126, 0.024512747492231427, 0.11191122588756564]
     )
@@ -225,6 +229,13 @@ isdir(outdir) && rm(outdir, recursive=true)
       initial_refinement_level = 2, tspan=(0.0, 0.5),
       l2 = [0.00015144571529699053, 0.018766076072331623, 0.007065070765652574, 0.0208399005734258],
       linf = [0.0014523369373669048, 0.12366779944955864, 0.05532450997115432, 0.16099927805328207]
+    )
+  end
+
+  @trixi_testset "TreeMesh2D: elixir_navierstokes_taylor_green_vortex.jl" begin
+    @test_trixi_include(joinpath(examples_dir(), "tree_2d_dgsem", "elixir_navierstokes_taylor_green_vortex.jl"),
+      l2 = [0.0009279657228109691, 0.012454661988687185, 0.012454661988689886, 0.030487112728612178],
+      linf = [0.002435582543096171, 0.024824039368199546, 0.024824039368212758, 0.06731583711777489]
     )
   end
 
