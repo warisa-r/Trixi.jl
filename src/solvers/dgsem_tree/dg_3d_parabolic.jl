@@ -172,10 +172,10 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
-function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
+function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{elType}},
                              mesh::TreeMesh{3},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {elType}
     @unpack interfaces = cache_parabolic
     @unpack orientations = interfaces
 
@@ -262,10 +262,10 @@ function calc_interface_flux!(surface_flux_values,
 end
 
 # This is the version used when calculating the divergence of the viscous fluxes
-function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{Float64}},
+function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{elType}},
                              mesh::TreeMesh{3},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {elType}
     @unpack boundaries = cache_parabolic
     @unpack orientations, neighbor_sides = boundaries
     flux_viscous_x, flux_viscous_y, flux_viscous_z = flux_viscous
@@ -596,15 +596,11 @@ function calc_boundary_flux_by_direction_divergence!(surface_flux_values::Abstra
 end
 
 function prolong2mortars!(cache,
-                          #=
-                          flux_viscous::Tuple{AbstractArray, AbstractArray,
-                                              AbstractArray},
-                          =#
-                          flux_viscous::Vector{Array{Float64}},
+                          flux_viscous::Vector{Array{elType}},
                           mesh::TreeMesh{3},
                           equations_parabolic::AbstractEquationsParabolic,
                           mortar_l2::LobattoLegendreMortarL2,
-                          surface_integral, dg::DGSEM)
+                          surface_integral, dg::DGSEM) where{elType}
     # temporary buffer for projections
     @unpack fstar_tmp1_threaded = cache # CARE: Not sure if I have to do something with this (not present in 2D)
 

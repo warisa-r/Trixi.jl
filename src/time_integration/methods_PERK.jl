@@ -122,6 +122,7 @@ mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_Int
   k1::uType
   k_higher::uType
   t_stage::RealT
+  du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
 end
 
 # Forward integrator.stats.naccept to integrator.iter (see GitHub PR#771)
@@ -145,6 +146,8 @@ function solve(ode::ODEProblem, alg::PERK;
   k1       = similar(u0)
   k_higher = similar(u0)
 
+  du_ode_hyp = similar(u0) # TODO: Not best solution since this is not needed for hyperbolic problems
+
   t0 = first(ode.tspan)
   iter = 0
 
@@ -152,7 +155,7 @@ function solve(ode::ODEProblem, alg::PERK;
   integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                 (prob=ode,), ode.f, alg,
                 PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
-                k1, k_higher, t0)
+                k1, k_higher, t0, du_ode_hyp)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -190,7 +193,7 @@ function solve!(integrator::PERK_Integrator)
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       # k1: 
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
@@ -203,7 +206,7 @@ function solve!(integrator::PERK_Integrator)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
       end
 
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
 
       @threaded for i in eachindex(integrator.du)
         integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -219,7 +222,7 @@ function solve!(integrator::PERK_Integrator)
             alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
         end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
 
         @threaded for i in eachindex(integrator.du)
           integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -281,6 +284,9 @@ function Base.resize!(integrator::PERK_Integrator, new_size)
 
   resize!(integrator.k1, new_size)
   resize!(integrator.k_higher, new_size)
+
+  # TODO: Move this into parabolic cache or similar
+  resize!(integrator.du_ode_hyp, new_size)
 end
 
 end # @muladd
