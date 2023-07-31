@@ -376,11 +376,9 @@ end
                                                                                       operator_type::Gradient,
                                                                                       equations::CompressibleNavierStokesDiffusion2D{
                                                                                                                                      GradientVariablesPrimitive
-                                                                                                                                     })
-    @trixi_timeit timer() "boundary_value_function" begin                                                                                                                               
+                                                                                                                                     })                                                                                                                     
     v1, v2 = boundary_condition.boundary_condition_velocity.boundary_value_function(x, t,
-                                                                                    equations)
-    end                                                                                    
+                                                                                    equations)                                                                              
     return SVector(u_inner[1], v1, v2, u_inner[4])
 end
 

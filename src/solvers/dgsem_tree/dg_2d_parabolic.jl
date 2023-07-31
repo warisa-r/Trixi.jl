@@ -707,7 +707,6 @@ function calc_boundary_flux_gradients!(cache, t,
     firsts = lasts - n_boundaries_per_direction .+ 1
 
     # Calc boundary fluxes in each direction
-    @trixi_timeit timer() "gradients" begin
     calc_boundary_flux_by_direction_gradient!(surface_flux_values, t,
                                             boundary_conditions_parabolic[1],
                                             equations_parabolic, surface_integral, dg,
@@ -727,8 +726,7 @@ function calc_boundary_flux_gradients!(cache, t,
                                             boundary_conditions_parabolic[4],
                                             equations_parabolic, surface_integral, dg,
                                             cache,
-                                            4, firsts[4], lasts[4])
-    end                                            
+                                            4, firsts[4], lasts[4])                                         
 end
 function calc_boundary_flux_by_direction_gradient!(surface_flux_values::AbstractArray{
                                                                                       <:Any,
@@ -743,9 +741,7 @@ function calc_boundary_flux_by_direction_gradient!(surface_flux_values::Abstract
     @unpack surface_flux = surface_integral
     @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
 
-    @trixi_timeit timer() "Threaded" begin
     @threaded for boundary in first_boundary:last_boundary
-        @trixi_timeit timer() "for loop" begin
         # Get neighboring element
         neighbor = neighbor_ids[boundary]
 
@@ -765,20 +761,15 @@ function calc_boundary_flux_by_direction_gradient!(surface_flux_values::Abstract
 
             x = get_node_coords(node_coordinates, equations_parabolic, dg, i, boundary)
             
-            @trixi_timeit timer() "BC eval" begin dummy = boundary_condition(flux_inner, u_inner,
-                                      get_unsigned_normal_vector_2d(direction),
-                                      x, t, Gradient(), equations_parabolic) end
             flux = boundary_condition(flux_inner, u_inner,
                                       get_unsigned_normal_vector_2d(direction),
-                                      x, t, Gradient(), equations_parabolic)
+                                      x, t, Gradient(), equations_parabolic)                                  
 
             # Copy flux to left and right element storage
             for v in eachvariable(equations_parabolic)
                 surface_flux_values[v, i, direction, neighbor] = flux[v]
             end
         end
-        end
-    end
     end
     return nothing
 end

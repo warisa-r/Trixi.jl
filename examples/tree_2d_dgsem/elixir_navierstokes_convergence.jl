@@ -44,7 +44,6 @@ Trixi.refine!(mesh.tree, LLID[1:64])
 #       and by the initial condition (which passes in `CompressibleEulerEquations2D`).
 # This convergence test setup was originally derived by Andrew Winters (@andrewwinters5000)
 function initial_condition_navier_stokes_convergence_test(x, t, equations)
-  Trixi.@trixi_timeit Trixi.timer() "initial_condition_navier_stokes_convergence_test" begin
   # Amplitude and shift
   A = 0.5
   c = 2.0
@@ -58,7 +57,7 @@ function initial_condition_navier_stokes_convergence_test(x, t, equations)
   v1  = sin(pi_x) * log(x[2] + 2.0) * (1.0 - exp(-A * (x[2] - 1.0)) ) * cos(pi_t)
   v2  = v1
   p   = rho^2
-  end
+
   return prim2cons(SVector(rho, v1, v2, p), equations)
 end
 
@@ -186,7 +185,7 @@ end
 initial_condition = initial_condition_navier_stokes_convergence_test
 
 # BC types
-velocity_bc_top_bottom = NoSlip((x, t, equations) -> initial_condition_navier_stokes_convergence_test(x, t, equations)[2:3])
+velocity_bc_top_bottom = NoSlip((x, t, equations) -> SVector(initial_condition_navier_stokes_convergence_test(x, t, equations)[2], initial_condition_navier_stokes_convergence_test(x, t, equations)[3]))
 heat_bc_top_bottom = Adiabatic((x, t, equations) -> 0.0)
 boundary_condition_top_bottom = BoundaryConditionNavierStokesWall(velocity_bc_top_bottom, heat_bc_top_bottom)
 
