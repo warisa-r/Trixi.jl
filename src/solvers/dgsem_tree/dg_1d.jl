@@ -131,12 +131,13 @@ end
 # RHS for PERK integrator
 function rhs!(du, u, t,
               mesh::TreeMesh{1}, equations,
-              initial_condition, boundary_conditions, source_terms,
+              initial_condition, boundary_conditions, source_terms::Source,
               dg::DG, cache,
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
               level_info_boundaries_acc::Vector{Int64},
-              level_info_mortars_acc::Vector{Int64}) # Mortars actually not appearant in 1D
+              # Mortars actually not appearant in 1D
+              level_info_mortars_acc::Vector{Int64}) where {Source}
     # Reset du
     @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
 

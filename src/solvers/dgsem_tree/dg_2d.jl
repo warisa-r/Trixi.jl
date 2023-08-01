@@ -179,12 +179,12 @@ end
 # RHS for PERK integrator
 function rhs!(du, u, t,
               mesh::TreeMesh{2}, equations,
-              initial_condition, boundary_conditions, source_terms,
+              initial_condition, boundary_conditions, source_terms::Source,
               dg::DG, cache,
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
               level_info_boundaries_acc::Vector{Int64},
-              level_info_mortars_acc::Vector{Int64})
+              level_info_mortars_acc::Vector{Int64}) where {Source}
     # Reset du
     @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
 
