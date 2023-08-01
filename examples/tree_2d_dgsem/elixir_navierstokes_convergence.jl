@@ -245,7 +245,7 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt =
             ode_default_options()..., callback=callbacks)
        
 
-
+#=
 CFL = 0.53
 dt = 0.0272853466311062236 / (2.0^(InitialRefinement - 3)) * CFL
 
@@ -271,9 +271,8 @@ S = 16
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/")
 
-
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-
+=#
 summary_callback() # print the timer summary
 
 plot(sol)

@@ -340,10 +340,10 @@ end
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
 function prolong2interfaces!(cache_parabolic,
-                             flux_viscous::Vector{Array{elType}},
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache) where{elType}
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
     @unpack orientations = interfaces
 
@@ -380,11 +380,11 @@ end
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
 function prolong2interfaces!(cache_parabolic,
-                             flux_viscous::Vector{Array{elType}},
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_interfaces_acc::Vector{Int64}) where {elType}
+                             level_info_interfaces_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
     @unpack orientations = interfaces
 
@@ -497,10 +497,10 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 function prolong2boundaries!(cache_parabolic,
-                             flux_viscous::Vector{Array{elType}},
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache) where {elType}
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack orientations, neighbor_sides = boundaries
     flux_viscous_x, flux_viscous_y = flux_viscous
@@ -547,11 +547,11 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 function prolong2boundaries!(cache_parabolic,
-                             flux_viscous::Vector{Array{elType}},
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_boundaries_acc::Vector{Int64}) where {elType}
+                             level_info_boundaries_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack orientations, neighbor_sides = boundaries
     flux_viscous_x, flux_viscous_y = flux_viscous
@@ -900,11 +900,11 @@ function calc_boundary_flux_by_direction_divergence!(surface_flux_values::Abstra
 end
 
 function prolong2mortars!(cache,
-                          flux_viscous::Vector{Array{elType}},
+                          flux_viscous::Vector{Array{uEltype, 4}},
                           mesh::TreeMesh{2},
                           equations_parabolic::AbstractEquationsParabolic,
                           mortar_l2::LobattoLegendreMortarL2, surface_integral,
-                          dg::DGSEM) where {elType}
+                          dg::DGSEM) where {uEltype <: Real}
     flux_viscous_x, flux_viscous_y = flux_viscous
     @threaded for mortar in eachmortar(dg, cache)
         large_element = cache.mortars.neighbor_ids[3, mortar]
@@ -998,12 +998,12 @@ function prolong2mortars!(cache,
 end
 
 function prolong2mortars!(cache,
-                          flux_viscous::Vector{Array{elType}},
+                          flux_viscous::Vector{Array{uEltype, 4}},
                           mesh::TreeMesh{2},
                           equations_parabolic::AbstractEquationsParabolic,
                           mortar_l2::LobattoLegendreMortarL2, surface_integral,
                           dg::DGSEM,
-                          level_info_mortars_acc::Vector{Int64}) where {elType}
+                          level_info_mortars_acc::Vector{Int64}) where {uEltype <: Real}
     flux_viscous_x, flux_viscous_y = flux_viscous
     @threaded for mortar in level_info_mortars_acc
         large_element = cache.mortars.neighbor_ids[3, mortar]
