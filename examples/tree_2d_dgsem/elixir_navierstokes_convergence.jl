@@ -32,12 +32,13 @@ Trixi.refine!(mesh.tree, LLID[1:16])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
 =#
-
+#=
 # Refinement tailored to initial_refinement = 4
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:64])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:64])
+=#
 
 # Note: the initial condition cannot be specialized to `CompressibleNavierStokesDiffusion2D`
 #       since it is called by both the parabolic solver (which passes in `CompressibleNavierStokesDiffusion2D`)
@@ -225,8 +226,8 @@ plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span `tspan`
-tspan = (0.0, 0.001)
-ode = semidiscretize(semi, tspan; split_form = false)
+tspan = (0.0, 0.5)
+ode = semidiscretize(semi, tspan; split_form = true)
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
@@ -237,11 +238,11 @@ callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
 ###############################################################################
 # run the simulation
 
-#=
+
 time_int_tol = 1e-8
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt = 1e-5,
             ode_default_options()..., callback=callbacks)
-=#            
+       
 
 
 CFL = 0.53
