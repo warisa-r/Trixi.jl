@@ -227,7 +227,8 @@ plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
 
 # Create ODE problem with time span `tspan`
 tspan = (0.0, 0.5)
-ode = semidiscretize(semi, tspan; split_form = true)
+#ode = semidiscretize(semi, tspan; split_form = true)
+ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
