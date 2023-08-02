@@ -928,7 +928,6 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
-      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)  
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -1002,7 +1001,9 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
+        #integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
+        # Slightly more performant version
+        integrator.u[i] += integrator.k_higher[i]
       end
       
       for stage_callback in alg.stage_callbacks
