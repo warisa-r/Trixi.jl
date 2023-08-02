@@ -5,14 +5,14 @@ using Trixi
 # semidiscretization of the ideal compressible Navier-Stokes equations
 
 prandtl_number() = 0.72
-mu() = 0.0001
+mu() = 1e-5
 
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(), Prandtl=prandtl_number(),
                                                           gradient_variables=GradientVariablesPrimitive())
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-solver = DGSEM(polydeg=3, surface_flux=flux_lax_friedrichs,
+solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
                volume_integral=VolumeIntegralWeakForm())
 
 coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
@@ -240,26 +240,35 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 ###############################################################################
 # run the simulation
 
-
+#=
 time_int_tol = 1e-6
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt = 1e-5,
             ode_default_options()..., callback=callbacks)
-       
+=#
 
 #=
-CFL = 0.53
-dt = 0.0272853466311062236 / (2.0^(InitialRefinement - 3)) * CFL
+# mu = 1e-5, HLLC flux, non-adapted
+CFL = 0.59
+dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
+=#
+
+
+# mu = 1e-5, HLLC flux, adapted
+CFL = 0.6
+dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
+
 
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/", 
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
                            bS, cEnd, stage_callbacks = ())
-=#
 
+#=
 # S = 8                   
 CFL = 0.5 * 0.48
-dt = 0.0687697602304979266 / (2.0^(InitialRefinement - 3)) * CFL
+# dt for adapted spectrum
+dt = 0.0803455849381862225 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
 
 
@@ -270,8 +279,8 @@ dt = 0.146746443033043769 / (2.0^(InitialRefinement - 3)) * CFL
 S = 16
 =#
 
-ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/")
-
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
+=#
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 summary_callback() # print the timer summary

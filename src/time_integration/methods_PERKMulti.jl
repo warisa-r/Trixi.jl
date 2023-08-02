@@ -982,18 +982,22 @@ function solve!(integrator::PERK_Multi_Integrator)
 
         for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
+            # CARE: Less effective if not finest level is present
             #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
-            # Approach where one uses only the highest levels when needed CARE: Does not work if no coarsest cells are present
+            # Approach where one uses only the highest levels when needed 
+            # CARE: Does not work if no coarsest cells are present
             integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # First attempt to be more effective
           if alg.AMatrices[level, stage - 2, 2] > 0 # Pretty much most efficient, AMR compatible way
             @threaded for u_ind in integrator.level_u_indices_elements[level]
+              # CARE: Less effective if not finest level is present
               #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
-              # Approach where one uses only the highest levels when needed CARE: Does not work if no coarsest cells are present
+              # Approach where one uses only the highest levels when needed 
+              # CARE: Does not work if no coarsest cells are present
               integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - length(integrator.level_u_indices_elements), stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
@@ -1001,19 +1005,8 @@ function solve!(integrator::PERK_Multi_Integrator)
 
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
-        # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
-        # NOTE: .<= casues most likely the allocations (constructs new array)
-        #integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= N_levels])
-
-        # Allocation-free version
-        for lvl in alg.ActiveLevels[stage]
-          if alg.ActiveLevels[stage][lvl] > N_levels
-            break
-          else
-            integrator.coarsest_lvl = lvl
-          end
-        end
-
+        # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
+        integrator.coarsest_lvl = min(maximum(alg.ActiveLevels[stage]), N_levels)
         # For statically refined meshes:
         #integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage])
 

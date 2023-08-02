@@ -105,12 +105,12 @@ ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spe
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
-
-
+#=
 alg = RDPK3SpFSAL49()
 time_int_tol = 1.0e-11
 sol = solve(ode, alg; abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
+=#
 
 # Print the timer summary
 summary_callback()
