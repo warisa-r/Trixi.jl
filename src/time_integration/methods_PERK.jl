@@ -219,7 +219,7 @@ function solve!(integrator::PERK_Integrator)
         # Construct current state
         @threaded for i in eachindex(integrator.du)
           integrator.u_tmp[i] = integrator.u[i] + alg.AMatrix[stage - 2, 1] * integrator.k1[i] + 
-            alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
+                                                  alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
         end
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
