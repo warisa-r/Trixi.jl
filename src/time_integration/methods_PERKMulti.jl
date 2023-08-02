@@ -46,8 +46,6 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    
-    
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -129,11 +127,6 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:NumDoublings+1
 
-  # Datastructure indicating at which stage which level kHigher is used
-  KHigherLevels = [Vector{Int}() for _ in 1:NumStages]
-  KHigherLevels[1] = [1]
-  KHigherLevels[2] = [1]
-
   for level = 1:NumDoublings + 1
     
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
@@ -156,9 +149,6 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
-    for stage = NumStages:-1:NumStages-NumMonCoeffs+1
-      push!(KHigherLevels[stage], level)
-    end
   end
 
   for i = 1:NumDoublings+1
@@ -174,9 +164,8 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   end
 
   println("\nActive Levels:"); display(ActiveLevels); println()
-  println("\nKHigherLevels:"); display(KHigherLevels); println()
 
-  return AMatrices, c, ActiveLevels, KHigherLevels
+  return AMatrices, c, ActiveLevels
 end
 
 
@@ -203,7 +192,6 @@ mutable struct PERK_Multi{StageCallbacks}
   AMatrices::Array{Float64, 3}
   c::Vector{Float64}
   ActiveLevels::Vector{Vector{Int64}}
-  KHigherLevels::Vector{Vector{Int64}}
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
@@ -219,7 +207,7 @@ mutable struct PERK_Multi{StageCallbacks}
                         # CARE: Hack to eanble linear increasing PERK
                         #NumStageEvalsMin_ + NumDoublings_)
 
-    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, newPERK_Multi.KHigherLevels = 
+    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
       ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
 
     return newPERK_Multi
@@ -996,17 +984,18 @@ function solve!(integrator::PERK_Multi_Integrator)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
-            # Approach where one uses only the highest levels when needed
+            # Approach where one uses only the highest levels when needed CARE: Does not work if no coarsest cells are present
             integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
-        end
 
-        for level in alg.KHigherLevels[stage]
-          @threaded for u_ind in integrator.level_u_indices_elements[level]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
+          # First attempt to be more effective
+          if alg.AMatrices[level, stage - 2, 2] > 0 # Pretty much most efficient, AMR compatible way
+            @threaded for u_ind in integrator.level_u_indices_elements[level]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
-            # Approach where one uses only the highest levels when needed
-            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
+              # Approach where one uses only the highest levels when needed CARE: Does not work if no coarsest cells are present
+              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - length(integrator.level_u_indices_elements), stage - 2, 2] * integrator.k_higher[u_ind]
+            end
           end
         end
 
