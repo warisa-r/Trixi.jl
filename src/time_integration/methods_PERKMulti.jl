@@ -915,38 +915,6 @@ function solve!(integrator::PERK_Multi_Integrator)
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
-
-      #=
-      # One scheme for whole domain (primarily for tests)
-      tstage = integrator.t + alg.c[2] * integrator.dt
-      # k2: Usually required for finest level [1]
-      # (Although possible that no scheme has full stage evaluations)
-      integrator.f(integrator.du, integrator.u + alg.c[2] * integrator.k1, prob.p, tstage)
-      integrator.k_higher = integrator.du * integrator.dt
-      
-      for stage = 3:alg.NumStages
-        # Construct current state
-
-        # Use highest level
-        
-        integrator.u_tmp = integrator.u + alg.AMatrices[1, stage - 2, 1] * integrator.k1 + 
-          alg.AMatrices[1, stage - 2, 2] * integrator.k_higher
-        
-
-        # Use lowest level
-        #=
-        integrator.u_tmp = integrator.u + (alg.c[stage] - alg.ACoeffs[stage - 2, end]) * integrator.k1 + 
-            alg.ACoeffs[stage - 2, end] * integrator.k_higher
-        =#
-
-        tstage = integrator.t + alg.c[stage] * integrator.dt
-
-        # Joint RHS evaluation with all elements sharing this timestep
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, tstage)
-
-        integrator.k_higher = integrator.du * integrator.dt
-      end
-      =#
       
       integrator.t_stage = integrator.t + alg.c[2] * integrator.dt
       # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
