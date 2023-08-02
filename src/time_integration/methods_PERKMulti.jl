@@ -124,9 +124,15 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     AMatrices[i, :, 1] = c[3:end]
   end
 
+  # Datastructure indicating at which stage which level is evaluated
   ActiveLevels = [Vector{Int}() for _ in 1:NumStages]
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:NumDoublings+1
+
+  # Datastructure indicating at which stage which level kHigher is used
+  KHigherLevels = [Vector{Int}() for _ in 1:NumStages]
+  KHigherLevels[1] = [1]
+  KHigherLevels[2] = [1]
 
   for level = 1:NumDoublings + 1
     
@@ -150,6 +156,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
+    for stage = NumStages:-1:NumStages-NumMonCoeffs+1
+      push!(KHigherLevels[stage], level)
+    end
   end
 
   for i = 1:NumDoublings+1
@@ -165,8 +174,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   end
 
   println("\nActive Levels:"); display(ActiveLevels); println()
+  println("\nKHigherLevels:"); display(KHigherLevels); println()
 
-  return AMatrices, c, ActiveLevels
+  return AMatrices, c, ActiveLevels, KHigherLevels
 end
 
 
@@ -193,6 +203,7 @@ mutable struct PERK_Multi{StageCallbacks}
   AMatrices::Array{Float64, 3}
   c::Vector{Float64}
   ActiveLevels::Vector{Vector{Int64}}
+  KHigherLevels::Vector{Vector{Int64}}
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
@@ -208,7 +219,7 @@ mutable struct PERK_Multi{StageCallbacks}
                         # CARE: Hack to eanble linear increasing PERK
                         #NumStageEvalsMin_ + NumDoublings_)
 
-    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
+    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, newPERK_Multi.KHigherLevels = 
       ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
 
     return newPERK_Multi
@@ -973,6 +984,8 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 
+      N_levels = length(integrator.level_u_indices_elements) # Dynamic since this changes during AMR
+
       for stage = 3:alg.NumStages
         # Construct current state
         @threaded for i in eachindex(integrator.u)
@@ -984,36 +997,36 @@ function solve!(integrator::PERK_Multi_Integrator)
             #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
             # Approach where one uses only the highest levels when needed
-            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - length(integrator.level_u_indices_elements), stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
+        end
 
-          # First attempt to be more effective
-          if alg.AMatrices[level, stage - 2, 2] > 0 # TODO: Avoid if at some point (two for loops for stage < > E)
-            @threaded for u_ind in integrator.level_u_indices_elements[level]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
+        for level in alg.KHigherLevels[stage]
+          @threaded for u_ind in integrator.level_u_indices_elements[level]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
-              # Approach where one uses only the highest levels when needed
-              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - length(integrator.level_u_indices_elements), stage - 2, 2] * integrator.k_higher[u_ind]
-            end
+            # Approach where one uses only the highest levels when needed
+            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
           end
         end
 
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "ActiveLevels" cannot be static for AMR, has to be checked with available levels
-        #=
-        integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= 
-                                                                  length(integrator.level_info_elements_acc)])
-        =#
+        # NOTE: .<= casues most likely the allocations (constructs new array)
+        #integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage][alg.ActiveLevels[stage] .<= N_levels])
 
         # Allocation-free version
         for lvl in alg.ActiveLevels[stage]
-          if alg.ActiveLevels[stage][lvl] > length(integrator.level_info_elements_acc)
+          if alg.ActiveLevels[stage][lvl] > N_levels
             break
           else
             integrator.coarsest_lvl = lvl
           end
         end
+
+        # For statically refined meshes:
+        #integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage])
 
         #=
         for stage_callback in alg.stage_callbacks
