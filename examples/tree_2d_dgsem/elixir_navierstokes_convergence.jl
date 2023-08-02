@@ -32,13 +32,13 @@ Trixi.refine!(mesh.tree, LLID[1:16])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
 =#
-#=
+
 # Refinement tailored to initial_refinement = 4
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:64])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:64])
-=#
+
 
 # Note: the initial condition cannot be specialized to `CompressibleNavierStokesDiffusion2D`
 #       since it is called by both the parabolic solver (which passes in `CompressibleNavierStokesDiffusion2D`)
@@ -226,21 +226,22 @@ plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span `tspan`
-tspan = (0.0, 0.5)
-#ode = semidiscretize(semi, tspan; split_form = true)
-ode = semidiscretize(semi, tspan)
+tspan = (0.0, 5.0)
+ode = semidiscretize(semi, tspan; split_form = false)
+#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
-callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
+#callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
 
 
-time_int_tol = 1e-8
+time_int_tol = 1e-6
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt = 1e-5,
             ode_default_options()..., callback=callbacks)
        
@@ -254,7 +255,7 @@ bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/", 
                            bS, cEnd, stage_callbacks = ())
-
+=#
 
 # S = 8                   
 CFL = 0.5 * 0.48
@@ -272,7 +273,7 @@ S = 16
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/")
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-=#
+
 summary_callback() # print the timer summary
 
 plot(sol)
