@@ -38,8 +38,8 @@ LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
-#LLID = Trixi.local_leaf_cells(mesh.tree)
-#Trixi.refine!(mesh.tree, LLID[1:64])
+LLID = Trixi.local_leaf_cells(mesh.tree)
+Trixi.refine!(mesh.tree, LLID[1:16])
 
 
 # Note: the initial condition cannot be specialized to `CompressibleNavierStokesDiffusion2D`
@@ -257,20 +257,20 @@ dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
 
 # mu = 1e-5, HLLC flux, adapted
 CFL = 1.2 # Three levels
-#CFL = 0.72 # Four levels
+CFL = 0.75 # Four levels
 dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
 
 
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
+ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
                            bS, cEnd, stage_callbacks = ())
 
-
+#=
 # S = 8                   
 CFL = 0.5 * 0.91 # Three levels
-#CFL = 0.25 * 0.9 # Four levels
+CFL = 0.25 * 0.92 # Four levels
 # dt for adapted spectrum
 dt = 0.0803455849381862225 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
@@ -284,9 +284,8 @@ S = 16
 =#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
-
+=#
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-
 summary_callback() # print the timer summary
 
 plot(sol)

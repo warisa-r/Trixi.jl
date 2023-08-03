@@ -75,6 +75,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
       push!(ActiveLevels[stage], level)
     end
   end
+  HighestActiveLevels = maximum.(ActiveLevels)
 
   for i = 1:NumDoublings+1
     println("A-Matrix of Butcher tableau of level " * string(i))
@@ -90,9 +91,10 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
   println("\nActive Levels:"); display(ActiveLevels); println()
 
-  return AMatrices, c, ActiveLevels
+  return AMatrices, c, ActiveLevels, HighestActiveLevels
 end
 
+# Version with variable bs, cEnd
 function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                           bS::Float64, cEnd::Float64)
                                      
@@ -150,6 +152,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
       push!(ActiveLevels[stage], level)
     end
   end
+  HighestActiveLevels = maximum.(ActiveLevels)
 
   for i = 1:NumDoublings+1
     println("A-Matrix of Butcher tableau of level " * string(i))
@@ -165,7 +168,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
   println("\nActive Levels:"); display(ActiveLevels); println()
 
-  return AMatrices, c, ActiveLevels
+  return AMatrices, c, ActiveLevels, HighestActiveLevels
 end
 
 
@@ -192,6 +195,7 @@ mutable struct PERK_Multi{StageCallbacks}
   AMatrices::Array{Float64, 3}
   c::Vector{Float64}
   ActiveLevels::Vector{Vector{Int64}}
+  HighestActiveLevels::Vector{Int64}
 
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
@@ -207,7 +211,7 @@ mutable struct PERK_Multi{StageCallbacks}
                         # CARE: Hack to eanble linear increasing PERK
                         #NumStageEvalsMin_ + NumDoublings_)
 
-    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels = 
+    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, newPERK_Multi.HighestActiveLevels = 
       ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
 
     return newPERK_Multi
@@ -939,7 +943,8 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 
-      N_levels = length(integrator.level_u_indices_elements) # Dynamic since this changes during AMR
+      # NOTE: For non-AMR, one could use "alg.NumDoublings + 1" for this
+      #N_levels = length(integrator.level_u_indices_elements) # Dynamic since this changes during AMR
 
       for stage = 3:alg.NumStages
         # Construct current state
@@ -950,23 +955,23 @@ function solve!(integrator::PERK_Multi_Integrator)
         for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             # CARE: Less effective if not finest level is present
-            #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
             # Approach where one uses only the highest levels when needed 
             # CARE: Does not work if no coarsest cells are present
-            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # Pretty much most efficient, AMR compatible way
-          #if alg.AMatrices[level, stage - 2, 2] > 0
-          if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
+          if alg.AMatrices[level, stage - 2, 2] > 0
+          #if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
               # CARE: Less effective if not finest level is present
-              #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
               # Approach where one uses only the highest levels when needed 
               # CARE: Does not work if no coarsest cells are present
-              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -974,9 +979,9 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
-        integrator.coarsest_lvl = min(maximum(alg.ActiveLevels[stage]), N_levels)
+        #integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], N_levels)
         # For statically refined meshes:
-        #integrator.coarsest_lvl = maximum(alg.ActiveLevels[stage])
+        integrator.coarsest_lvl = alg.HighestActiveLevels[stage]
 
         #=
         for stage_callback in alg.stage_callbacks
@@ -1007,9 +1012,11 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.u[i] += integrator.k_higher[i]
       end
       
+      #=
       for stage_callback in alg.stage_callbacks
         stage_callback(integrator.u, integrator, prob.p, integrator.t_stage)
       end
+      =#
     end # PERK_Multi step
 
     integrator.iter += 1
