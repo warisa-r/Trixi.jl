@@ -458,6 +458,8 @@ function init_boundaries!(boundaries, elements, mesh::TreeMesh2D)
             boundaries.neighbor_ids[count] = element
 
             # Set neighbor side, which denotes the direction (1 -> negative, 2 -> positive) of the element
+            # Note: Negative neighbor side translates to boundary on positive end of coordinate direction and
+            #       positive neighbor side translates to boundary on negative end of coordinate direction.
             if iseven(direction)
                 boundaries.neighbor_sides[count] = 1
             else
