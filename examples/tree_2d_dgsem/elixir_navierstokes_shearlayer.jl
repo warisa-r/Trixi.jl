@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq
 using Trixi
 
 ###############################################################################
@@ -14,9 +14,11 @@ equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
                                                           Prandtl=prandtl_number())
 
 function initial_condition_shear_layer(x, t, equations::CompressibleEulerEquations2D)
+  # Shear layer parameters
   k = 80
   delta = 0.05
   u0 = 1.0
+  
   Ms = 0.1 # maximum Mach number
 
   rho = 1.0
