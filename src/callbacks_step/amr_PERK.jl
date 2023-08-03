@@ -34,8 +34,8 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
 
         # Next to fine NOT integrated with fine scheme
         # Initialize storage for level-wise information
-        level_info_elements                = [Vector{Int}() for _ in 1:n_levels]
-        integrator.level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+        level_info_elements                = [Vector{Int64}() for _ in 1:n_levels]
+        integrator.level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
         #resize!(integrator.level_info_elements_acc, n_levels) # TODO: Does unfortunately not work
 
         # Determine level for each element
@@ -55,7 +55,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_elements "highest level should contain all elements"
 
 
-        integrator.level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
         # Determine level for each interface
         for interface_id in 1:n_interfaces
           # Get element ids
@@ -77,7 +77,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
 
 
         # TODO: Need more advanced datastructures for boundaries!
-        integrator.level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
           # Get element id (boundaries have only one unique associated element)
@@ -98,7 +98,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_boundaries "highest level should contain all boundaries"
 
 
-        integrator.level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
         dimensions = ndims(mesh.tree) # Spatial dimension
         if dimensions > 1
           @unpack mortars = cache
@@ -129,8 +129,8 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         #=
         # Initialize storage for level-wise information
         # Set-like datastructures more suited then vectors (Especially for interfaces)
-        level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
-        level_info_elements_set_acc = [Set{Int}() for _ in 1:n_levels]
+        level_info_elements_set     = [Set{Int64}() for _ in 1:n_levels]
+        level_info_elements_set_acc = [Set{Int64}() for _ in 1:n_levels]
         # Loop over interfaces to have access to its neighbors
         for interface_id in 1:n_interfaces
           # Get element ids
@@ -157,7 +157,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           end
         end
         # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-        level_info_elements = [Vector{Int}() for _ in 1:n_levels]
+        level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
         for level in 1:n_levels
           # Make sure elements are only stored once: In the finest level
           for fine_level in 1:level-1
@@ -175,7 +175,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           end
         end
 
-        integrator.level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
         for level in 1:n_levels
           integrator.level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
         end
@@ -183,7 +183,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_elements "highest level should contain all elements"
 
         # Use sets first to avoid double storage of interfaces
-        level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+        level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:n_levels]
         # Determine ODE level for each interface
         for interface_id in 1:n_interfaces
           # Get element ids
@@ -202,7 +202,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           end
         end
         # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-        integrator.level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
         for level in 1:n_levels
           integrator.level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
         end
@@ -211,7 +211,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
 
 
         # Use sets first to avoid double storage of boundaries
-        level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+        level_info_boundaries_set_acc = [Set{Int64}() for _ in 1:n_levels]
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
           #=
@@ -253,7 +253,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         end
 
         # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-        integrator.level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
         for level in 1:n_levels
           integrator.level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
         end
@@ -261,7 +261,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_boundaries "highest level should contain all boundaries"
 
         # TODO: Mortars need probably to be reconsidered! (sets, level-assignment, ...)
-        integrator.level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
         dimensions = ndims(mesh.tree) # Spatial dimension
         if dimensions > 1
           # Determine level for each mortar
@@ -296,7 +296,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
     
         u = wrap_array(u_ode, mesh, equations, solver, cache)
     
-        integrator.level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
+        integrator.level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
 
         # Have if outside for performance reasons
         if dimensions == 1

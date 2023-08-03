@@ -41,7 +41,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     AMatrices[i, :, 1] = c[3:end]
   end
 
-  ActiveLevels = [Vector{Int}() for _ in 1:NumStages]
+  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:NumDoublings+1
 
@@ -125,7 +125,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   end
 
   # Datastructure indicating at which stage which level is evaluated
-  ActiveLevels = [Vector{Int}() for _ in 1:NumStages]
+  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:NumDoublings+1
 
@@ -305,8 +305,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   # NOTE: Next-to-fine is NOT integrated with fine integrator
   
   # Initialize storage for level-wise information
-  level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
-  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
+  level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
 
   # Determine level for each element
   for element_id in 1:n_elements
@@ -325,7 +325,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_elements "highest level should contain all elements"
 
 
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
   # Determine level for each interface
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -347,7 +347,13 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
 
   # TODO: Need more advanced datastructures for boundaries!
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+
+  # For efficient treatment of boundaries we need additional datastructures
+  n_dims = ndims(mesh.tree) # Spatial dimension
+  level_info_boundaries_orient_dir = [SVector{Vector{Int64}(), 2*ndims} for _ in 1:n_levels]
+  
+
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
     # Get element id (boundaries have only one unique associated element)
@@ -368,9 +374,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_boundaries "highest level should contain all boundaries"
 
 
-  level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
-  dimensions = ndims(mesh.tree) # Spatial dimension
-  if dimensions > 1
+  level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
+  if n_dims > 1
     @unpack mortars = cache
     n_mortars = length(mortars.orientations)
 
@@ -399,8 +404,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   #=
   # Initialize storage for level-wise information
   # Set-like datastructures more suited then vectors
-  level_info_elements_set     = [Set{Int}() for _ in 1:n_levels]
-  level_info_elements_set_acc = [Set{Int}() for _ in 1:n_levels]
+  level_info_elements_set     = [Set{Int64}() for _ in 1:n_levels]
+  level_info_elements_set_acc = [Set{Int64}() for _ in 1:n_levels]
   # Loop over interfaces to have access to its neighbors
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -428,7 +433,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   
   # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_elements = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     # Make sure elements are only stored once: In the finest level
     for fine_level in 1:level-1
@@ -448,7 +453,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   display(element_ODE_level_dict); println()
 
-  level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
   end
@@ -456,8 +461,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_elements "highest level should contain all elements"
 
   # Use sets first to avoid double storage of interfaces
-  level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
-  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+  level_info_interfaces_set = [Set{Int64}() for _ in 1:n_levels]
+  level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:n_levels]
   # Determine ODE level for each interface
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -494,7 +499,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
 
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     # Make sure elements are only stored once: In the finest level
     for fine_level in 1:level-1
@@ -506,13 +511,13 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
 
   #=
-  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
   end 
   =#
 
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
@@ -521,7 +526,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
   
   # Use sets first to avoid double storage of boundaries
-  level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+  level_info_boundaries_set_acc = [Set{Int64}() for _ in 1:n_levels]
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
     #=
@@ -563,7 +568,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
 
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
   for level in 1:n_levels
     level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
   end
@@ -571,7 +576,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
 
   # TODO: Mortars need probably to be reconsidered! (sets, level-assignment, ...)
-  level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
+  level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
   dimensions = ndims(mesh.tree) # Spatial dimension
   if dimensions > 1
     # Determine level for each mortar
@@ -625,7 +630,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   @unpack equations, solver = ode.p
   u = wrap_array(u0, mesh, equations, solver, cache)
 
-  level_u_indices_elements = [Vector{Int}() for _ in 1:n_levels]
+  level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
 
   # Have if outside for performance reasons (this is also used in the AMR calls)
   if dimensions == 1
@@ -665,7 +670,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   display(element_ODE_level_dict); println()                              
 
-  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:length(level_info_elements)]
+  level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:length(level_info_elements)]
   # Determine ODE level for each interface
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -684,14 +689,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
   end
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
   for level in 1:length(level_info_elements)
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
   @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
-  level_info_mortars_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
+  level_info_mortars_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
 
   println("level_info_elements:")
   display(level_info_elements); println()
@@ -707,7 +712,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
   u = wrap_array(u0, mesh, equations, solver, cache)
-  level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_u_indices_elements = [Vector{Int64}() for _ in 1:length(level_info_elements)]
   for level in 1:length(level_info_elements)
     for element_id in level_info_elements[level]
       indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
@@ -720,8 +725,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   #=
   # CARE: Distribute level assignment randomly
   Random.seed!(42); # Needed to fix error constant
-  level_info_elements     = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
-  level_info_elements_acc = [Vector{Int}() for _ in 1:alg.NumDoublings+1]
+  level_info_elements     = [Vector{Int64}() for _ in 1:alg.NumDoublings+1]
+  level_info_elements_acc = [Vector{Int64}() for _ in 1:alg.NumDoublings+1]
   
   for element_id in 1:n_elements
     level_id = Int(mod(round(1000 * rand()), alg.NumDoublings+1)) + 1
@@ -742,7 +747,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   display(element_ODE_level_dict); println()
 
-  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:length(level_info_elements)]
+  level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:length(level_info_elements)]
   # Determine ODE level for each interface
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -761,14 +766,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
   end
   # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
   for level in 1:length(level_info_elements)
     level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
   @assert length(level_info_interfaces_acc[end]) == n_interfaces "highest level should contain all interfaces"
 
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
-  level_info_mortars_acc = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
+  level_info_mortars_acc = [Vector{Int64}() for _ in 1:length(level_info_elements)]
 
   println("level_info_elements:")
   display(level_info_elements); println()
@@ -784,7 +789,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
   u = wrap_array(u0, mesh, equations, solver, cache)
-  level_u_indices_elements = [Vector{Int}() for _ in 1:length(level_info_elements)]
+  level_u_indices_elements = [Vector{Int64}() for _ in 1:length(level_info_elements)]
   dimensions = ndims(mesh.tree) # Spatial dimension
   if dimensions == 1
     for level in 1:alg.NumDoublings+1
