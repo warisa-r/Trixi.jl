@@ -267,7 +267,7 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
                            bS, cEnd, stage_callbacks = ())
 
-#=
+
 # S = 8                   
 CFL = 0.5 * 0.91 # Three levels
 CFL = 0.25 * 0.92 # Four levels
@@ -284,7 +284,7 @@ S = 16
 =#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
-=#
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary
 

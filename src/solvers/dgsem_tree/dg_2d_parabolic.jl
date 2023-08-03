@@ -129,6 +129,7 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
                         level_info_elements_acc::Vector{Int64},
                         level_info_interfaces_acc::Vector{Int64},
                         level_info_boundaries_acc::Vector{Int64},
+                        level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                         level_info_mortars_acc::Vector{Int64})
     #(; u_transformed, gradients, flux_viscous) = cache_parabolic
     @unpack cache_viscous = cache_parabolic
@@ -203,7 +204,7 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
                                        boundary_conditions_parabolic, mesh,
                                        equations_parabolic,
                                        dg.surface_integral, dg,
-                                       level_info_boundaries_acc)
+                                       level_info_boundaries_orientation_acc)
     end
 
     # Prolong solution to mortars
@@ -814,38 +815,30 @@ function calc_boundary_flux_divergence!(cache, t,
                                         mesh::TreeMesh{2},
                                         equations_parabolic::AbstractEquationsParabolic,
                                         surface_integral, dg::DG,
-                                        level_info_boundaries_acc::Vector{Int64})
-    # TODO: Not most efficient approach!
-    if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level                                        
-        @unpack surface_flux_values = cache.elements
-        @unpack n_boundaries_per_direction = cache.boundaries
+                                        level_info_boundaries_orientation_acc::Vector{Vector{Int64}})                                   
+    @unpack surface_flux_values = cache.elements
 
-        # Calculate indices
-        lasts = accumulate(+, n_boundaries_per_direction)
-        firsts = lasts - n_boundaries_per_direction .+ 1
-
-        # Calc boundary fluxes in each direction
-        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
-                                                    boundary_conditions_parabolic[1],
-                                                    equations_parabolic, surface_integral,
-                                                    dg, cache,
-                                                    1, firsts[1], lasts[1])
-        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
-                                                    boundary_conditions_parabolic[2],
-                                                    equations_parabolic, surface_integral,
-                                                    dg, cache,
-                                                    2, firsts[2], lasts[2])
-        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
-                                                    boundary_conditions_parabolic[3],
-                                                    equations_parabolic, surface_integral,
-                                                    dg, cache,
-                                                    3, firsts[3], lasts[3])
-        calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
-                                                    boundary_conditions_parabolic[4],
-                                                    equations_parabolic, surface_integral,
-                                                    dg, cache,
-                                                    4, firsts[4], lasts[4])
-    end
+    # Calc boundary fluxes in each direction
+    calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                boundary_conditions_parabolic[1],
+                                                equations_parabolic, surface_integral,
+                                                dg, cache,
+                                                1, level_info_boundaries_orientation_acc[1])
+    calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                boundary_conditions_parabolic[2],
+                                                equations_parabolic, surface_integral,
+                                                dg, cache,
+                                                2, level_info_boundaries_orientation_acc[2])
+    calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                boundary_conditions_parabolic[3],
+                                                equations_parabolic, surface_integral,
+                                                dg, cache,
+                                                3, level_info_boundaries_orientation_acc[3])
+    calc_boundary_flux_by_direction_divergence!(surface_flux_values, t,
+                                                boundary_conditions_parabolic[4],
+                                                equations_parabolic, surface_integral,
+                                                dg, cache,
+                                                4, level_info_boundaries_orientation_acc[4])
 end
 
 function calc_boundary_flux_by_direction_divergence!(surface_flux_values::AbstractArray{
@@ -865,6 +858,57 @@ function calc_boundary_flux_by_direction_divergence!(surface_flux_values::Abstra
     @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
 
     @threaded for boundary in first_boundary:last_boundary
+        # Get neighboring element
+        neighbor = neighbor_ids[boundary]
+
+        for i in eachnode(dg)
+            # Get viscous boundary fluxes
+            flux_ll, flux_rr = get_surface_node_vars(u, equations_parabolic, dg, i,
+                                                     boundary)
+            if neighbor_sides[boundary] == 1 # Element is on the left, boundary on the right
+                flux_inner = flux_ll
+            else # Element is on the right, boundary on the left
+                flux_inner = flux_rr
+            end
+
+            x = get_node_coords(node_coordinates, equations_parabolic, dg, i, boundary)
+
+            # TODO: add a field in `cache.boundaries` for gradient information.
+            # Here, we pass in `u_inner = nothing` since we overwrite cache.boundaries.u with gradient information.
+            # This currently works with Dirichlet/Neuman boundary conditions for LaplaceDiffusion2D and
+            # NoSlipWall/Adiabatic boundary conditions for CompressibleNavierStokesDiffusion2D as of 2022-6-27.
+            # It will not work with implementations which utilize `u_inner` to impose boundary conditions.
+            flux = boundary_condition(flux_inner, nothing,
+                                      get_unsigned_normal_vector_2d(direction),
+                                      x, t, Divergence(), equations_parabolic)
+                     
+            # Copy flux to left and right element storage
+            for v in eachvariable(equations_parabolic)
+                surface_flux_values[v, i, direction, neighbor] = flux[v]
+            end
+        end
+    end
+
+    return nothing
+end
+
+function calc_boundary_flux_by_direction_divergence!(surface_flux_values::AbstractArray{
+                                                                                        <:Any,
+                                                                                        4
+                                                                                        },
+                                                     t,
+                                                     boundary_condition,
+                                                     equations_parabolic::AbstractEquationsParabolic,
+                                                     surface_integral, dg::DG, cache,
+                                                     direction, 
+                                                     level_info_boundaries_orientation_acc_dim::Vector{Int64})
+    @unpack surface_flux = surface_integral
+
+    # Note: cache.boundaries.u contains the unsigned normal component (using "orientation", not "direction")
+    # of the viscous flux, as computed in `prolong2boundaries!`
+    @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
+
+    @threaded for boundary in level_info_boundaries_orientation_acc_dim
         # Get neighboring element
         neighbor = neighbor_ids[boundary]
 

@@ -365,6 +365,7 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
               level_info_boundaries_acc::Vector{Int64},
+              level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
               level_info_mortars_acc::Vector{Int64})
     @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
 
@@ -378,6 +379,7 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
                                       level_info_elements_acc,
                                       level_info_interfaces_acc,
                                       level_info_boundaries_acc,
+                                      level_info_boundaries_orientation_acc,
                                       level_info_mortars_acc)
     runtime = time_ns() - time_start
     put!(semi.performance_counter.counters[1], runtime)
@@ -389,6 +391,7 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
                         level_info_elements_acc::Vector{Int64},
                         level_info_interfaces_acc::Vector{Int64},
                         level_info_boundaries_acc::Vector{Int64},
+                        level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                         level_info_mortars_acc::Vector{Int64})
     @unpack mesh, equations_parabolic, initial_condition, boundary_conditions_parabolic, source_terms, solver, solver_parabolic, cache, cache_parabolic = semi
 
@@ -407,6 +410,7 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
                                                           level_info_elements_acc,
                                                           level_info_interfaces_acc,
                                                           level_info_boundaries_acc,
+                                                          level_info_boundaries_orientation_acc,
                                                           level_info_mortars_acc)
     runtime = time_ns() - time_start
     put!(semi.performance_counter.counters[2], runtime)
@@ -418,6 +422,7 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                                    level_info_elements_acc::Vector{Int64},
                                    level_info_interfaces_acc::Vector{Int64},
                                    level_info_boundaries_acc::Vector{Int64},
+                                   level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                                    level_info_mortars_acc::Vector{Int64},
                                    du_ode_hyp)
     @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin 
@@ -426,10 +431,12 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
         rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
              level_info_interfaces_acc,
              level_info_boundaries_acc,
+             level_info_boundaries_orientation_acc,
              level_info_mortars_acc)
         rhs_parabolic!(du_ode, u_ode, semi, t, level_info_elements_acc,
                        level_info_interfaces_acc,
                        level_info_boundaries_acc,
+                       level_info_boundaries_orientation_acc,
                        level_info_mortars_acc)
         du_ode .+= du_ode_hyp
     end

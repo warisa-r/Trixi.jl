@@ -257,6 +257,7 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   level_info_elements_acc::Vector{Vector{Int64}}
   level_info_interfaces_acc::Vector{Vector{Int64}}
   level_info_boundaries_acc::Vector{Vector{Int64}}
+  level_info_boundaries_orientation_acc::Vector{Vector{Vector{Int64}}}
   level_info_mortars_acc::Vector{Vector{Int64}}
   level_u_indices_elements::Vector{Vector{Int64}}
   t_stage::RealT
@@ -346,13 +347,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_interfaces "highest level should contain all interfaces"
 
 
-  # TODO: Need more advanced datastructures for boundaries!
   level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
 
   # For efficient treatment of boundaries we need additional datastructures
   n_dims = ndims(mesh.tree) # Spatial dimension
-  level_info_boundaries_orient_dir = [SVector{Vector{Int64}(), 2*ndims} for _ in 1:n_levels]
-  
+  level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
 
   # Determine level for each boundary
   for boundary_id in 1:n_boundaries
@@ -368,6 +367,39 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     # Add to accumulated container
     for l in level_id:n_levels
       push!(level_info_boundaries_acc[l], boundary_id)
+    end
+
+    # For orientation-side wise specific treatment
+    if boundaries.orientations[boundary_id] == 1 # x Boundary
+      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][2], boundary_id)
+        end
+      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][1], boundary_id)
+        end
+      end
+    elseif boundaries.orientations[boundary_id] == 2 # y Boundary
+      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][4], boundary_id)
+        end
+      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][3], boundary_id)
+        end
+      end
+    elseif boundaries.orientations[boundary_id] == 3 # z Boundary
+      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][6], boundary_id)
+        end
+      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+        for l in level_id:n_levels
+          push!(level_info_boundaries_orientation_acc[l][5], boundary_id)
+        end
+      end 
     end
   end
   @assert length(level_info_boundaries_acc[end]) == 
@@ -607,9 +639,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
   end
   =#
-  
-  println("n_elements: ", n_elements)
-  println("\nn_interfaces: ", n_interfaces)
 
   println("level_info_elements:")
   display(level_info_elements); println()
@@ -621,7 +650,10 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
   println("level_info_boundaries_acc:")
   display(level_info_boundaries_acc); println()
+  println("level_info_boundaries_orientation_acc:")
+  display(level_info_boundaries_orientation_acc); println()
 
+  
   println("level_info_mortars_acc:")
   display(level_info_mortars_acc); println()
 
@@ -633,14 +665,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
 
   # Have if outside for performance reasons (this is also used in the AMR calls)
-  if dimensions == 1
+  if n_dims == 1
     for level in 1:n_levels
       for element_id in level_info_elements[level]
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
     end
-  elseif dimensions == 2
+  elseif n_dims == 2
     for level in 1:n_levels
       for element_id in level_info_elements[level]
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
@@ -648,6 +680,9 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       end
     end
   end
+  # TODO: 3D
+
+  println("level_u_indices_elements:")
   display(level_u_indices_elements); println()
   
 
@@ -815,7 +850,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 (prob=ode,), ode.f, alg,
                 PERK_Multi_IntegratorOptions(callback, ode.tspan; kwargs...), false,
                 k1, k_higher,   
-                level_info_elements_acc, level_info_interfaces_acc, level_info_boundaries_acc,
+                level_info_elements_acc, level_info_interfaces_acc, 
+                level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, level_u_indices_elements, t0, -1, du_ode_hyp)
             
   # initialize callbacks
@@ -879,6 +915,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
+                   integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1],
                    integrator.du_ode_hyp)
       
@@ -937,6 +974,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
+                    integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.du_ode_hyp)
         
@@ -951,7 +989,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
         #integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
-        # Slightly more performant version
+        # Slightly more performant, hard-coded version
         integrator.u[i] += integrator.k_higher[i]
       end
       

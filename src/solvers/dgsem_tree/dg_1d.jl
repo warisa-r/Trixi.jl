@@ -136,6 +136,7 @@ function rhs!(du, u, t,
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
               level_info_boundaries_acc::Vector{Int64},
+              level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
               # Mortars actually not appearant in 1D
               level_info_mortars_acc::Vector{Int64}) where {Source}
     # Reset du
@@ -185,7 +186,7 @@ function rhs!(du, u, t,
                           boundary_conditions, mesh,
                           equations,
                           dg.surface_integral, dg,
-                          level_info_boundaries_acc)
+                          level_info_boundaries_orientation_acc)
     end
 
     # Calculate surface integrals
@@ -815,27 +816,18 @@ end
 
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{1}, equations, surface_integral, dg::DG,
-                             level_info_boundaries_acc::Vector{Int64})
-    # TODO: Not most efficient approach!
-    if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level
+                             level_info_boundaries_orientation_acc::Vector{Vector{Int64}})
         @unpack surface_flux_values = cache.elements
-        @unpack n_boundaries_per_direction = cache.boundaries
 
-        # Calculate indices
-        # TODO: Probably not that easy
-        lasts = accumulate(+, n_boundaries_per_direction)
-        firsts = lasts - n_boundaries_per_direction .+ 1
-
-        # Calc boundary fluxes in each direction
-        calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
-                                         have_nonconservative_terms(equations),
-                                         equations, surface_integral, dg, cache,
-                                         1, firsts[1], lasts[1])
-        calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
-                                         have_nonconservative_terms(equations),
-                                         equations, surface_integral, dg, cache,
-                                         2, firsts[2], lasts[2])
-    end
+    # Calc boundary fluxes in each direction
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     1, level_info_boundaries_orientation_acc[1])
+    calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
+                                     have_nonconservative_terms(equations),
+                                     equations, surface_integral, dg, cache,
+                                     2, level_info_boundaries_orientation_acc[2])
 end
 
 function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any, 3},
@@ -848,6 +840,41 @@ function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:A
     @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
 
     @threaded for boundary in first_boundary:last_boundary
+        # Get neighboring element
+        neighbor = neighbor_ids[boundary]
+
+        # Get boundary flux
+        u_ll, u_rr = get_surface_node_vars(u, equations, dg, boundary)
+        if neighbor_sides[boundary] == 1 # Element is on the left, boundary on the right
+            u_inner = u_ll
+        else # Element is on the right, boundary on the left
+            u_inner = u_rr
+        end
+        x = get_node_coords(node_coordinates, equations, dg, boundary)
+        flux = boundary_condition(u_inner, orientations[boundary], direction, x, t,
+                                  surface_flux,
+                                  equations)
+
+        # Copy flux to left and right element storage
+        for v in eachvariable(equations)
+            surface_flux_values[v, direction, neighbor] = flux[v]
+        end
+    end
+
+    return nothing
+end
+
+function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any, 3},
+                                          t,
+                                          boundary_condition,
+                                          nonconservative_terms::False, equations,
+                                          surface_integral, dg::DG, cache,
+                                          direction, 
+                                          level_info_boundaries_orientation_acc_dim::Vector{Int64})
+    @unpack surface_flux = surface_integral
+    @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
+
+    @threaded for boundary in level_info_boundaries_orientation_acc_dim
         # Get neighboring element
         neighbor = neighbor_ids[boundary]
 

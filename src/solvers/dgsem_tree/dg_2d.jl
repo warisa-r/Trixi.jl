@@ -184,6 +184,7 @@ function rhs!(du, u, t,
               level_info_elements_acc::Vector{Int64},
               level_info_interfaces_acc::Vector{Int64},
               level_info_boundaries_acc::Vector{Int64},
+              level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
               level_info_mortars_acc::Vector{Int64}) where {Source}
     # Reset du
     @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
@@ -233,7 +234,7 @@ function rhs!(du, u, t,
                           boundary_conditions, mesh,
                           equations,
                           dg.surface_integral, dg,
-                          level_info_boundaries_acc)
+                          level_info_boundaries_orientation_acc)
     end
 
     # Prolong solution to mortars
@@ -1066,35 +1067,27 @@ end
 
 function calc_boundary_flux!(cache, t, boundary_conditions::NamedTuple,
                              mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
-                             level_info_boundaries_acc::Vector{Int64})
-
-  # TODO: Not most efficient approach!
-  if !isempty(level_info_boundaries_acc) # Check if there are some boundaries on this level                        
+                             level_info_boundaries_orientation_acc::Vector{Vector{Int64}})
+                   
     @unpack surface_flux_values = cache.elements
-    @unpack n_boundaries_per_direction = cache.boundaries
-
-    # Calculate indices
-    lasts = accumulate(+, n_boundaries_per_direction)
-    firsts = lasts - n_boundaries_per_direction .+ 1
 
     # Calc boundary fluxes in each direction
     calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[1],
                                      have_nonconservative_terms(equations),
                                      equations, surface_integral, dg, cache,
-                                     1, firsts[1], lasts[1])
+                                     1, level_info_boundaries_orientation_acc[1])
     calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[2],
                                      have_nonconservative_terms(equations),
                                      equations, surface_integral, dg, cache,
-                                     2, firsts[2], lasts[2])
+                                     2, level_info_boundaries_orientation_acc[2])
     calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[3],
                                      have_nonconservative_terms(equations),
                                      equations, surface_integral, dg, cache,
-                                     3, firsts[3], lasts[3])
+                                     3, level_info_boundaries_orientation_acc[3])
     calc_boundary_flux_by_direction!(surface_flux_values, t, boundary_conditions[4],
                                      have_nonconservative_terms(equations),
                                      equations, surface_integral, dg, cache,
-                                     4, firsts[4], lasts[4])
-  end
+                                     4, level_info_boundaries_orientation_acc[4])
 end
 
 function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any, 4},
@@ -1107,6 +1100,43 @@ function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:A
     @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
 
     @threaded for boundary in first_boundary:last_boundary
+        # Get neighboring element
+        neighbor = neighbor_ids[boundary]
+
+        for i in eachnode(dg)
+            # Get boundary flux
+            u_ll, u_rr = get_surface_node_vars(u, equations, dg, i, boundary)
+            if neighbor_sides[boundary] == 1 # Element is on the left, boundary on the right
+                u_inner = u_ll
+            else # Element is on the right, boundary on the left
+                u_inner = u_rr
+            end
+            x = get_node_coords(node_coordinates, equations, dg, i, boundary)
+            flux = boundary_condition(u_inner, orientations[boundary], direction, x, t,
+                                      surface_flux,
+                                      equations)
+
+            # Copy flux to left and right element storage
+            for v in eachvariable(equations)
+                surface_flux_values[v, i, direction, neighbor] = flux[v]
+            end
+        end
+    end
+
+    return nothing
+end
+
+function calc_boundary_flux_by_direction!(surface_flux_values::AbstractArray{<:Any, 4},
+                                          t,
+                                          boundary_condition,
+                                          nonconservative_terms::False, equations,
+                                          surface_integral, dg::DG, cache,
+                                          direction, 
+                                          level_info_boundaries_orientation_acc_dim::Vector{Int64})
+    @unpack surface_flux = surface_integral
+    @unpack u, neighbor_ids, neighbor_sides, node_coordinates, orientations = cache.boundaries
+
+    @threaded for boundary in level_info_boundaries_orientation_acc_dim
         # Get neighboring element
         neighbor = neighbor_ids[boundary]
 
@@ -1735,10 +1765,12 @@ end
 function calc_sources!(du, u, t, source_terms,
                        equations::AbstractEquations{2}, dg::DG, cache,
                        level_info_elements_acc::Vector{Int64})
+    @unpack node_coordinates = cache.elements                       
+
     @threaded for element in level_info_elements_acc
         for j in eachnode(dg), i in eachnode(dg)
             u_local = get_node_vars(u, equations, dg, i, j, element)
-            x_local = get_node_coords(cache.elements.node_coordinates, equations, dg, i,
+            x_local = get_node_coords(node_coordinates, equations, dg, i,
                                       j, element)
             du_local = source_terms(u_local, x_local, t, equations)
             add_to_node_vars!(du, du_local, equations, dg, i, j, element)
