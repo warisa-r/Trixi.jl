@@ -371,7 +371,7 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolic, t,
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
     # Call "rhs!" of the corresponding solver
-    @trixi_timeit timer() "rhs! level dependent" rhs!(du, u, t, mesh, equations,
+    @trixi_timeit timer() "rhs! (level-dependent)" rhs!(du, u, t, mesh, equations,
                                                       initial_condition,
                                                       boundary_conditions,
                                                       source_terms, solver, cache,

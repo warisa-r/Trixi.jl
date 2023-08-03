@@ -324,7 +324,7 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
 
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
-    @trixi_timeit timer() "parabolic rhs!" rhs_parabolic!(du, u, t, mesh,
+    @trixi_timeit timer() "rhs_parabolic!" rhs_parabolic!(du, u, t, mesh,
                                                           equations_parabolic,
                                                           initial_condition,
                                                           boundary_conditions_parabolic,
@@ -339,7 +339,7 @@ end
 
 function rhs_hyperbolic_parabolic!(du_ode, u_ode,
                                    semi::SemidiscretizationHyperbolicParabolic, t)
-    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin
+    @trixi_timeit timer() "rhs_hyperbolic_parabolic!" begin
         # Implementation of split ODE problem in OrdinaryDiffEq
         du_ode_hyp = similar(du_ode)
         rhs!(du_ode_hyp, u_ode, semi, t)
@@ -351,7 +351,7 @@ end
 function rhs_hyperbolic_parabolic!(du_ode, u_ode,
                                    semi::SemidiscretizationHyperbolicParabolic, t,
                                    du_ode_hyp)
-    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin
+    @trixi_timeit timer() "rhs_hyperbolic_parabolic!" begin
         # Implementation of split ODE problem in OrdinaryDiffEq
         rhs!(du_ode_hyp, u_ode, semi, t)
         rhs_parabolic!(du_ode, u_ode, semi, t)
@@ -374,7 +374,7 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
 
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
-    @trixi_timeit timer() "rhs!" rhs!(du, u, t, mesh, equations, initial_condition,
+    @trixi_timeit timer() "rhs! (level-dependent)" rhs!(du, u, t, mesh, equations, initial_condition,
                                       boundary_conditions, source_terms, solver, cache,
                                       level_info_elements_acc,
                                       level_info_interfaces_acc,
@@ -400,7 +400,7 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
 
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
-    @trixi_timeit timer() "parabolic rhs!" rhs_parabolic!(du, u, t, mesh,
+    @trixi_timeit timer() "rhs_parabolic! (level-dependent)" rhs_parabolic!(du, u, t, mesh,
                                                           equations_parabolic,
                                                           initial_condition,
                                                           boundary_conditions_parabolic,
@@ -425,7 +425,7 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                                    level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                                    level_info_mortars_acc::Vector{Int64},
                                    du_ode_hyp)
-    @trixi_timeit timer() "hyperbolic-parabolic rhs!" begin 
+    @trixi_timeit timer() "rhs_hyperbolic-parabolic! (level-dependent)" begin 
         # TODO: Avoid allocations, make member variable of something? 
         # -> Could reside in (PERK) integrator, then pass in similar to indices of PERK
         rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
