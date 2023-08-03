@@ -305,7 +305,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   # NOTE: Next-to-fine is NOT integrated with fine integrator
   
   # Initialize storage for level-wise information
-  # Set-like datastructures more suited then vectors (Especially for interfaces)
   level_info_elements     = [Vector{Int}() for _ in 1:n_levels]
   level_info_elements_acc = [Vector{Int}() for _ in 1:n_levels]
 
@@ -326,9 +325,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_elements "highest level should contain all elements"
 
 
-  # Use sets first to avoid double storage of interfaces
-  level_info_interfaces_set = [Set{Int}() for _ in 1:n_levels]
-  level_info_interfaces_set_acc = [Set{Int}() for _ in 1:n_levels]
+  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
   # Determine level for each interface
   for interface_id in 1:n_interfaces
     # Get element ids
@@ -339,114 +336,57 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
     level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
-    # Convert to level id
-    level_id_left  = max_level + 1 - level_left
-    level_id_right = max_level + 1 - level_right
-
-    push!(level_info_interfaces_set[level_id_left], interface_id)
-    push!(level_info_interfaces_set[level_id_right], interface_id)
-
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(level_info_interfaces_set_acc[l], interface_id)
+    # Higher element's level determines this interfaces' level
+    level_id = max_level + 1 - max(level_left, level_right)
+    for l in level_id:n_levels
+      push!(level_info_interfaces_acc[l], interface_id)
     end
-    for l in level_id_right:n_levels
-      push!(level_info_interfaces_set_acc[l], interface_id)
-    end
-  end
-
-  level_info_interfaces = [Vector{Int}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
-  end
-
-  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_interfaces_acc = [Vector{Int}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
   end
   @assert length(level_info_interfaces_acc[end]) == 
     n_interfaces "highest level should contain all interfaces"
 
 
-  # Use sets first to avoid double storage of boundaries
-  level_info_boundaries_set_acc = [Set{Int}() for _ in 1:n_levels]
+  # TODO: Need more advanced datastructures for boundaries!
+  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
   # Determine level for each boundary
-
   for boundary_id in 1:n_boundaries
-    #=
-    # Get element ids
-    element_id_left  = boundaries.neighbor_ids[1, boundary_id]
-    element_id_right = boundaries.neighbor_ids[2, boundary_id]
-
-    # Determine level
-    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
-
-    # Convert to level id
-    level_id_left  = max_level + 1 - level_left
-    level_id_right = max_level + 1 - level_right
-
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
-    end
-    for l in level_id_right:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
-    end
-    =#
-
-    # CARE: May be only valid for 1D
-    # Get element id
+    # Get element id (boundaries have only one unique associated element)
     element_id = boundaries.neighbor_ids[boundary_id]
 
     # Determine level
-    level  = mesh.tree.levels[elements.cell_ids[element_id]]
+    level = mesh.tree.levels[elements.cell_ids[element_id]]
 
     # Convert to level id
-    level_id  = max_level + 1 - level
+    level_id = max_level + 1 - level
 
     # Add to accumulated container
     for l in level_id:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
+      push!(level_info_boundaries_acc[l], boundary_id)
     end
-  end
-
-  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_boundaries_acc = [Vector{Int}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
   end
   @assert length(level_info_boundaries_acc[end]) == 
     n_boundaries "highest level should contain all boundaries"
 
+
   level_info_mortars_acc = [Vector{Int}() for _ in 1:n_levels]
-
   dimensions = ndims(mesh.tree) # Spatial dimension
-
   if dimensions > 1
-    # Determine level for each mortar
-    # Since mortars belong by definition to two levels, theoretically we have to
-    # add them twice: Once for each level of its neighboring elements. However,
-    # as we store the accumulated mortar ids, we only need to consider the one of
-    # the small neighbors (here: the lower one), is it has the higher level and
-    # thus the lower level id.
-
     @unpack mortars = cache
     n_mortars = length(mortars.orientations)
 
     for mortar_id in 1:n_mortars
       # Get element ids
-      element_id_lower = mortars.neighbor_ids[1, mortar_id]
+      element_id_lower  = mortars.neighbor_ids[1, mortar_id]
+      element_id_higher = mortars.neighbor_ids[2, mortar_id]
 
       # Determine level
-      level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+      level_lower  = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+      level_higher = mesh.tree.levels[elements.cell_ids[element_id_higher]]
 
-      # Convert to level id
-      level_id_lower = max_level + 1 - level_lower
-
+      # Higher element's level determines this mortars' level
+      level_id = max_level + 1 - max(level_lower, level_higher)
       # Add to accumulated container
-      for l in level_id_lower:n_levels
+      for l in level_id:n_levels
         push!(level_info_mortars_acc[l], mortar_id)
       end
     end
@@ -671,8 +611,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   println("level_info_elements_acc:")
   display(level_info_elements_acc); println()
 
-  println("level_info_interfaces:")
-  display(level_info_interfaces); println()
   println("level_info_interfaces_acc:")
   display(level_info_interfaces_acc); println()
 

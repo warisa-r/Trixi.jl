@@ -759,6 +759,8 @@ function prolong2interfaces!(cache, u,
     @unpack orientations = interfaces
 
     @threaded for interface in level_info_interfaces_acc
+        # TODO: Check if neighbors are on same level? Update "interfaces.u" only of current level?
+        # NOTE: Not sure if there is still a formal interface when there are mortars, though.
         left_element = interfaces.neighbor_ids[1, interface]
         right_element = interfaces.neighbor_ids[2, interface]
 
@@ -1266,6 +1268,8 @@ function prolong2mortars!(cache, u,
                           dg::DGSEM,
                           level_info_mortars_acc::Vector{Int64})
     @threaded for mortar in level_info_mortars_acc
+        # TODO: Same as for "prolong2interfaces": 
+        # Most efficient way would be updating only "cache.mortars.u_upper" when data comes from fine element?
         large_element = cache.mortars.neighbor_ids[3, mortar]
         upper_element = cache.mortars.neighbor_ids[2, mortar]
         lower_element = cache.mortars.neighbor_ids[1, mortar]
