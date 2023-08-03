@@ -957,15 +957,16 @@ function solve!(integrator::PERK_Multi_Integrator)
             integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
 
-          # First attempt to be more effective
-          if alg.AMatrices[level, stage - 2, 2] > 0 # Pretty much most efficient, AMR compatible way
+          # Pretty much most efficient, AMR compatible way
+          #if alg.AMatrices[level, stage - 2, 2] > 0
+          if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
               # CARE: Less effective if not finest level is present
               #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
               # Approach where one uses only the highest levels when needed 
               # CARE: Does not work if no coarsest cells are present
-              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - length(integrator.level_u_indices_elements), stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
