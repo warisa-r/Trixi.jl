@@ -25,22 +25,14 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 periodicity=(true, false),
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-# Refinement tailored to initial_refinement = 3
-#=
-LLID = Trixi.local_leaf_cells(mesh.tree)
-Trixi.refine!(mesh.tree, LLID[1:16])
-LLID = Trixi.local_leaf_cells(mesh.tree)
-Trixi.refine!(mesh.tree, LLID[1:16])
-=#
-
-# Refinement tailored to initial_refinement = 4
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:16])
-
+LLID = Trixi.local_leaf_cells(mesh.tree)
+Trixi.refine!(mesh.tree, LLID[1:16])
 
 # Note: the initial condition cannot be specialized to `CompressibleNavierStokesDiffusion2D`
 #       since it is called by both the parabolic solver (which passes in `CompressibleNavierStokesDiffusion2D`)
@@ -208,21 +200,6 @@ boundary_conditions_parabolic = (; x_neg = boundary_condition_periodic,
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver;
                                              boundary_conditions=(boundary_conditions, boundary_conditions_parabolic),
                                              source_terms=source_terms_navier_stokes_convergence_test)
-#=
-A = jacobian_ad_forward(semi)
-
-Eigenvalues = eigvals(A)
-
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
-=#
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -254,19 +231,21 @@ CFL = 0.59
 dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
 =#
 
-
+#=
 # mu = 1e-5, HLLC flux, adapted
 CFL = 1.2 # Three levels
 CFL = 0.75 # Four levels
 dt = 0.0364957930534728823 / (2.0^(InitialRefinement - 3)) * CFL
 
+# Base Level: 3
+dt = 0.0472580105059023507 / (2.0^(InitialRefinement - 3)) * CFL
 
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
                            bS, cEnd, stage_callbacks = ())
-
+=#
 
 # S = 8                   
 CFL = 0.5 * 0.91 # Three levels
@@ -276,12 +255,13 @@ dt = 0.0803455849381862225 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
 
 
-# S = 16
-#=
-CFL = 0.21
-dt = 0.146746443033043769 / (2.0^(InitialRefinement - 3)) * CFL
-S = 16
-=#
+# S = 48
+CFL = 0.5 * 0.91 # Three levels
+CFL = 0.25 * 0.92 # Four levels
+CFL = 0.125 * 0.47 # Five levels
+# dt for adapted spectrum
+dt = 0.44093098367184691 / (2.0^(InitialRefinement - 3)) * CFL
+S = 24
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
 
@@ -292,21 +272,3 @@ plot(sol)
 pd = PlotData2D(sol)
 plot(pd["v1"])
 plot!(getmesh(pd))
-
-#=
-A = jacobian_ad_forward(semi, tspan[2], sol.u[end])
-
-Eigenvalues = eigvals(A)
-
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
-display(plotdata)
-=#

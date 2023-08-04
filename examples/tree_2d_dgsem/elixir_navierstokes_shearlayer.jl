@@ -48,8 +48,9 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 1.0)
-ode = semidiscretize(semi, tspan; split_form = true)
+tspan = (0.0, 0.1)
+#ode = semidiscretize(semi, tspan; split_form = true)
+ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
@@ -62,9 +63,9 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
 amr_indicator = IndicatorLöhner(semi, variable=v_x)                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level=4,
-                                      med_level = 5, med_threshold=0.05,
-                                      max_level =6, max_threshold=0.1)
+                                      base_level = InitialRefinement,
+                                      med_level  = InitialRefinement+1, med_threshold=0.05,
+                                      max_level  = InitialRefinement+2, max_threshold=0.1)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
                            adapt_initial_condition=true,
@@ -93,7 +94,8 @@ ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spe
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 =#
 
-time_int_tol = 1e-6
+time_int_tol = 1e-6 # InitialRefinement = 4
+#time_int_tol = 1e-7 # InitialRefinement = 5
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 
@@ -102,4 +104,5 @@ summary_callback() # print the timer summary
 
 plot(sol)
 pd = PlotData2D(sol)
+plot(pd["v1"])
 plot!(getmesh(pd))
