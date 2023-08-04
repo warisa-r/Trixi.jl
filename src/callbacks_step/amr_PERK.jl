@@ -18,6 +18,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
       u_modified!(integrator, true)
 
       ### PERK addition ###
+      # TODO: Need to make this much less allocating!
       @trixi_timeit timer() "PERK stage identifiers update" begin
         mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
         @unpack elements, interfaces, boundaries = cache
@@ -76,8 +77,11 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_interfaces "highest level should contain all interfaces"
 
 
-        # TODO: Need more advanced datastructures for boundaries!
         integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+        # For efficient treatment of boundaries we need additional datastructures
+        n_dims = ndims(mesh.tree) # Spatial dimension
+        integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
+
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
           # Get element id (boundaries have only one unique associated element)
@@ -92,6 +96,39 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           # Add to accumulated container
           for l in level_id:n_levels
             push!(integrator.level_info_boundaries_acc[l], boundary_id)
+          end
+
+          # For orientation-side wise specific treatment
+          if boundaries.orientations[boundary_id] == 1 # x Boundary
+            if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][2], boundary_id)
+              end
+            else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][1], boundary_id)
+              end
+            end
+          elseif boundaries.orientations[boundary_id] == 2 # y Boundary
+            if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][4], boundary_id)
+              end
+            else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][3], boundary_id)
+              end
+            end
+          elseif boundaries.orientations[boundary_id] == 3 # z Boundary
+            if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][6], boundary_id)
+              end
+            else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+              for l in level_id:n_levels
+                push!(integrator.level_info_boundaries_orientation_acc[l][5], boundary_id)
+              end
+            end 
           end
         end
         @assert length(integrator.level_info_boundaries_acc[end]) == 

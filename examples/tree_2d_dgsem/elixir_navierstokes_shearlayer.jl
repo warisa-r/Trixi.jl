@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -7,7 +7,7 @@ using Trixi
 
 # TODO: parabolic; unify names of these accessor functions
 prandtl_number() = 0.72
-mu() = 1.0/3.0 * 10^(-3) # equivalent to Re = 3000
+mu() = 1.0/3.0 * 10^(-5)
 
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
@@ -48,16 +48,14 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.1)
-#ode = semidiscretize(semi, tspan; split_form = true)
-ode = semidiscretize(semi, tspan)
+tspan = (0.0, 2.0)
+ode = semidiscretize(semi, tspan; split_form = false)
+#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 50
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                     extra_analysis_integrals=(energy_kinetic,
-                                                               energy_internal))
+analysis_interval = 200
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
@@ -67,7 +65,7 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level  = InitialRefinement+1, med_threshold=0.05,
                                       max_level  = InitialRefinement+2, max_threshold=0.1)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=5,
+                           interval=10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -80,19 +78,26 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 
-CFL = 0.5 # b1 = 0
-CFL = 0.57 # b1 = 0.5
-dt = 0.00320512892678380019  / (2.0^(InitialRefinement - 3)) * CFL
+CFL = 0.53 # b1 = 0
+dt = 0.00315187349391635514  / (2.0^(InitialRefinement - 3)) * CFL
 
-#=
-b1   = 0.5
+
+b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            bS, cEnd, stage_callbacks = ())
 
+
+CFL = 0.5 * 0.45 # Three levels
+# dt for adapted spectrum
+dt = 0.00688232183165382608 / (2.0^(InitialRefinement - 3)) * CFL
+S = 8
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
+
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-=#
 
 time_int_tol = 1e-6 # InitialRefinement = 4
 #time_int_tol = 1e-7 # InitialRefinement = 5
