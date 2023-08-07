@@ -7,7 +7,7 @@ using Trixi
 
 # TODO: parabolic; unify names of these accessor functions
 prandtl_number() = 0.72
-mu() = 6.25e-4 # equivalent to Re = 1600
+mu() = 1e-5 # equivalent to Re = 1600
 
 equations = CompressibleEulerEquations1D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion1D(equations, mu=mu(),
@@ -105,7 +105,7 @@ solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
 coordinates_min = -1.0
 coordinates_max =  1.0
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=7,
                 n_cells_max=100_000)
 
 
@@ -117,7 +117,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 1.0)
-ode = semidiscretize(semi, tspan)
+ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
@@ -132,9 +132,18 @@ callbacks = CallbackSet(summary_callback,
 
 ###############################################################################
 # run the simulation
-
+#=
 time_int_tol = 1e-9
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
+=#
+CFL = 0.6
+dt = 0.0342224 * CFL
+S = 32
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_NavierStokes_Convergence/")
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+
 summary_callback() # print the timer summary
 plot(sol)
