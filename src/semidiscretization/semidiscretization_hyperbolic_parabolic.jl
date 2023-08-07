@@ -1,3 +1,6 @@
+using Symbolics # For detecting sparsity pattern, see
+# https://github.com/JuliaDiff/SparseDiffTools.jl#example
+
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -446,6 +449,12 @@ end
 function _jacobian_ad_forward(semi::SemidiscretizationHyperbolicParabolic, t0, u0_ode,
                               du_ode, config)
     new_semi = remake(semi, uEltype = eltype(config))
+
+    @time begin
+    sparsity_pattern = Symbolics.jacobian_sparsity(rhs_hyperbolic_parabolic!,
+                                                   du_ode, u0_ode, semi, t0)
+    end
+    jac = Float64.(sparsity_pattern)
 
     du_ode_hyp = Vector{eltype(config)}(undef, length(du_ode))
     J = ForwardDiff.jacobian(du_ode, u0_ode, config) do du_ode, u_ode
