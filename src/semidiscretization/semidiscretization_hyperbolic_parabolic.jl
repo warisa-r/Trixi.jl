@@ -1,6 +1,3 @@
-using Symbolics # For detecting sparsity pattern, see
-# https://github.com/JuliaDiff/SparseDiffTools.jl#example
-
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -378,12 +375,12 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
     @trixi_timeit timer() "rhs! (level-dependent)" rhs!(du, u, t, mesh, equations, initial_condition,
-                                      boundary_conditions, source_terms, solver, cache,
-                                      level_info_elements_acc,
-                                      level_info_interfaces_acc,
-                                      level_info_boundaries_acc,
-                                      level_info_boundaries_orientation_acc,
-                                      level_info_mortars_acc)
+                                                        boundary_conditions, source_terms, solver, cache,
+                                                        level_info_elements_acc,
+                                                        level_info_interfaces_acc,
+                                                        level_info_boundaries_acc,
+                                                        level_info_boundaries_orientation_acc,
+                                                        level_info_mortars_acc)
     runtime = time_ns() - time_start
     put!(semi.performance_counter.counters[1], runtime)
 
@@ -404,17 +401,17 @@ function rhs_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabol
     # TODO: Taal decide, do we need to pass the mesh?
     time_start = time_ns()
     @trixi_timeit timer() "rhs_parabolic! (level-dependent)" rhs_parabolic!(du, u, t, mesh,
-                                                          equations_parabolic,
-                                                          initial_condition,
-                                                          boundary_conditions_parabolic,
-                                                          source_terms,
-                                                          solver, solver_parabolic,
-                                                          cache, cache_parabolic,
-                                                          level_info_elements_acc,
-                                                          level_info_interfaces_acc,
-                                                          level_info_boundaries_acc,
-                                                          level_info_boundaries_orientation_acc,
-                                                          level_info_mortars_acc)
+                                                                            equations_parabolic,
+                                                                            initial_condition,
+                                                                            boundary_conditions_parabolic,
+                                                                            source_terms,
+                                                                            solver, solver_parabolic,
+                                                                            cache, cache_parabolic,
+                                                                            level_info_elements_acc,
+                                                                            level_info_interfaces_acc,
+                                                                            level_info_boundaries_acc,
+                                                                            level_info_boundaries_orientation_acc,
+                                                                            level_info_mortars_acc)
     runtime = time_ns() - time_start
     put!(semi.performance_counter.counters[2], runtime)
 
@@ -449,12 +446,6 @@ end
 function _jacobian_ad_forward(semi::SemidiscretizationHyperbolicParabolic, t0, u0_ode,
                               du_ode, config)
     new_semi = remake(semi, uEltype = eltype(config))
-
-    @time begin
-    sparsity_pattern = Symbolics.jacobian_sparsity(rhs_hyperbolic_parabolic!,
-                                                   du_ode, u0_ode, semi, t0)
-    end
-    jac = Float64.(sparsity_pattern)
 
     du_ode_hyp = Vector{eltype(config)}(undef, length(du_ode))
     J = ForwardDiff.jacobian(du_ode, u0_ode, config) do du_ode, u_ode
