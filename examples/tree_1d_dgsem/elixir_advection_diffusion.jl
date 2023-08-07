@@ -5,9 +5,9 @@ using Trixi
 ###############################################################################
 # semidiscretization of the linear advection diffusion equation
 
-advection_velocity = 0.1
+advection_velocity = 1
 equations = LinearScalarAdvectionEquation1D(advection_velocity)
-diffusivity() = 0.1
+diffusivity() = 1e-5
 equations_parabolic = LaplaceDiffusion1D(diffusivity(), equations)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -18,7 +18,7 @@ coordinates_max =  pi # maximum coordinate
 
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=7,
                 n_cells_max=30_000, # set maximum capacity of tree data structure
                 periodicity=true)
 
@@ -59,8 +59,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 1.0
-tspan = (0.0, 1.0)
-ode = semidiscretize(semi, tspan);
+tspan = (0.0, 10.0)
+ode = semidiscretize(semi, tspan; split_form = false);
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
 # and resets the timers
@@ -78,12 +78,23 @@ callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback)
 
 ###############################################################################
 # run the simulation
-
+#=
 # OrdinaryDiffEq's `solve` method evolves the solution in time and executes the passed callbacks
 time_int_tol = 1.0e-10
 time_abs_tol = 1.0e-10
 sol = solve(ode, KenCarp4(autodiff=false), abstol=time_abs_tol, reltol=time_int_tol,
             save_everystep=false, callback=callbacks)
+=#
+
+CFL = 0.99
+# dt for adapted spectrum
+dt = 0.181515 * CFL
+S = 32
+
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff/")
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 # Print the timer summary
 summary_callback()
