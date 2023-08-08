@@ -89,7 +89,7 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            bS, cEnd, stage_callbacks = ())
 
-
+#=
 CFL = 0.5 * 0.45 # Three levels
 #CFL = 0.25 * 0.51 # Four levels
 # dt for adapted spectrum
@@ -97,7 +97,7 @@ dt = 0.00688232183165382608 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
-
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
@@ -107,6 +107,9 @@ time_int_tol = 1e-6 # InitialRefinement = 4
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 =#
+
+sol = solve(ode, SSPRK33(), dt=4e-5,
+            save_everystep=false, callback=callbacks)
 
 summary_callback() # print the timer summary
 
