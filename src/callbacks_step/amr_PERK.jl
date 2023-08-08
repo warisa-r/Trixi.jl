@@ -32,12 +32,30 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         max_level = maximum_level(mesh.tree)
         n_levels = max_level - min_level + 1
 
+        n_dims = ndims(mesh.tree) # Spatial dimension
 
         # Next to fine NOT integrated with fine scheme
+
         # Initialize storage for level-wise information
-        level_info_elements                = [Vector{Int64}() for _ in 1:n_levels]
-        integrator.level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
-        #resize!(integrator.level_info_elements_acc, n_levels) # TODO: Does unfortunately not work
+        if n_levels != length(integrator.level_info_elements_acc)
+          integrator.level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
+          integrator.level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
+          integrator.level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
+          integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+          # For efficient treatment of boundaries we need additional datastructures
+          integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
+          integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
+          #resize!(integrator.level_info_elements_acc, n_levels) # TODO: Does unfortunately not work
+        else # Just empty datastructures
+          for level in 1:n_levels
+            empty!(integrator.level_info_elements[level])
+            empty!(integrator.level_info_elements_acc[level])
+            empty!(integrator.level_info_interfaces_acc[level])
+            empty!(integrator.level_info_boundaries_acc[level])
+            empty!(integrator.level_info_boundaries_orientation_acc[level])
+            empty!(integrator.level_info_mortars_acc[level])
+          end
+        end
 
         # Determine level for each element
         for element_id in 1:n_elements
@@ -46,7 +64,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           # Convert to level id
           level_id = max_level + 1 - level
 
-          push!(level_info_elements[level_id], element_id)
+          push!(integrator.level_info_elements[level_id], element_id)
           # Add to accumulated container
           for l in level_id:n_levels
             push!(integrator.level_info_elements_acc[l], element_id)
@@ -56,7 +74,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_elements "highest level should contain all elements"
 
 
-        integrator.level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
         # Determine level for each interface
         for interface_id in 1:n_interfaces
           # Get element ids
@@ -76,11 +93,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         @assert length(integrator.level_info_interfaces_acc[end]) == 
           n_interfaces "highest level should contain all interfaces"
 
-
-        integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
-        # For efficient treatment of boundaries we need additional datastructures
-        n_dims = ndims(mesh.tree) # Spatial dimension
-        integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
 
         # Determine level for each boundary
         for boundary_id in 1:n_boundaries
@@ -135,7 +147,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           n_boundaries "highest level should contain all boundaries"
 
 
-        integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
         dimensions = ndims(mesh.tree) # Spatial dimension
         if dimensions > 1
           @unpack mortars = cache
@@ -338,14 +349,14 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         # Have if outside for performance reasons
         if dimensions == 1
           for level in 1:n_levels
-            for element_id in level_info_elements[level]
+            for element_id in integrator.level_info_elements[level]
               indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
           end
         elseif dimensions == 2
           for level in 1:n_levels
-            for element_id in level_info_elements[level]
+            for element_id in integrator.level_info_elements[level]
               indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
