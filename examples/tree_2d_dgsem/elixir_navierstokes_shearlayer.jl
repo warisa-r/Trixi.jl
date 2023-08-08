@@ -48,7 +48,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 1)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
@@ -62,8 +62,8 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 amr_indicator = IndicatorLöhner(semi, variable=v_x)                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
-                                      med_level  = InitialRefinement+1, med_threshold=0.05,
-                                      max_level  = InitialRefinement+2, max_threshold=0.1)
+                                      med_level  = InitialRefinement+1, med_threshold=0.15,
+                                      max_level  = InitialRefinement+2, max_threshold=0.2)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
@@ -88,22 +88,22 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            bS, cEnd, stage_callbacks = ())
 
-
+#=
 CFL = 0.5 * 0.45 # Three levels
 # dt for adapted spectrum
 dt = 0.00688232183165382608 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
-
-
+=#
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
+#=
 time_int_tol = 1e-6 # InitialRefinement = 4
 #time_int_tol = 1e-7 # InitialRefinement = 5
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
-
+=#
 
 summary_callback() # print the timer summary
 

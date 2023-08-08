@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, Plots, LinearAlgebra
 using Trixi
 
 ###############################################################################
@@ -113,6 +113,23 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
                                              initial_condition, solver,
                                              source_terms = source_terms_navier_stokes_convergence_test)
 
+A = jacobian_ad_forward(semi)
+
+Eigenvalues = eigvals(A)
+
+# Complex conjugate eigenvalues have same modulus
+Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
+
+# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
+Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
+
+EigValsReal = real(Eigenvalues)
+EigValsImag = imag(Eigenvalues)
+
+plotdata = nothing
+plotdata = scatter(EigValsReal, EigValsImag, label = "Start")
+display(plotdata)            
+
 ###############################################################################
 # ODE solvers, callbacks etc.
 
@@ -146,4 +163,20 @@ ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_N
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 summary_callback() # print the timer summary
-plot(sol)
+#plot(sol)
+
+A = jacobian_ad_forward(semi, tspan[2], sol.u[end])
+
+Eigenvalues = eigvals(A)
+
+# Complex conjugate eigenvalues have same modulus
+Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
+
+# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
+Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
+
+EigValsReal = real(Eigenvalues)
+EigValsImag = imag(Eigenvalues)
+
+plotdata = scatter!(EigValsReal, EigValsImag, label = "End")
+display(plotdata)       
