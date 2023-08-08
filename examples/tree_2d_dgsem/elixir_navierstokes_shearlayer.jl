@@ -36,9 +36,9 @@ solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
-InitialRefinement = 4
+InitialRefinement = 6
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
 
 
@@ -48,7 +48,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 1)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
@@ -62,8 +62,8 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 amr_indicator = IndicatorLöhner(semi, variable=v_x)                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
-                                      med_level  = InitialRefinement+1, med_threshold=0.15,
-                                      max_level  = InitialRefinement+2, max_threshold=0.2)
+                                      med_level  = InitialRefinement+1, med_threshold=0.2,
+                                      max_level  = InitialRefinement+2, max_threshold=0.4)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
@@ -78,7 +78,8 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 
-CFL = 0.53 # b1 = 0
+CFL = 0.53 # b1 = 0 # Two refinements
+#CFL = 0.35 # Three refinements
 dt = 0.00315187349391635514  / (2.0^(InitialRefinement - 3)) * CFL
 
 
@@ -88,14 +89,16 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            bS, cEnd, stage_callbacks = ())
 
-#=
+
 CFL = 0.5 * 0.45 # Three levels
+#CFL = 0.25 * 0.51 # Four levels
 # dt for adapted spectrum
 dt = 0.00688232183165382608 / (2.0^(InitialRefinement - 3)) * CFL
 S = 8
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
-=#
+
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 #=
