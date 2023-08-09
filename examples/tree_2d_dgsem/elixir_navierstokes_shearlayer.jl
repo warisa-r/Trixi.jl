@@ -36,7 +36,7 @@ solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
-InitialRefinement = 4
+InitialRefinement = 6
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
@@ -66,7 +66,7 @@ display(plotdata)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 1.0)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
@@ -81,7 +81,7 @@ amr_indicator = IndicatorLöhner(semi, variable=v_x)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
                                       med_level  = InitialRefinement+1, med_threshold=0.2,
-                                      max_level  = InitialRefinement+2, max_threshold=0.4)
+                                      max_level  = InitialRefinement+3, max_threshold=0.5)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
@@ -95,13 +95,8 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-#=
-CFL = 0.53 # b1 = 0 # Two refinements
-#CFL = 0.35 # Three refinements
-dt = 0.00315187349391635514 / (2.0^(InitialRefinement - 3)) * CFL
-
 CFL = 0.57
-#CFL = 0.35 # Three refinements
+CFL = 0.35 # Three refinements
 # 4: dt 0.00156784012855496261
 dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
 # 8: dt 0.00342847820080351092
@@ -110,25 +105,19 @@ dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
 b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
+ode_algorithm = PERK_Multi(4, 3, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            "/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, stage_callbacks = ())
-=#
 
-# Optimized for refinement_level = 3
-# S = 8
-#CFL = 0.5 * 0.45 # Three levels
-#CFL = 0.25 * 0.51 # Four levels
-#dt = 0.00688232183165382608 / (2.0^(InitialRefinement - 3)) * CFL
-#S = 8
-
+#=
 # S = 8
 CFL = 0.25 * 1.0
-#CFL = 0.125 * 1.0
+CFL = 0.125 * 1.0
 
 dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4)) * CFL
 S = 8
 
+#=
 CFL = 0.25 * 0.8
 dt = 0.00708093033754266813 / (2.0^(InitialRefinement - 4)) * CFL
 S = 16
@@ -136,13 +125,11 @@ S = 16
 CFL = 0.25 * 0.4
 dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
 S = 32
+=#
 
-b1 = 0.5
-bS = 1. - b1
-cEnd = 0.5/bS
 ode_algorithm = PERK(S, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/")
                          "/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/", bS, cEnd)
-
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
