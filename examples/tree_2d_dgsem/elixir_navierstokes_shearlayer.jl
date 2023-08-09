@@ -80,8 +80,14 @@ callbacks = CallbackSet(summary_callback,
 #=
 CFL = 0.53 # b1 = 0 # Two refinements
 #CFL = 0.35 # Three refinements
-dt = 0.00315187349391635514  / (2.0^(InitialRefinement - 3)) * CFL
+dt = 0.00315187349391635514 / (2.0^(InitialRefinement - 3)) * CFL
 
+dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
+
+# 8 :
+0.00342847820080351092
+
+# 16:
 
 b1   = 0.0
 bS   = 1.0 - b1
