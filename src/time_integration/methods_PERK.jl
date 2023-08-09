@@ -20,15 +20,20 @@ function ComputeACoeffs(NumStageEvals::Int,
   return reverse(ACoeffs)
 end
 
-function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString)
+function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString, bS::Float64, cEnd::Float64)
 
   # c Vector form Butcher Tableau (defines timestep per stage)
   c = zeros(NumStages)
   for k in 2:NumStages
+    c[k] = cEnd * (k - 1)/(NumStages - 1)
+  end
+  #=
+  for k in 2:NumStages
     c[k] = (k - 1)/(2.0*(NumStages - 1))
   end
+  =#
   println("Timestep-split: "); display(c); println("\n")
-  SE_Factors = reverse(c[2:end-1])
+  SE_Factors = bS * reverse(c[2:end-1])
 
   # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK specific)
   CoeffsMax = NumStages - 2
@@ -73,15 +78,21 @@ mutable struct PERK
 
   AMatrix::Matrix{Float64}
   c::Vector{Float64}
+  bS::Float64
+  b1::Float64
+  cEnd::Float64
 
   # Constructor for previously computed A Coeffs
-  function PERK(NumStages_::Int, BasePathMonCoeffs_::AbstractString)
+  function PERK(NumStages_::Int, BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64)
 
     newPERK = new(NumStages_)
 
     newPERK.AMatrix, newPERK.c = 
-      ComputePERK_ButcherTableau(NumStages_, BasePathMonCoeffs_)
+      ComputePERK_ButcherTableau(NumStages_, BasePathMonCoeffs_, bS_, cEnd_)
 
+    newPERK.b1 = 1 - bS_
+    newPERK.bS = bS_
+    newPERK.cEnd = cEnd_
     return newPERK
   end
 end # struct PERK
@@ -230,7 +241,8 @@ function solve!(integrator::PERK_Integrator)
       end
 
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += integrator.k_higher[i]
+        #integrator.u[i] += integrator.k_higher[i]
+        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
       end
     end # PERK step
 

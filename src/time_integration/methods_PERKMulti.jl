@@ -95,6 +95,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 end
 
 # Version with variable bs, cEnd
+# TODO: Make bS, cEend Keyword arguments (avoid two methods)
 function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                           bS::Float64, cEnd::Float64)
                                      
@@ -991,9 +992,9 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
-        #integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
+        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
         # Slightly more performant, hard-coded version
-        integrator.u[i] += integrator.k_higher[i]
+        #integrator.u[i] += integrator.k_higher[i]
       end
       
       #=
