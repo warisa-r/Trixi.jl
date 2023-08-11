@@ -52,7 +52,9 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
             empty!(integrator.level_info_elements_acc[level])
             empty!(integrator.level_info_interfaces_acc[level])
             empty!(integrator.level_info_boundaries_acc[level])
-            empty!(integrator.level_info_boundaries_orientation_acc[level])
+            for dim in 1:2*n_dims
+              empty!(integrator.level_info_boundaries_orientation_acc[level][dim])
+            end
             empty!(integrator.level_info_mortars_acc[level])
           end
         end

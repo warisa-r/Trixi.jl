@@ -81,7 +81,7 @@ amr_controller = ControllerThreeLevel(semi,
                                       IndicatorMax(semi, variable=first),
                                       base_level=Base_lvl,
                                       med_level=Base_lvl+1, med_threshold=0.1,
-                                      max_level=Base_lvl+3, max_threshold=0.6)
+                                      max_level=Base_lvl+2, max_threshold=0.6)
 
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
@@ -93,18 +93,19 @@ callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback, amr
 
 ###############################################################################
 # run the simulation
-#=
-CFL = 0.4
+
+CFL = 0.6 # Two refinements
+CFL = 0.4 # Three refinements
 dt = 0.0279620120039908231 * CFL
 
 b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff_Reac/", 
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff_Reac/", 
                            bS, cEnd, stage_callbacks = ())
-=#
 
 
+#=
 CFL = 0.5 * 0.99
 dt = 0.0279620120039908231 * CFL
 S = 16
@@ -120,7 +121,7 @@ bS   = 1.0 - b1
 cEnd = 0.5/bS
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff_Reac/", bS, cEnd)
-
+=#
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 #=

@@ -24,14 +24,14 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 periodicity=(true, false),
                 n_cells_max=30_000) # set maximum capacity of tree data structure
-
+#=
 LLID = Trixi.local_leaf_cells(mesh.tree)
-Trixi.refine!(mesh.tree, LLID[1:4])
+Trixi.refine!(mesh.tree, LLID[1:128])
 LLID = Trixi.local_leaf_cells(mesh.tree)
-Trixi.refine!(mesh.tree, LLID[1:4])
-#LLID = Trixi.local_leaf_cells(mesh.tree)
-#Trixi.refine!(mesh.tree, LLID[1:4])
-
+Trixi.refine!(mesh.tree, LLID[1:128])
+LLID = Trixi.local_leaf_cells(mesh.tree)
+Trixi.refine!(mesh.tree, LLID[1:128])
+=#
 
 # Note: the initial condition cannot be specialized to `CompressibleNavierStokesDiffusion2D`
 #       since it is called by both the parabolic solver (which passes in `CompressibleNavierStokesDiffusion2D`)
@@ -215,7 +215,18 @@ alive_callback = AliveCallback(alive_interval=100)
 analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 #callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
-callbacks = CallbackSet(summary_callback, analysis_callback)
+
+amr_indicator = IndicatorMax(semi, variable=Trixi.density)
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level = InitialRefinement,
+                                      med_level  = InitialRefinement+1, med_threshold=2.0,
+                                      max_level  = InitialRefinement+2, max_threshold=2.3)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=10,
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
+
+callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
 
 ###############################################################################
 # run the simulation
@@ -229,7 +240,8 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt =
 
 # mu = 1e-5, HLLC flux, non-adapted, finer mesh
 CFL = 0.71 # Two refinements
-CFL = 0.43 # Three
+#CFL = 0.43 # Three
+CFL = 0.38
 dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4)) * CFL
 
 
@@ -246,33 +258,33 @@ dt = 0.0472580105059023507 / (2.0^(InitialRefinement - 3)) * CFL
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 3, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
+ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
                            "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", 
                            bS, cEnd, stage_callbacks = ())
 
-                     
+                    
 # S = 4             
-CFL = 0.25 * 1.0
+CFL = 0.125 * 1.0
 # dt for adapted spectrum
 dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4)) * CFL
 S = 4
 
 
-
+#=
 # S = 8                   
 CFL = 0.25 * 1.0
 # dt for adapted spectrum
 dt = 0.0705015182429633608 / (2.0^(InitialRefinement - 4)) * CFL
 S = 8
+=#
 
-
-
+#=
 # S = 16                
 CFL = 0.25 * 1.0
 # dt for adapted spectrum
 dt = 0.143722531198727673 / (2.0^(InitialRefinement - 4)) * CFL
 S = 16
-
+=#
 
 #=
 # S = 32             
@@ -282,12 +294,12 @@ dt = 0.28912970427227858 / (2.0^(InitialRefinement - 4)) * CFL
 S = 32
 =#
 
-ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/")
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", bS, cEnd)
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary
 
 plot(sol)
 pd = PlotData2D(sol)
-plot(pd["v1"])
+plot(pd["rho"])
 plot!(getmesh(pd))

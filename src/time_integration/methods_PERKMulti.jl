@@ -899,6 +899,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # k1: Evaluated on entire domain / all levels
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
@@ -915,6 +916,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
+      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -922,7 +924,14 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1],
                    integrator.du_ode_hyp)
-      
+      #=
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
+                   integrator.level_info_elements_acc[1],
+                   integrator.level_info_interfaces_acc[1],
+                   integrator.level_info_boundaries_acc[1],
+                   integrator.level_info_boundaries_orientation_acc[1],
+                   integrator.level_info_mortars_acc[1])
+      =#
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
@@ -939,23 +948,23 @@ function solve!(integrator::PERK_Multi_Integrator)
         for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             # CARE: Less effective if not finest level is present
-            #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
             # Approach where one uses only the highest levels when needed 
             # CARE: Does not work if no coarsest cells are present
-            integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # Pretty much most efficient, AMR compatible way
-          #if alg.AMatrices[level, stage - 2, 2] > 0
-          if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
+          if alg.AMatrices[level, stage - 2, 2] > 0
+          #if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
               # CARE: Less effective if not finest level is present
-              #integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
               # Approach where one uses only the highest levels when needed 
               # CARE: Does not work if no coarsest cells are present
-              integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -974,6 +983,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         =#
         
         # Joint RHS evaluation with all elements sharing this timestep
+        
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
@@ -981,7 +991,14 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.du_ode_hyp)
-        
+        #=
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
+                    integrator.level_info_elements_acc[integrator.coarsest_lvl],
+                    integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
+                    integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
+                    integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
+                    integrator.level_info_mortars_acc[integrator.coarsest_lvl])
+        =#
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
           @threaded for u_ind in integrator.level_u_indices_elements[level]

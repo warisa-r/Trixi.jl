@@ -17,8 +17,9 @@ coordinates_min = -pi # minimum coordinate
 coordinates_max =  pi # maximum coordinate
 
 # Create a uniformly refined mesh with periodic boundaries
+InitialRefinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000, # set maximum capacity of tree data structure
                 periodicity=true)
 
@@ -59,7 +60,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 1.0
-tspan = (0.0, 1.0)
+tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan; split_form = false);
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
@@ -97,6 +98,13 @@ bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff/", 
                            bS, cEnd, stage_callbacks = ())
+#=
+CFL = 0.25 * 0.5
+dt = 0.180811925990383315 / (2.0^(InitialRefinement - 4)) * CFL
+S = 4
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff/", bS, cEnd)
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 

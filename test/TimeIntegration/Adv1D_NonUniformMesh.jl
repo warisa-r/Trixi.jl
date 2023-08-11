@@ -12,7 +12,7 @@ PolyDeg = 3
 surface_flux = flux_lax_friedrichs
 # surface_flux = flux_godunov # Cannot extract jacobian for this
 
-
+#=
 basis = LobattoLegendreBasis(PolyDeg)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
                                          alpha_max=1.0,
@@ -20,7 +20,7 @@ indicator_sc = IndicatorHennemannGassner(equations, basis,
                                          alpha_smooth=false,
                                          variable=Trixi.scalar)
 
-#=
+
 volume_flux  = flux_central
 #volume_flux  = flux_lax_friedrichs
 volume_integral = VolumeIntegralShockCapturingHG(indicator_sc;
@@ -63,7 +63,7 @@ num_leafs = length(LLID)
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4)+1 : Int(3*num_leafs/4)])
 
 
-#=
+
 # Third refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -72,7 +72,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
-=#
+
 
 initial_condition = initial_condition_convergence_test
 initial_condition = initial_condition_gauss
@@ -85,14 +85,14 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-CFL = 1.0
+CFL = 0.4
 
 # S=4, D=3
 dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
 
 StartTime = 0.0
 EndTime = 10 * rand()
-#EndTime = dt
+EndTime = 0.8
 
 
 # Create ODEProblem
@@ -117,12 +117,14 @@ save_solution = SaveSolutionCallback(interval=1,
 #callbacks = CallbackSet(summary_callback, analysis_callback, stepsize_callback)
 #callbacks = CallbackSet(summary_callback, analysis_callback)
 
+#=
 indicator_max = IndicatorMax(semi, variable=first)
 indicator_löhner = IndicatorLöhner(semi, variable=Trixi.scalar)
 
 limiterp1_callback = Trixi.Limiterp1Callback(indicator_löhner)
 
-#callbacks = CallbackSet(summary_callback, analysis_callback, limiterp1_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback, limiterp1_callback)
+=#
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
@@ -132,10 +134,10 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
+#callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
 
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
-                           bS, cEnd, stage_callbacks = callbacks_Stage)
+ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
+                           bS, cEnd)
 
 #ode_algorithm = Trixi.PRK()               
 #ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")

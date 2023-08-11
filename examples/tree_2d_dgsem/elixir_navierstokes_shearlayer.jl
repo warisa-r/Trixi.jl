@@ -81,7 +81,7 @@ amr_indicator = IndicatorLöhner(semi, variable=v_x)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
                                       med_level  = InitialRefinement+1, med_threshold=0.2,
-                                      max_level  = InitialRefinement+3, max_threshold=0.5)
+                                      max_level  = InitialRefinement+2, max_threshold=0.5)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
@@ -96,7 +96,7 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 CFL = 0.57
-CFL = 0.35 # Three refinements
+#CFL = 0.35 # Three refinements
 # 4: dt 0.00156784012855496261
 dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
 # 8: dt 0.00342847820080351092
@@ -105,8 +105,8 @@ dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
 b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 3, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
-                           "/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
+                           #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, stage_callbacks = ())
 
 #=

@@ -22,10 +22,12 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 periodicity=true,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
+#=
 LLID = Trixi.local_leaf_cells(mesh.tree)
 num_leafs = length(LLID)
 @assert num_leafs % 8 == 0
 Trixi.refine!(mesh.tree, LLID[1:Int(num_leafs/8)])                
+=#
 
 # Define initial condition
 function initial_condition_diffusive_convergence_test(x, t, equation::LinearScalarAdvectionEquation2D)
@@ -60,7 +62,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh,
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 1.5
-tspan = (0.0, 0.4)
+tspan = (0.0, 1)
 ode = semidiscretize(semi, tspan; split_form = false)
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
@@ -102,6 +104,13 @@ bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv_Diff/", 
                            bS, cEnd, stage_callbacks = ())
+#=
+CFL = 0.25 * 0.7
+dt = 0.0454358300175954355 / (2.0^(InitialRefinement - 3)) * CFL
+S = 4
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv_Diff/", bS, cEnd)
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
