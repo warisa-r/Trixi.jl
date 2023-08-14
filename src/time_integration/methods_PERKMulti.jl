@@ -427,6 +427,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       for l in level_id:n_levels
         push!(level_info_mortars_acc[l], mortar_id)
       end
+
+      #= TODO: 
+      Add elements on the fine side (higher level) to additional datastructure
+      which serves as an indicator on which cells we impose artificial viscosity, i.e., simulate Navier-Stokes.
+
+      Idea: Number of elements based on the stencil size of the integrator associated with this level
+      =#
+
     end
     @assert length(level_info_mortars_acc[end]) == 
       n_mortars "highest level should contain all mortars"
@@ -898,8 +906,18 @@ function solve!(integrator::PERK_Multi_Integrator)
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t_stage, 
+                    integrator.level_info_elements_acc[end],
+                    integrator.level_info_interfaces_acc[end],
+                    integrator.level_info_boundaries_acc[end],
+                    integrator.level_info_boundaries_orientation_acc[end],
+                    integrator.level_info_mortars_acc[end],
+                    integrator.du_ode_hyp,
+                    integrator.level_u_indices_elements[1])
+
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
@@ -923,7 +941,8 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1],
-                   integrator.du_ode_hyp)
+                   integrator.du_ode_hyp,
+                   integrator.level_u_indices_elements[1])
       #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
@@ -990,7 +1009,8 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
-                    integrator.du_ode_hyp)
+                    integrator.du_ode_hyp,
+                    integrator.level_u_indices_elements[1])
         #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],

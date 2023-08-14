@@ -426,8 +426,6 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                                    level_info_mortars_acc::Vector{Int64},
                                    du_ode_hyp)
     @trixi_timeit timer() "rhs_hyperbolic-parabolic! (level-dependent)" begin 
-        # TODO: Avoid allocations, make member variable of something? 
-        # -> Could reside in (PERK) integrator, then pass in similar to indices of PERK
         rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
              level_info_interfaces_acc,
              level_info_boundaries_acc,
@@ -442,6 +440,34 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
     end
 end
 
+function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t,
+                                   level_info_elements_acc::Vector{Int64},
+                                   level_info_interfaces_acc::Vector{Int64},
+                                   level_info_boundaries_acc::Vector{Int64},
+                                   level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
+                                   level_info_mortars_acc::Vector{Int64},
+                                   du_ode_hyp,
+                                   level_u_indices_elements_finest::Vector{Int64})
+    @trixi_timeit timer() "rhs_hyperbolic-parabolic! (level-dependent)" begin 
+        rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
+             level_info_interfaces_acc,
+             level_info_boundaries_acc,
+             level_info_boundaries_orientation_acc,
+             level_info_mortars_acc)
+        rhs_parabolic!(du_ode, u_ode, semi, t, level_info_elements_acc,
+                       level_info_interfaces_acc,
+                       level_info_boundaries_acc,
+                       level_info_boundaries_orientation_acc,
+                       level_info_mortars_acc)
+        for i in level_u_indices_elements_finest
+            du_ode_hyp[i] += du_ode[i]
+        end
+
+        for i in eachindex(du_ode_hyp)
+            du_ode[i] = du_ode_hyp[i]
+        end
+    end
+end
 
 function _jacobian_ad_forward(semi::SemidiscretizationHyperbolicParabolic, t0, u0_ode,
                               du_ode, config)
