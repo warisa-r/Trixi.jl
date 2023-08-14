@@ -239,9 +239,9 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt =
 
 
 # mu = 1e-5, HLLC flux, non-adapted, finer mesh
-CFL = 0.71 # Two refinements
+CFL = 0.6 # Two refinements
 #CFL = 0.43 # Three
-CFL = 0.38
+#CFL = 0.38
 dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4)) * CFL
 
 
@@ -262,35 +262,35 @@ ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/Sp
                            "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", 
                            bS, cEnd, stage_callbacks = ())
 
-                    
+             
 # S = 4             
-CFL = 0.125 * 1.0
+CFL_Single = 0.25 * CFL
 # dt for adapted spectrum
-dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4)) * CFL
+dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4)) * CFL_Single
 S = 4
 
 
-#=
-# S = 8                   
-CFL = 0.25 * 1.0
-# dt for adapted spectrum
-dt = 0.0705015182429633608 / (2.0^(InitialRefinement - 4)) * CFL
-S = 8
-=#
 
-#=
-# S = 16                
-CFL = 0.25 * 1.0
+# S = 8                   
+CFL_Single = 0.25 * CFL
 # dt for adapted spectrum
-dt = 0.143722531198727673 / (2.0^(InitialRefinement - 4)) * CFL
+dt = 0.0705015182429633608 / (2.0^(InitialRefinement - 4)) * CFL_Single
+S = 8
+
+
+
+# S = 16                
+CFL_Single = 0.25 * CFL
+# dt for adapted spectrum
+dt = 0.143722531198727673 / (2.0^(InitialRefinement - 4)) * CFL_Single
 S = 16
-=#
+
 
 #=
 # S = 32             
 CFL = 0.125 * 0.63
 # dt for adapted spectrum
-dt = 0.28912970427227858 / (2.0^(InitialRefinement - 4)) * CFL
+dt = 0.28912970427227858 / (2.0^(InitialRefinement - 4)) * CFL_Single
 S = 32
 =#
 

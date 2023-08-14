@@ -138,9 +138,7 @@ summary_callback = SummaryCallback()
 
 analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                     extra_analysis_errors=(:conservation_error,),
-                                     extra_analysis_integrals=(entropy, energy_total,
-                                                               energy_kinetic, energy_internal))
+                                     extra_analysis_errors=(:conservation_error,))
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
@@ -184,7 +182,7 @@ dtRefBase = 0.415213931783000589
 
 NumBaseStages = 4
 NumDoublings = 2
-CFL = 0.65 # Ref level: 4, S_base = 4
+CFL = 0.64 # Ref level: 4, S_base = 4
 #CFL = 0.67 # Ref level: 5, S_base = 4
 
 # Shared 
@@ -213,15 +211,17 @@ ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings,
                            bS, cEnd, stage_callbacks = stage_limiter)
 
                           
-#ode_algorithm = PERK(NumBaseStages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
+#ode_algorithm = PERK(16, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/", bS, cEnd)
 #ode_algorithm = PERK(Int(NumBaseStages*2^NumDoublings), "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
 
+#=
 CFL_AMR = 0.25
-#CFL_AMR = 1.0
-CFL_Stability = 0.86
-CFL = CFL_AMR * CFL_Stability
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL 
-
+CFL_AMR = 0.5
+CFL_AMR = 1.0
+#CFL_Stability = 0.86
+CFL_Single = CFL_AMR * CFL
+dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL_Single 
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
