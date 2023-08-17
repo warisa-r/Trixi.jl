@@ -14,7 +14,7 @@
 # Keywords: supersonic flow, shock capturing, AMR, unstructured curved mesh, positivity preservation, compressible Euler, 2D
 
 using Downloads: download
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -120,11 +120,14 @@ amr_callback = AMRCallback(semi, amr_controller,
                            interval=1,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
-
+#=
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
                         save_solution,
                         amr_callback)
+=#
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback, alive_callback)
 
 # positivity limiter necessary for this example with strong shocks. Very sensitive
 # to the order of the limiter variables, pressure must come first.
@@ -136,3 +139,6 @@ stage_limiter! = PositivityPreservingLimiterZhangShu(thresholds=(5.0e-7, 1.0e-6)
 sol = solve(ode, SSPRK43(stage_limiter!);
             ode_default_options()..., callback=callbacks);
 summary_callback() # print the timer summary
+pd = PlotData2D(sol)
+plot(pd["rho"])
+plot!(getmesh(pd))

@@ -183,6 +183,7 @@ dtRefBase = 0.415213931783000589
 NumBaseStages = 4
 NumDoublings = 2
 CFL = 0.64 # Ref level: 4, S_base = 4
+CFL = 0.5 # Shared
 #CFL = 0.67 # Ref level: 5, S_base = 4
 
 # Shared 
@@ -197,7 +198,7 @@ CFL = 0.32 # Ref level: 3, S_base = 4
 
 dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL
 
-b1   = 0.0
+b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
@@ -206,8 +207,8 @@ stage_limiter = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-2, 5.0e-2)
                                                      variables=(Trixi.density, pressure)),)
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
-                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/",
-                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/Shared/",
+                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/",
+                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/Shared/",
                            bS, cEnd, stage_callbacks = stage_limiter)
 
                           
