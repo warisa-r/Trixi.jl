@@ -45,6 +45,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           # For efficient treatment of boundaries we need additional datastructures
           integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
           integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
+          integrator.level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
           #resize!(integrator.level_info_elements_acc, n_levels) # TODO: Does unfortunately not work
         else # Just empty datastructures
           for level in 1:n_levels
@@ -56,6 +57,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
               empty!(integrator.level_info_boundaries_orientation_acc[level][dim])
             end
             empty!(integrator.level_info_mortars_acc[level])
+            empty!(integrator.level_u_indices_elements[level])
           end
         end
 
@@ -345,10 +347,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         =#
     
         u = wrap_array(u_ode, mesh, equations, solver, cache)
-    
-        integrator.level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
 
-        # Have if outside for performance reasons
         if dimensions == 1
           for level in 1:n_levels
             for element_id in integrator.level_info_elements[level]
@@ -364,6 +363,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
             end
           end
         end
+        # TODO: 3
         
       end # "PERK stage identifiers update" timing
     end # if has changed
