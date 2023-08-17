@@ -86,8 +86,66 @@ mesh_file = default_mesh_file
 
 mesh = P4estMesh{2}(mesh_file)
 
+nnodes = length(mesh.nodes)
+nelements = last(size(mesh.tree_node_coordinates))
+h_min = 42;
+h_max = 0;
+for k in 1:nelements
+  # pull the four corners numbered as right-handed
+  P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
+  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
+  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
+  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+  # compute the four side lengths and get the smallest
+  L0 = sqrt( sum( (P1-P0).^2 ) )
+  L1 = sqrt( sum( (P2-P1).^2 ) )
+  L2 = sqrt( sum( (P3-P2).^2 ) )
+  L3 = sqrt( sum( (P0-P3).^2 ) )
+  h = min(L0, L1, L2, L3)
+  if h > h_max 
+    h_max = h
+  end
+  if h < h_min
+    h_min = h
+  end
+end
+println("h_min, h_max: ", h_min, " ", h_max)
+println("ratio: ", h_max/h_min)
+
+S_min = 4
+S_max = 32
+N_bins = Int((S_max - S_min)/2) + 1
+h_bins = LinRange(h_min, h_max, N_bins)
+
+level_u_indices_elements = [Vector{Int64}() for _ in 1:N_bins]
+
+for k in 1:nelements
+  # pull the four corners numbered as right-handed
+  P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
+  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
+  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
+  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+  # compute the four side lengths and get the smallest
+  L0 = sqrt( sum( (P1-P0).^2 ) )
+  L1 = sqrt( sum( (P2-P1).^2 ) )
+  L2 = sqrt( sum( (P3-P2).^2 ) )
+  L3 = sqrt( sum( (P0-P3).^2 ) )
+  h = min(L0, L1, L2, L3)
+
+  level = findfirst(x-> x >= h, h_bins)
+  append!(level_u_indices_elements[level], k)
+end
+level_u_indices_elements_count = Vector{Int64}(undef, N_bins)
+for i in eachindex(level_u_indices_elements)
+  level_u_indices_elements_count[i] = length(level_u_indices_elements[i])
+end
+
+bar(1:N_bins, level_u_indices_elements_count)
+
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
+
+A = jacobian_ad_forward(semi)
 
 ###############################################################################
 # ODE solvers
