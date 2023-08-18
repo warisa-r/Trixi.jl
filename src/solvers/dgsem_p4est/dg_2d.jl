@@ -113,6 +113,63 @@ function prolong2interfaces!(cache, u,
     return nothing
 end
 
+function prolong2interfaces!(cache, u,
+                             mesh::P4estMesh{2},
+                             equations, surface_integral, dg::DG,
+                             level_info_interfaces_acc::Vector{Int64})
+    @unpack interfaces = cache
+    index_range = eachnode(dg)
+
+    @threaded for interface in level_info_interfaces_acc
+        # Copy solution data from the primary element using "delayed indexing" with
+        # a start value and a step size to get the correct face and orientation.
+        # Note that in the current implementation, the interface will be
+        # "aligned at the primary element", i.e., the index of the primary side
+        # will always run forwards.
+        primary_element = interfaces.neighbor_ids[1, interface]
+        primary_indices = interfaces.node_indices[1, interface]
+
+        i_primary_start, i_primary_step = index_to_start_step_2d(primary_indices[1],
+                                                                 index_range)
+        j_primary_start, j_primary_step = index_to_start_step_2d(primary_indices[2],
+                                                                 index_range)
+
+        i_primary = i_primary_start
+        j_primary = j_primary_start
+        for i in eachnode(dg)
+            for v in eachvariable(equations)
+                interfaces.u[1, v, i, interface] = u[v, i_primary, j_primary,
+                                                     primary_element]
+            end
+            i_primary += i_primary_step
+            j_primary += j_primary_step
+        end
+
+        # Copy solution data from the secondary element using "delayed indexing" with
+        # a start value and a step size to get the correct face and orientation.
+        secondary_element = interfaces.neighbor_ids[2, interface]
+        secondary_indices = interfaces.node_indices[2, interface]
+
+        i_secondary_start, i_secondary_step = index_to_start_step_2d(secondary_indices[1],
+                                                                     index_range)
+        j_secondary_start, j_secondary_step = index_to_start_step_2d(secondary_indices[2],
+                                                                     index_range)
+
+        i_secondary = i_secondary_start
+        j_secondary = j_secondary_start
+        for i in eachnode(dg)
+            for v in eachvariable(equations)
+                interfaces.u[2, v, i, interface] = u[v, i_secondary, j_secondary,
+                                                     secondary_element]
+            end
+            i_secondary += i_secondary_step
+            j_secondary += j_secondary_step
+        end
+    end
+
+    return nothing
+end
+
 function calc_interface_flux!(surface_flux_values,
                               mesh::Union{P4estMesh{2}, T8codeMesh{2}},
                               nonconservative_terms,
@@ -123,6 +180,74 @@ function calc_interface_flux!(surface_flux_values,
     index_end = last(index_range)
 
     @threaded for interface in eachinterface(dg, cache)
+        # Get element and side index information on the primary element
+        primary_element = neighbor_ids[1, interface]
+        primary_indices = node_indices[1, interface]
+        primary_direction = indices2direction(primary_indices)
+
+        # Create the local i,j indexing on the primary element used to pull normal direction information
+        i_primary_start, i_primary_step = index_to_start_step_2d(primary_indices[1],
+                                                                 index_range)
+        j_primary_start, j_primary_step = index_to_start_step_2d(primary_indices[2],
+                                                                 index_range)
+
+        i_primary = i_primary_start
+        j_primary = j_primary_start
+
+        # Get element and side index information on the secondary element
+        secondary_element = neighbor_ids[2, interface]
+        secondary_indices = node_indices[2, interface]
+        secondary_direction = indices2direction(secondary_indices)
+
+        # Initiate the secondary index to be used in the surface for loop.
+        # This index on the primary side will always run forward but
+        # the secondary index might need to run backwards for flipped sides.
+        if :i_backward in secondary_indices
+            node_secondary = index_end
+            node_secondary_step = -1
+        else
+            node_secondary = 1
+            node_secondary_step = 1
+        end
+
+        for node in eachnode(dg)
+            # Get the normal direction on the primary element.
+            # Contravariant vectors at interfaces in negative coordinate direction
+            # are pointing inwards. This is handled by `get_normal_direction`.
+            normal_direction = get_normal_direction(primary_direction,
+                                                    contravariant_vectors,
+                                                    i_primary, j_primary,
+                                                    primary_element)
+
+            calc_interface_flux!(surface_flux_values, mesh, nonconservative_terms,
+                                 equations,
+                                 surface_integral, dg, cache,
+                                 interface, normal_direction,
+                                 node, primary_direction, primary_element,
+                                 node_secondary, secondary_direction, secondary_element)
+
+            # Increment primary element indices to pull the normal direction
+            i_primary += i_primary_step
+            j_primary += j_primary_step
+            # Increment the surface node index along the secondary element
+            node_secondary += node_secondary_step
+        end
+    end
+
+    return nothing
+end
+
+function calc_interface_flux!(surface_flux_values,
+                              mesh::P4estMesh{2},
+                              nonconservative_terms,
+                              equations, surface_integral, dg::DG, cache,
+                              level_info_interfaces_acc::Vector{Int64})
+    @unpack neighbor_ids, node_indices = cache.interfaces
+    @unpack contravariant_vectors = cache.elements
+    index_range = eachnode(dg)
+    index_end = last(index_range)
+
+    @threaded for interface in level_info_interfaces_acc
         # Get element and side index information on the primary element
         primary_element = neighbor_ids[1, interface]
         primary_indices = node_indices[1, interface]
@@ -275,9 +400,76 @@ function prolong2boundaries!(cache, u,
     return nothing
 end
 
+function prolong2boundaries!(cache, u,
+                             mesh::P4estMesh{2},
+                             equations, surface_integral, dg::DG,
+                             level_info_boundaries_acc::Vector{Int64})
+    @unpack boundaries = cache
+    index_range = eachnode(dg)
+
+    @threaded for boundary in level_info_boundaries_acc
+        # Copy solution data from the element using "delayed indexing" with
+        # a start value and a step size to get the correct face and orientation.
+        element = boundaries.neighbor_ids[boundary]
+        node_indices = boundaries.node_indices[boundary]
+
+        i_node_start, i_node_step = index_to_start_step_2d(node_indices[1], index_range)
+        j_node_start, j_node_step = index_to_start_step_2d(node_indices[2], index_range)
+
+        i_node = i_node_start
+        j_node = j_node_start
+        for i in eachnode(dg)
+            for v in eachvariable(equations)
+                boundaries.u[v, i, boundary] = u[v, i_node, j_node, element]
+            end
+            i_node += i_node_step
+            j_node += j_node_step
+        end
+    end
+
+    return nothing
+end
+
 function calc_boundary_flux!(cache, t, boundary_condition, boundary_indexing,
                              mesh::Union{P4estMesh{2}, T8codeMesh{2}},
                              equations, surface_integral, dg::DG)
+    @unpack boundaries = cache
+    @unpack surface_flux_values = cache.elements
+    index_range = eachnode(dg)
+
+    @threaded for local_index in eachindex(boundary_indexing)
+        # Use the local index to get the global boundary index from the pre-sorted list
+        boundary = boundary_indexing[local_index]
+
+        # Get information on the adjacent element, compute the surface fluxes,
+        # and store them
+        element = boundaries.neighbor_ids[boundary]
+        node_indices = boundaries.node_indices[boundary]
+        direction = indices2direction(node_indices)
+
+        i_node_start, i_node_step = index_to_start_step_2d(node_indices[1], index_range)
+        j_node_start, j_node_step = index_to_start_step_2d(node_indices[2], index_range)
+
+        i_node = i_node_start
+        j_node = j_node_start
+        for node in eachnode(dg)
+            calc_boundary_flux!(surface_flux_values, t, boundary_condition,
+                                mesh, have_nonconservative_terms(equations),
+                                equations, surface_integral, dg, cache,
+                                i_node, j_node,
+                                node, direction, element, boundary)
+
+            i_node += i_node_step
+            j_node += j_node_step
+        end
+    end
+end
+
+# TODO: Real specialization for P-ERK required!
+function calc_boundary_flux!(cache, t, boundary_condition, boundary_indexing,
+                             mesh::P4estMesh{2},
+                             equations, surface_integral, dg::DG,
+                             level_info_boundaries_orientation_acc::Vector{Vector{Int64}})
     @unpack boundaries = cache
     @unpack surface_flux_values = cache.elements
     index_range = eachnode(dg)
@@ -451,6 +643,74 @@ function prolong2mortars!(cache, u,
     return nothing
 end
 
+function prolong2mortars!(cache, u,
+                          mesh::P4estMesh{2}, equations,
+                          mortar_l2::LobattoLegendreMortarL2,
+                          surface_integral, dg::DGSEM,
+                          level_info_mortars_acc::Vector{Int64})
+    @unpack neighbor_ids, node_indices = cache.mortars
+    index_range = eachnode(dg)
+
+    @threaded for mortar in level_info_mortars_acc
+        # Copy solution data from the small elements using "delayed indexing" with
+        # a start value and a step size to get the correct face and orientation.
+        small_indices = node_indices[1, mortar]
+
+        i_small_start, i_small_step = index_to_start_step_2d(small_indices[1],
+                                                             index_range)
+        j_small_start, j_small_step = index_to_start_step_2d(small_indices[2],
+                                                             index_range)
+
+        for position in 1:2
+            i_small = i_small_start
+            j_small = j_small_start
+            element = neighbor_ids[position, mortar]
+            for i in eachnode(dg)
+                for v in eachvariable(equations)
+                    cache.mortars.u[1, v, position, i, mortar] = u[v, i_small, j_small,
+                                                                   element]
+                end
+                i_small += i_small_step
+                j_small += j_small_step
+            end
+        end
+
+        # Buffer to copy solution values of the large element in the correct orientation
+        # before interpolating
+        u_buffer = cache.u_threaded[Threads.threadid()]
+
+        # Copy solution of large element face to buffer in the
+        # correct orientation
+        large_indices = node_indices[2, mortar]
+
+        i_large_start, i_large_step = index_to_start_step_2d(large_indices[1],
+                                                             index_range)
+        j_large_start, j_large_step = index_to_start_step_2d(large_indices[2],
+                                                             index_range)
+
+        i_large = i_large_start
+        j_large = j_large_start
+        element = neighbor_ids[3, mortar]
+        for i in eachnode(dg)
+            for v in eachvariable(equations)
+                u_buffer[v, i] = u[v, i_large, j_large, element]
+            end
+            i_large += i_large_step
+            j_large += j_large_step
+        end
+
+        # Interpolate large element face data from buffer to small face locations
+        multiply_dimensionwise!(view(cache.mortars.u, 2, :, 1, :, mortar),
+                                mortar_l2.forward_lower,
+                                u_buffer)
+        multiply_dimensionwise!(view(cache.mortars.u, 2, :, 2, :, mortar),
+                                mortar_l2.forward_upper,
+                                u_buffer)
+    end
+
+    return nothing
+end
+
 function calc_mortar_flux!(surface_flux_values,
                            mesh::Union{P4estMesh{2}, T8codeMesh{2}},
                            nonconservative_terms, equations,
@@ -462,6 +722,65 @@ function calc_mortar_flux!(surface_flux_values,
     index_range = eachnode(dg)
 
     @threaded for mortar in eachmortar(dg, cache)
+        # Choose thread-specific pre-allocated container
+        fstar = (fstar_lower_threaded[Threads.threadid()],
+                 fstar_upper_threaded[Threads.threadid()])
+
+        # Get index information on the small elements
+        small_indices = node_indices[1, mortar]
+        small_direction = indices2direction(small_indices)
+
+        i_small_start, i_small_step = index_to_start_step_2d(small_indices[1],
+                                                             index_range)
+        j_small_start, j_small_step = index_to_start_step_2d(small_indices[2],
+                                                             index_range)
+
+        for position in 1:2
+            i_small = i_small_start
+            j_small = j_small_start
+            element = neighbor_ids[position, mortar]
+            for node in eachnode(dg)
+                # Get the normal direction on the small element.
+                # Note, contravariant vectors at interfaces in negative coordinate direction
+                # are pointing inwards. This is handled by `get_normal_direction`.
+                normal_direction = get_normal_direction(small_direction,
+                                                        contravariant_vectors,
+                                                        i_small, j_small, element)
+
+                calc_mortar_flux!(fstar, mesh, nonconservative_terms, equations,
+                                  surface_integral, dg, cache,
+                                  mortar, position, normal_direction,
+                                  node)
+
+                i_small += i_small_step
+                j_small += j_small_step
+            end
+        end
+
+        # Buffer to interpolate flux values of the large element to before
+        # copying in the correct orientation
+        u_buffer = cache.u_threaded[Threads.threadid()]
+
+        mortar_fluxes_to_elements!(surface_flux_values,
+                                   mesh, equations, mortar_l2, dg, cache,
+                                   mortar, fstar, u_buffer)
+    end
+
+    return nothing
+end
+
+function calc_mortar_flux!(surface_flux_values,
+                           mesh::P4estMesh{2},
+                           nonconservative_terms, equations,
+                           mortar_l2::LobattoLegendreMortarL2,
+                           surface_integral, dg::DG, cache,
+                           level_info_mortars_acc::Vector{Int64})
+    @unpack neighbor_ids, node_indices = cache.mortars
+    @unpack contravariant_vectors = cache.elements
+    @unpack fstar_upper_threaded, fstar_lower_threaded = cache
+    index_range = eachnode(dg)
+
+    @threaded for mortar in level_info_mortars_acc
         # Choose thread-specific pre-allocated container
         fstar = (fstar_lower_threaded[Threads.threadid()],
                  fstar_upper_threaded[Threads.threadid()])
@@ -635,6 +954,49 @@ function calc_surface_integral!(du, u,
     factor_1 = boundary_interpolation[1, 1]
     factor_2 = boundary_interpolation[nnodes(dg), 2]
     @threaded for element in eachelement(dg, cache)
+        for l in eachnode(dg)
+            for v in eachvariable(equations)
+                # surface at -x
+                du[v, 1, l, element] = (du[v, 1, l, element] +
+                                        surface_flux_values[v, l, 1, element] *
+                                        factor_1)
+
+                # surface at +x
+                du[v, nnodes(dg), l, element] = (du[v, nnodes(dg), l, element] +
+                                                 surface_flux_values[v, l, 2, element] *
+                                                 factor_2)
+
+                # surface at -y
+                du[v, l, 1, element] = (du[v, l, 1, element] +
+                                        surface_flux_values[v, l, 3, element] *
+                                        factor_1)
+
+                # surface at +y
+                du[v, l, nnodes(dg), element] = (du[v, l, nnodes(dg), element] +
+                                                 surface_flux_values[v, l, 4, element] *
+                                                 factor_2)
+            end
+        end
+    end
+
+    return nothing
+end
+
+function calc_surface_integral!(du, u,
+                                mesh::P4estMesh{2},
+                                equations,
+                                surface_integral::SurfaceIntegralWeakForm,
+                                dg::DGSEM, cache)
+    @unpack boundary_interpolation = dg.basis
+    @unpack surface_flux_values = cache.elements
+
+    # Note that all fluxes have been computed with outward-pointing normal vectors.
+    # Access the factors only once before beginning the loop to increase performance.
+    # We also use explicit assignments instead of `+=` to let `@muladd` turn these
+    # into FMAs (see comment at the top of the file).
+    factor_1 = boundary_interpolation[1, 1]
+    factor_2 = boundary_interpolation[nnodes(dg), 2]
+    @threaded for element in level_info_elements_acc
         for l in eachnode(dg)
             for v in eachvariable(equations)
                 # surface at -x

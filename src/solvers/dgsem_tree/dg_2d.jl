@@ -178,7 +178,7 @@ end
 
 # RHS for PERK integrator
 function rhs!(du, u, t,
-              mesh::TreeMesh{2}, equations,
+              mesh::Union{TreeMesh{2}, P4estMesh{2}}, equations,
               initial_condition, boundary_conditions, source_terms::Source,
               dg::DG, cache,
               level_info_elements_acc::Vector{Int64},
@@ -297,7 +297,7 @@ function calc_volume_integral!(du, u,
 end
 
 function calc_volume_integral!(du, u,
-                               mesh::TreeMesh{2},
+                               mesh::Union{TreeMesh{2}, P4estMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache,
@@ -1716,7 +1716,7 @@ function apply_jacobian!(du, mesh::TreeMesh{2},
     return nothing
 end
 
-function apply_jacobian!(du, mesh::TreeMesh{2},
+function apply_jacobian!(du, mesh::Union{TreeMesh{2}, P4estMesh{2}},
                          equations, dg::DG, cache,
                          level_info_elements_acc::Vector{Int64})
     @threaded for element in level_info_elements_acc

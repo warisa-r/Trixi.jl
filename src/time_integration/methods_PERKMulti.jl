@@ -140,9 +140,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
 
-    # CARE: For linear PERK family: 4,5,6, and not 4, 8, 16, ...
+    # CARE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
     #=
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages - level + 1)) * ".txt"
+    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages - 2*level + 2)) * ".txt"
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 2]  = A
@@ -297,360 +297,541 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   @unpack mesh, cache = ode.p
   @unpack elements, interfaces, boundaries = cache
 
-  # TODO: Check mesh-type for different inits of P-ERK helper variables
-  #if typeof(mesh) <:TreeMesh
+  if typeof(mesh) <:TreeMesh
+    n_elements   = length(elements.cell_ids)
+    n_interfaces = length(interfaces.orientations)
+    n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
 
-  n_elements   = length(elements.cell_ids)
-  n_interfaces = length(interfaces.orientations)
-  n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
+    min_level = minimum_level(mesh.tree)
+    max_level = maximum_level(mesh.tree)
+    n_levels = max_level - min_level + 1
 
-  min_level = minimum_level(mesh.tree)
-  max_level = maximum_level(mesh.tree)
-  n_levels = max_level - min_level + 1
+    # NOTE: Next-to-fine is NOT integrated with fine integrator
+    
+    # Initialize storage for level-wise information
+    level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
+    level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
 
-  # NOTE: Next-to-fine is NOT integrated with fine integrator
-  
-  # Initialize storage for level-wise information
-  level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
-  level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
+    # Determine level for each element
+    for element_id in 1:n_elements
+      # Determine level
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
+      # Convert to level id
+      level_id = max_level + 1 - level
 
-  # Determine level for each element
-  for element_id in 1:n_elements
-    # Determine level
-    level = mesh.tree.levels[elements.cell_ids[element_id]]
-    # Convert to level id
-    level_id = max_level + 1 - level
-
-    push!(level_info_elements[level_id], element_id)
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(level_info_elements_acc[l], element_id)
+      push!(level_info_elements[level_id], element_id)
+      # Add to accumulated container
+      for l in level_id:n_levels
+        push!(level_info_elements_acc[l], element_id)
+      end
     end
-  end
-  @assert length(level_info_elements_acc[end]) == 
-    n_elements "highest level should contain all elements"
+    @assert length(level_info_elements_acc[end]) == 
+      n_elements "highest level should contain all elements"
 
 
-  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
-  # Determine level for each interface
-  for interface_id in 1:n_interfaces
-    # Get element ids
-    element_id_left  = interfaces.neighbor_ids[1, interface_id]
-    element_id_right = interfaces.neighbor_ids[2, interface_id]
+    level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
+    # Determine level for each interface
+    for interface_id in 1:n_interfaces
+      # Get element ids
+      element_id_left  = interfaces.neighbor_ids[1, interface_id]
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
 
-    # Determine level
-    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+      # Determine level
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
-    # Higher element's level determines this interfaces' level
-    level_id = max_level + 1 - max(level_left, level_right)
-    for l in level_id:n_levels
-      push!(level_info_interfaces_acc[l], interface_id)
+      # Higher element's level determines this interfaces' level
+      level_id = max_level + 1 - max(level_left, level_right)
+      for l in level_id:n_levels
+        push!(level_info_interfaces_acc[l], interface_id)
+      end
     end
-  end
-  @assert length(level_info_interfaces_acc[end]) == 
-    n_interfaces "highest level should contain all interfaces"
+    @assert length(level_info_interfaces_acc[end]) == 
+      n_interfaces "highest level should contain all interfaces"
 
 
-  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
-  # For efficient treatment of boundaries we need additional datastructures
-  n_dims = ndims(mesh.tree) # Spatial dimension
-  level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
+    level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+    # For efficient treatment of boundaries we need additional datastructures
+    n_dims = ndims(mesh.tree) # Spatial dimension
+    level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
 
-  # Determine level for each boundary
-  for boundary_id in 1:n_boundaries
-    # Get element id (boundaries have only one unique associated element)
-    element_id = boundaries.neighbor_ids[boundary_id]
+    # Determine level for each boundary
+    for boundary_id in 1:n_boundaries
+      # Get element id (boundaries have only one unique associated element)
+      element_id = boundaries.neighbor_ids[boundary_id]
 
-    # Determine level
-    level = mesh.tree.levels[elements.cell_ids[element_id]]
+      # Determine level
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
 
-    # Convert to level id
-    level_id = max_level + 1 - level
+      # Convert to level id
+      level_id = max_level + 1 - level
 
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(level_info_boundaries_acc[l], boundary_id)
-    end
+      # Add to accumulated container
+      for l in level_id:n_levels
+        push!(level_info_boundaries_acc[l], boundary_id)
+      end
 
-    # For orientation-side wise specific treatment
-    if boundaries.orientations[boundary_id] == 1 # x Boundary
-      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
-        for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][2], boundary_id)
+      # For orientation-side wise specific treatment
+      if boundaries.orientations[boundary_id] == 1 # x Boundary
+        if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][2], boundary_id)
+          end
+        else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][1], boundary_id)
+          end
         end
-      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+      elseif boundaries.orientations[boundary_id] == 2 # y Boundary
+        if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][4], boundary_id)
+          end
+        else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][3], boundary_id)
+          end
+        end
+      elseif boundaries.orientations[boundary_id] == 3 # z Boundary
+        if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][6], boundary_id)
+          end
+        else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
+          for l in level_id:n_levels
+            push!(level_info_boundaries_orientation_acc[l][5], boundary_id)
+          end
+        end 
+      end
+    end
+    @assert length(level_info_boundaries_acc[end]) == 
+      n_boundaries "highest level should contain all boundaries"
+
+
+    level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
+    if n_dims > 1
+      @unpack mortars = cache
+      n_mortars = length(mortars.orientations)
+
+      for mortar_id in 1:n_mortars
+        # Get element ids
+        element_id_lower  = mortars.neighbor_ids[1, mortar_id]
+        element_id_higher = mortars.neighbor_ids[2, mortar_id]
+
+        # Determine level
+        level_lower  = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+        level_higher = mesh.tree.levels[elements.cell_ids[element_id_higher]]
+
+        # Higher element's level determines this mortars' level
+        level_id = max_level + 1 - max(level_lower, level_higher)
+        # Add to accumulated container
         for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][1], boundary_id)
+          push!(level_info_mortars_acc[l], mortar_id)
+        end
+
+        #= TODO: 
+        Add elements on the fine side (higher level) to additional datastructure
+        which serves as an indicator on which cells we impose artificial viscosity, i.e., simulate Navier-Stokes.
+
+        Idea: Number of elements based on the stencil size of the integrator associated with this level
+        =#
+
+      end
+      @assert length(level_info_mortars_acc[end]) == 
+        n_mortars "highest level should contain all mortars"
+    end
+    
+    
+    # NOTE: Next-to-fine is also integrated with fine integrator
+    #=
+    # Initialize storage for level-wise information
+    # Set-like datastructures more suited then vectors
+    level_info_elements_set     = [Set{Int64}() for _ in 1:n_levels]
+    level_info_elements_set_acc = [Set{Int64}() for _ in 1:n_levels]
+    # Loop over interfaces to have access to its neighbors
+    for interface_id in 1:n_interfaces
+      # Get element ids
+      element_id_left  = interfaces.neighbor_ids[1, interface_id]
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+      # Determine level
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+      # Neighbors of finer cells should be integrated with same integrator
+      ode_level = max(level_left, level_right)
+
+      # Convert to level id
+      level_id = max_level + 1 - ode_level
+
+      # Assign elements according to their neighbors
+      push!(level_info_elements_set[level_id], element_id_left)
+      push!(level_info_elements_set[level_id], element_id_right)
+      # Add to accumulated container
+      for l in level_id:n_levels
+        push!(level_info_elements_set_acc[l], element_id_left)
+        push!(level_info_elements_set_acc[l], element_id_right)
+      end
+    end
+    
+    # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      # Make sure elements are only stored once: In the finest level
+      for fine_level in 1:level-1
+        level_info_elements_set[level] = setdiff(level_info_elements_set[level], 
+                                                level_info_elements_set[fine_level])
+      end
+
+      level_info_elements[level] = sort(collect(level_info_elements_set[level]))
+    end
+
+    # Set up dictionary to set later ODE level for interfaces
+    element_ODE_level_dict = Dict{Int, Int}()
+    for level in 1:n_levels
+      for element_id in level_info_elements[level]
+        push!(element_ODE_level_dict, element_id=>level)
+      end
+    end
+    display(element_ODE_level_dict); println()
+
+    level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
+    end
+    @assert length(level_info_elements_acc[end]) == 
+      n_elements "highest level should contain all elements"
+
+    # Use sets first to avoid double storage of interfaces
+    level_info_interfaces_set = [Set{Int64}() for _ in 1:n_levels]
+    level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:n_levels]
+    # Determine ODE level for each interface
+    for interface_id in 1:n_interfaces
+      # Get element ids
+      element_id_left  = interfaces.neighbor_ids[1, interface_id]
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+      # Interface neighboring two distinct ODE levels belong to fines one
+      ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
+                      get(element_ODE_level_dict, element_id_right, -1))
+      
+      #=
+      ode_level = max(get(element_ODE_level_dict, element_id_left, -1), 
+                      get(element_ODE_level_dict, element_id_right, -1))                              
+      =#
+
+      @assert ode_level != -1 "Errors in datastructures for ODE level assignment"
+      
+      push!(level_info_interfaces_set[ode_level], interface_id)
+
+      #=
+      # TODO: Not sure if correct in this setting
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+      level_id_left  = max_level + 1 - level_left
+      level_id_right = max_level + 1 - level_right
+      push!(level_info_interfaces_set[level_id_left], interface_id)
+      push!(level_info_interfaces_set[level_id_right], interface_id)
+      =#
+
+      # Add to accumulated container
+      for l in ode_level:n_levels
+        push!(level_info_interfaces_set_acc[l], interface_id)
+      end
+    end
+
+    # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      # Make sure elements are only stored once: In the finest level
+      for fine_level in 1:level-1
+        level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], 
+                                                  level_info_interfaces_set[fine_level])
+      end
+
+      level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+    end
+
+    #=
+    level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
+    end 
+    =#
+
+    level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
+    end
+    @assert length(level_info_interfaces_acc[end]) == 
+      n_interfaces "highest level should contain all interfaces"
+
+    
+    # Use sets first to avoid double storage of boundaries
+    level_info_boundaries_set_acc = [Set{Int64}() for _ in 1:n_levels]
+    # Determine level for each boundary
+    for boundary_id in 1:n_boundaries
+      #=
+      # Get element ids
+      element_id_left  = boundaries.neighbor_ids[1, boundary_id]
+      element_id_right = boundaries.neighbor_ids[2, boundary_id]
+
+      # Determine level
+      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
+      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+
+      # Convert to level id
+      level_id_left  = max_level + 1 - level_left
+      level_id_right = max_level + 1 - level_right
+
+      # Add to accumulated container
+      for l in level_id_left:n_levels
+        push!(level_info_boundaries_set_acc[l], boundary_id)
+      end
+      for l in level_id_right:n_levels
+        push!(level_info_boundaries_set_acc[l], boundary_id)
+      end
+      =#
+
+      # CARE: May be only valid for 1D
+      # Get element id
+      element_id = boundaries.neighbor_ids[boundary_id]
+
+      # Determine level
+      level  = mesh.tree.levels[elements.cell_ids[element_id]]
+
+      # Convert to level id
+      level_id  = max_level + 1 - level
+
+      # Add to accumulated container
+      for l in level_id:n_levels
+        push!(level_info_boundaries_set_acc[l], boundary_id)
+      end
+    end
+
+    # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
+    level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+    for level in 1:n_levels
+      level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
+    end
+    @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
+
+
+    # TODO: Mortars need probably to be reconsidered! (sets, level-assignment, ...)
+    level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
+    dimensions = ndims(mesh.tree) # Spatial dimension
+    if dimensions > 1
+      # Determine level for each mortar
+      # Since mortars belong by definition to two levels, theoretically we have to
+      # add them twice: Once for each level of its neighboring elements. However,
+      # as we store the accumulated mortar ids, we only need to consider the one of
+      # the small neighbors (here: the lower one), is it has the higher level and
+      # thus the lower level id.
+
+      @unpack mortars = cache
+      n_mortars = length(mortars.orientations)
+
+      for mortar_id in 1:n_mortars
+        # Get element ids
+        element_id_lower = mortars.neighbor_ids[1, mortar_id]
+
+        # Determine level
+        level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
+
+        # Convert to level id
+        level_id_lower = max_level + 1 - level_lower
+
+        # Add to accumulated container
+        for l in level_id_lower:n_levels
+          push!(level_info_mortars_acc[l], mortar_id)
         end
       end
-    elseif boundaries.orientations[boundary_id] == 2 # y Boundary
-      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
-        for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][4], boundary_id)
-        end
-      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
-        for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][3], boundary_id)
-        end
-      end
-    elseif boundaries.orientations[boundary_id] == 3 # z Boundary
-      if boundaries.neighbor_sides[boundary_id] == 1 # Boundary on negative coordinate side
-        for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][6], boundary_id)
-        end
-      else # boundaries.neighbor_sides[boundary_id] == 2 Boundary on positive coordinate side
-        for l in level_id:n_levels
-          push!(level_info_boundaries_orientation_acc[l][5], boundary_id)
-        end
-      end 
+      @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
-  end
-  @assert length(level_info_boundaries_acc[end]) == 
-    n_boundaries "highest level should contain all boundaries"
+    =#
+  elseif typeof(mesh) <:P4estMesh
+    nnodes = length(mesh.nodes)
+    n_elements = last(size(mesh.tree_node_coordinates))
+    h_min = 42;
+    h_max = 0;
+    for k in 1:n_elements
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h = min(L0, L1, L2, L3)
+      if h > h_max 
+        h_max = h
+      end
+      if h < h_min
+        h_min = h
+      end
+    end
 
+    S_min = alg.NumStageEvalsMin
+    S_max = ag.NumStages
+    n_levels = Int((S_max - S_min)/2) + 1
+    h_bins = LinRange(h_min, h_max, N_bins)
 
-  level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
-  if n_dims > 1
+    level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
+    for k in 1:n_elements
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h = min(L0, L1, L2, L3)
+
+      level = findfirst(x-> x >= h, h_bins)
+      append!(level_info_elements[level], k)
+    end
+    level_info_elements_count = Vector{Int64}(undef, n_levels)
+    for i in eachindex(level_info_elements)
+      level_info_elements_count[i] = length(level_info_elements[i])
+    end
+
+    semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
+                                        boundary_conditions=boundary_conditions)
+
+    @unpack cache = semi
+    @unpack elements, interfaces, boundaries, mortars = cache
+
+    n_interfaces = last(size(interfaces.u))
+
+    level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
+    # Determine level for each interface
+    for interface_id in 1:n_interfaces
+      # Get element ids
+      element_id_left  = interfaces.neighbor_ids[1, interface_id]
+
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_left]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_left]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_left]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_left]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h_left = min(L0, L1, L2, L3)
+
+      element_id_right = interfaces.neighbor_ids[2, interface_id]
+
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_right]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_right]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_right]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_right]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h_right = min(L0, L1, L2, L3)
+
+      # Determine level
+      h = min(h_left, h_right)
+      level = findfirst(x-> x >= h, h_bins)
+
+      for l in level:n_levels
+        push!(level_info_interfaces_acc[l], interface_id)
+      end
+    end
+    @assert length(level_info_interfaces_acc[end]) == 
+      n_interfaces "highest level should contain all interfaces"
+
+    n_boundaries = last(size(boundaries.u))
+    level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
+    # For efficient treatment of boundaries we need additional datastructures
+    n_dims = ndims(mesh) # Spatial dimension
+    level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
+
+    # Determine level for each boundary
+    for boundary_id in 1:n_boundaries
+      # Get element id (boundaries have only one unique associated element)
+      element_id = boundaries.neighbor_ids[boundary_id]
+
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h = min(L0, L1, L2, L3)
+
+      # Determine level
+      level = findfirst(x-> x >= h, h_bins)
+
+      # Add to accumulated container
+      for l in level:N_bins
+        push!(level_info_boundaries_acc[l], boundary_id)
+      end
+    end
+    @assert length(level_info_boundaries_acc[end]) == 
+      n_boundaries "highest level should contain all boundaries"
+
+    level_info_mortars_acc = [Vector{Int64}() for _ in 1:N_bins]
     @unpack mortars = cache
-    n_mortars = length(mortars.orientations)
+    n_mortars = last(size(mortars.u))
 
     for mortar_id in 1:n_mortars
       # Get element ids
       element_id_lower  = mortars.neighbor_ids[1, mortar_id]
+
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_lower]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_lower]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_lower]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_lower]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h_lower = min(L0, L1, L2, L3)
+
       element_id_higher = mortars.neighbor_ids[2, mortar_id]
 
-      # Determine level
-      level_lower  = mesh.tree.levels[elements.cell_ids[element_id_lower]]
-      level_higher = mesh.tree.levels[elements.cell_ids[element_id_higher]]
+      # pull the four corners numbered as right-handed
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_higher]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_higher]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_higher]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_higher]
+      # compute the four side lengths and get the smallest
+      L0 = sqrt( sum( (P1-P0).^2 ) )
+      L1 = sqrt( sum( (P2-P1).^2 ) )
+      L2 = sqrt( sum( (P3-P2).^2 ) )
+      L3 = sqrt( sum( (P0-P3).^2 ) )
+      h_higher = min(L0, L1, L2, L3)
 
-      # Higher element's level determines this mortars' level
-      level_id = max_level + 1 - max(level_lower, level_higher)
+      # Determine level
+      h = min(h_left, h_right)
+      level = findfirst(x-> x >= h, h_bins)
+
       # Add to accumulated container
-      for l in level_id:n_levels
+      for l in level:n_levels
         push!(level_info_mortars_acc[l], mortar_id)
       end
-
-      #= TODO: 
-      Add elements on the fine side (higher level) to additional datastructure
-      which serves as an indicator on which cells we impose artificial viscosity, i.e., simulate Navier-Stokes.
-
-      Idea: Number of elements based on the stencil size of the integrator associated with this level
-      =#
-
     end
     @assert length(level_info_mortars_acc[end]) == 
       n_mortars "highest level should contain all mortars"
   end
-  
-  
-  # NOTE: Next-to-fine is also integrated with fine integrator
-  #=
-  # Initialize storage for level-wise information
-  # Set-like datastructures more suited then vectors
-  level_info_elements_set     = [Set{Int64}() for _ in 1:n_levels]
-  level_info_elements_set_acc = [Set{Int64}() for _ in 1:n_levels]
-  # Loop over interfaces to have access to its neighbors
-  for interface_id in 1:n_interfaces
-    # Get element ids
-    element_id_left  = interfaces.neighbor_ids[1, interface_id]
-    element_id_right = interfaces.neighbor_ids[2, interface_id]
-
-    # Determine level
-    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
-
-    # Neighbors of finer cells should be integrated with same integrator
-    ode_level = max(level_left, level_right)
-
-    # Convert to level id
-    level_id = max_level + 1 - ode_level
-
-    # Assign elements according to their neighbors
-    push!(level_info_elements_set[level_id], element_id_left)
-    push!(level_info_elements_set[level_id], element_id_right)
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(level_info_elements_set_acc[l], element_id_left)
-      push!(level_info_elements_set_acc[l], element_id_right)
-    end
-  end
-  
-  # Turn sets into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    # Make sure elements are only stored once: In the finest level
-    for fine_level in 1:level-1
-      level_info_elements_set[level] = setdiff(level_info_elements_set[level], 
-                                               level_info_elements_set[fine_level])
-    end
-
-    level_info_elements[level] = sort(collect(level_info_elements_set[level]))
-  end
-
-  # Set up dictionary to set later ODE level for interfaces
-  element_ODE_level_dict = Dict{Int, Int}()
-  for level in 1:n_levels
-    for element_id in level_info_elements[level]
-      push!(element_ODE_level_dict, element_id=>level)
-    end
-  end
-  display(element_ODE_level_dict); println()
-
-  level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_elements_acc[level] = sort(collect(level_info_elements_set_acc[level]))
-  end
-  @assert length(level_info_elements_acc[end]) == 
-    n_elements "highest level should contain all elements"
-
-  # Use sets first to avoid double storage of interfaces
-  level_info_interfaces_set = [Set{Int64}() for _ in 1:n_levels]
-  level_info_interfaces_set_acc = [Set{Int64}() for _ in 1:n_levels]
-  # Determine ODE level for each interface
-  for interface_id in 1:n_interfaces
-    # Get element ids
-    element_id_left  = interfaces.neighbor_ids[1, interface_id]
-    element_id_right = interfaces.neighbor_ids[2, interface_id]
-
-    # Interface neighboring two distinct ODE levels belong to fines one
-    ode_level = min(get(element_ODE_level_dict, element_id_left, -1), 
-                    get(element_ODE_level_dict, element_id_right, -1))
-    
-    #=
-    ode_level = max(get(element_ODE_level_dict, element_id_left, -1), 
-                    get(element_ODE_level_dict, element_id_right, -1))                              
-    =#
-
-    @assert ode_level != -1 "Errors in datastructures for ODE level assignment"
-    
-    push!(level_info_interfaces_set[ode_level], interface_id)
-
-    #=
-    # TODO: Not sure if correct in this setting
-    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
-    level_id_left  = max_level + 1 - level_left
-    level_id_right = max_level + 1 - level_right
-    push!(level_info_interfaces_set[level_id_left], interface_id)
-    push!(level_info_interfaces_set[level_id_right], interface_id)
-    =#
-
-    # Add to accumulated container
-    for l in ode_level:n_levels
-      push!(level_info_interfaces_set_acc[l], interface_id)
-    end
-  end
-
-  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    # Make sure elements are only stored once: In the finest level
-    for fine_level in 1:level-1
-      level_info_interfaces_set[level] = setdiff(level_info_interfaces_set[level], 
-                                                 level_info_interfaces_set[fine_level])
-    end
-
-    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
-  end
-
-  #=
-  level_info_interfaces = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_interfaces[level] = sort(collect(level_info_interfaces_set[level]))
-  end 
-  =#
-
-  level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_interfaces_acc[level] = sort(collect(level_info_interfaces_set_acc[level]))
-  end
-  @assert length(level_info_interfaces_acc[end]) == 
-    n_interfaces "highest level should contain all interfaces"
-
-  
-  # Use sets first to avoid double storage of boundaries
-  level_info_boundaries_set_acc = [Set{Int64}() for _ in 1:n_levels]
-  # Determine level for each boundary
-  for boundary_id in 1:n_boundaries
-    #=
-    # Get element ids
-    element_id_left  = boundaries.neighbor_ids[1, boundary_id]
-    element_id_right = boundaries.neighbor_ids[2, boundary_id]
-
-    # Determine level
-    level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-    level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
-
-    # Convert to level id
-    level_id_left  = max_level + 1 - level_left
-    level_id_right = max_level + 1 - level_right
-
-    # Add to accumulated container
-    for l in level_id_left:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
-    end
-    for l in level_id_right:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
-    end
-    =#
-
-    # CARE: May be only valid for 1D
-    # Get element id
-    element_id = boundaries.neighbor_ids[boundary_id]
-
-    # Determine level
-    level  = mesh.tree.levels[elements.cell_ids[element_id]]
-
-    # Convert to level id
-    level_id  = max_level + 1 - level
-
-    # Add to accumulated container
-    for l in level_id:n_levels
-      push!(level_info_boundaries_set_acc[l], boundary_id)
-    end
-  end
-
-  # Turn set into sorted vectors to have (hopefully) faster accesses due to contiguous storage
-  level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
-  for level in 1:n_levels
-    level_info_boundaries_acc[level] = sort(collect(level_info_boundaries_set_acc[level]))
-  end
-  @assert length(level_info_boundaries_acc[end]) == n_boundaries "highest level should contain all boundaries"
-
-
-  # TODO: Mortars need probably to be reconsidered! (sets, level-assignment, ...)
-  level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
-  dimensions = ndims(mesh.tree) # Spatial dimension
-  if dimensions > 1
-    # Determine level for each mortar
-    # Since mortars belong by definition to two levels, theoretically we have to
-    # add them twice: Once for each level of its neighboring elements. However,
-    # as we store the accumulated mortar ids, we only need to consider the one of
-    # the small neighbors (here: the lower one), is it has the higher level and
-    # thus the lower level id.
-
-    @unpack mortars = cache
-    n_mortars = length(mortars.orientations)
-
-    for mortar_id in 1:n_mortars
-      # Get element ids
-      element_id_lower = mortars.neighbor_ids[1, mortar_id]
-
-      # Determine level
-      level_lower = mesh.tree.levels[elements.cell_ids[element_id_lower]]
-
-      # Convert to level id
-      level_id_lower = max_level + 1 - level_lower
-
-      # Add to accumulated container
-      for l in level_id_lower:n_levels
-        push!(level_info_mortars_acc[l], mortar_id)
-      end
-    end
-    @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
-  end
-  =#
 
   println("level_info_elements:")
   display(level_info_elements); println()
@@ -909,8 +1090,8 @@ function solve!(integrator::PERK_Multi_Integrator)
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
 
       #=
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t_stage, 
@@ -938,7 +1119,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
-      
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -947,14 +1128,14 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.du_ode_hyp)
       
-      #=
+      =#
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      =#
+      
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
@@ -1006,7 +1187,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         =#
         
         # Joint RHS evaluation with all elements sharing this timestep
-        
+        #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
@@ -1014,14 +1195,14 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.du_ode_hyp)
-        #=
+        =#
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        =#
+        
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
           @threaded for u_ind in integrator.level_u_indices_elements[level]
