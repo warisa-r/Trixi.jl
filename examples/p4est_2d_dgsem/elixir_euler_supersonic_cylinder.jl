@@ -116,9 +116,9 @@ S_min = 4
 S_max = 32
 N_bins = Int((S_max - S_min)/2) + 1
 h_bins = LinRange(h_min, h_max, N_bins)
+#bar(1:N_bins, h_bins)
 
 level_u_indices_elements = [Vector{Int64}() for _ in 1:N_bins]
-
 for k in 1:nelements
   # pull the four corners numbered as right-handed
   P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
