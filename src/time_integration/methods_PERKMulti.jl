@@ -131,7 +131,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    
+    #=
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -139,14 +139,16 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
+    =#
 
     # CARE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
-    #=
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages - 2*level + 2)) * ".txt"
-    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
+    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
+    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
+    @assert NumMonCoeffs == NumStages - 2*level
+    A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
+
     AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 2]  = A
-    =#
 
     # Add refinement levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -675,17 +677,18 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
 
     S_min = alg.NumStageEvalsMin
-    S_max = ag.NumStages
+    S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1
-    h_bins = LinRange(h_min, h_max, N_bins)
+    h_bins = LinRange(h_min, h_max, n_levels)
 
     level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
-    for k in 1:n_elements
+    level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
+    for element_id in 1:n_elements
       # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id]
+      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id]
+      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id]
+      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id]
       # compute the four side lengths and get the smallest
       L0 = sqrt( sum( (P1-P0).^2 ) )
       L1 = sqrt( sum( (P2-P1).^2 ) )
@@ -694,18 +697,16 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       h = min(L0, L1, L2, L3)
 
       level = findfirst(x-> x >= h, h_bins)
-      append!(level_info_elements[level], k)
+      append!(level_info_elements[level], element_id)
+
+      for l in level:n_levels
+        push!(level_info_elements_acc[l], element_id)
+      end
     end
     level_info_elements_count = Vector{Int64}(undef, n_levels)
     for i in eachindex(level_info_elements)
       level_info_elements_count[i] = length(level_info_elements[i])
     end
-
-    semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
-                                        boundary_conditions=boundary_conditions)
-
-    @unpack cache = semi
-    @unpack elements, interfaces, boundaries, mortars = cache
 
     n_interfaces = last(size(interfaces.u))
 
@@ -779,14 +780,15 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       level = findfirst(x-> x >= h, h_bins)
 
       # Add to accumulated container
-      for l in level:N_bins
+      for l in level:n_levels
         push!(level_info_boundaries_acc[l], boundary_id)
       end
     end
     @assert length(level_info_boundaries_acc[end]) == 
       n_boundaries "highest level should contain all boundaries"
 
-    level_info_mortars_acc = [Vector{Int64}() for _ in 1:N_bins]
+    @unpack mortars = cache # TODO: Could also make dimensionality check
+    level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
     @unpack mortars = cache
     n_mortars = last(size(mortars.u))
 

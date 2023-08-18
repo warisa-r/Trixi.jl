@@ -986,7 +986,8 @@ function calc_surface_integral!(du, u,
                                 mesh::P4estMesh{2},
                                 equations,
                                 surface_integral::SurfaceIntegralWeakForm,
-                                dg::DGSEM, cache)
+                                dg::DGSEM, cache,
+                                level_info_elements_acc::Vector{Int64})
     @unpack boundary_interpolation = dg.basis
     @unpack surface_flux_values = cache.elements
 

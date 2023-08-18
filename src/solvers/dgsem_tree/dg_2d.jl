@@ -1032,7 +1032,7 @@ end
 
 # TODO: Taal dimension agnostic
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
-                             mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
+                             mesh::Union{TreeMesh{2}, P4estMesh{2}}, equations, surface_integral, dg::DG,
                              level_info_boundaries_orientation_acc::Vector{Vector{Int64}})
     @assert isempty(eachboundary(dg, cache))
 end
