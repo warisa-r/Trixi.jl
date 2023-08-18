@@ -118,7 +118,7 @@ N_bins = Int((S_max - S_min)/2) + 1
 h_bins = LinRange(h_min, h_max, N_bins)
 #bar(1:N_bins, h_bins)
 
-level_u_indices_elements = [Vector{Int64}() for _ in 1:N_bins]
+level_info_elements = [Vector{Int64}() for _ in 1:N_bins]
 for k in 1:n_elements
   # pull the four corners numbered as right-handed
   P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
@@ -133,14 +133,14 @@ for k in 1:n_elements
   h = min(L0, L1, L2, L3)
 
   level = findfirst(x-> x >= h, h_bins)
-  append!(level_u_indices_elements[level], k)
+  append!(level_info_elements[level], k)
 end
-level_u_indices_elements_count = Vector{Int64}(undef, N_bins)
+level_info_elements_count = Vector{Int64}(undef, N_bins)
 for i in eachindex(level_u_indices_elements)
-  level_u_indices_elements_count[i] = length(level_u_indices_elements[i])
+  level_info_elements_count[i] = length(level_info_elements[i])
 end
 
-bar(1:N_bins, level_u_indices_elements_count)
+bar(1:N_bins, level_info_elements_count)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
@@ -232,6 +232,17 @@ end
 
 tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
+
+u = Trixi.wrap_array(ode.u0, mesh, equations, solver, cache)
+level_u_indices_elements = [Vector{Int64}() for _ in 1:N_bins]
+if n_dims == 2
+  for level in 1:N_bins
+    for element_id in level_info_elements[level]
+      indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
+      append!(level_u_indices_elements[level], indices)
+    end
+  end
+end
 
 # Callbacks
 
