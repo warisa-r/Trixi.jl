@@ -14,7 +14,7 @@
 # Keywords: supersonic flow, shock capturing, AMR, unstructured curved mesh, positivity preservation, compressible Euler, 2D
 
 using Downloads: download
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq, LinearAlgebra, Plots
 using Trixi
 
 ###############################################################################
@@ -68,6 +68,7 @@ surface_flux = flux_lax_friedrichs
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
+#=
 shock_indicator = IndicatorHennemannGassner(equations, basis,
                                             alpha_max=0.5,
                                             alpha_min=0.001,
@@ -76,219 +77,28 @@ shock_indicator = IndicatorHennemannGassner(equations, basis,
 volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
                                                  volume_flux_dg=volume_flux,
                                                  volume_flux_fv=surface_flux)
+=#
+volume_integral = VolumeIntegralFluxDifferencing(flux_ranocha_turbo)                                               
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
+#=
 # Get the unstructured quad mesh from a file (downloads the file if not available locally)
 default_mesh_file = joinpath(@__DIR__, "abaqus_cylinder_in_channel.inp")
 isfile(default_mesh_file) || download("https://gist.githubusercontent.com/andrewwinters5000/a08f78f6b185b63c3baeff911a63f628/raw/addac716ea0541f588b9d2bd3f92f643eb27b88f/abaqus_cylinder_in_channel.inp",
                                       default_mesh_file)
 mesh_file = default_mesh_file
-
+=#
+mesh_file = "out/cylinder.inp"
 mesh = P4estMesh{2}(mesh_file)
-
-nnodes = length(mesh.nodes)
-n_elements = last(size(mesh.tree_node_coordinates))
-h_min = 42;
-h_max = 0;
-for k in 1:n_elements
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h = min(L0, L1, L2, L3)
-  if h > h_max 
-    h_max = h
-  end
-  if h < h_min
-    h_min = h
-  end
-end
-println("h_min, h_max: ", h_min, " ", h_max)
-println("ratio: ", h_max/h_min)
-
-S_min = 4
-S_max = 32
-N_bins = Int((S_max - S_min)/2) + 1
-h_bins = LinRange(h_min, h_max, N_bins)
-#bar(1:N_bins, h_bins)
-
-level_info_elements = [Vector{Int64}() for _ in 1:N_bins]
-for k in 1:n_elements
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h = min(L0, L1, L2, L3)
-
-  level = findfirst(x-> x >= h, h_bins)
-  append!(level_info_elements[level], k)
-end
-level_info_elements_count = Vector{Int64}(undef, N_bins)
-for i in eachindex(level_info_elements)
-  level_info_elements_count[i] = length(level_info_elements[i])
-end
-
-bar(1:N_bins, level_info_elements_count)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
-@unpack cache = semi
-@unpack elements, interfaces, boundaries, mortars = cache
-
-n_interfaces = last(size(interfaces.u))
-
-level_info_interfaces_acc = [Vector{Int64}() for _ in 1:N_bins]
-# Determine level for each interface
-for interface_id in 1:n_interfaces
-  # Get element ids
-  element_id_left  = interfaces.neighbor_ids[1, interface_id]
-
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_left]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_left]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_left]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_left]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h_left = min(L0, L1, L2, L3)
-
-  element_id_right = interfaces.neighbor_ids[2, interface_id]
-
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_right]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_right]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_right]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_right]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h_right = min(L0, L1, L2, L3)
-
-  # Determine level
-  h = min(h_left, h_right)
-  level = findfirst(x-> x >= h, h_bins)
-
-  for l in level:N_bins
-    push!(level_info_interfaces_acc[l], interface_id)
-  end
-end
-@assert length(level_info_interfaces_acc[end]) == 
-  n_interfaces "highest level should contain all interfaces"
-
-n_boundaries = last(size(boundaries.u))
-level_info_boundaries_acc = [Vector{Int64}() for _ in 1:N_bins]
-# For efficient treatment of boundaries we need additional datastructures
-n_dims = ndims(mesh) # Spatial dimension
-level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:N_bins]
-
-# Determine level for each boundary
-for boundary_id in 1:n_boundaries
-  # Get element id (boundaries have only one unique associated element)
-  element_id = boundaries.neighbor_ids[boundary_id]
-
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h = min(L0, L1, L2, L3)
-
-  # Determine level
-  level = findfirst(x-> x >= h, h_bins)
-
-  # Add to accumulated container
-  for l in level:N_bins
-    push!(level_info_boundaries_acc[l], boundary_id)
-  end
-end
-@assert length(level_info_boundaries_acc[end]) == 
-  n_boundaries "highest level should contain all boundaries"
-
-level_info_mortars_acc = [Vector{Int64}() for _ in 1:N_bins]
-@unpack mortars = cache
-n_mortars = last(size(mortars.u))
-
-for mortar_id in 1:n_mortars
-  # Get element ids
-  element_id_lower  = mortars.neighbor_ids[1, mortar_id]
-
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_lower]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_lower]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_lower]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_lower]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h_lower = min(L0, L1, L2, L3)
-
-  element_id_higher = mortars.neighbor_ids[2, mortar_id]
-
-  # pull the four corners numbered as right-handed
-  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_higher]
-  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_higher]
-  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_higher]
-  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_higher]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h_higher = min(L0, L1, L2, L3)
-
-  # Determine level
-  h = min(h_left, h_right)
-  level = findfirst(x-> x >= h, h_bins)
-
-  # Add to accumulated container
-  for l in level:N_bins
-    push!(level_info_mortars_acc[l], mortar_id)
-  end
-end
-@assert length(level_info_mortars_acc[end]) == 
-  n_mortars "highest level should contain all mortars" 
-
 ###############################################################################
 # ODE solvers
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.0398892400284239579 * 0.5)
 ode = semidiscretize(semi, tspan)
-
-u = Trixi.wrap_array(ode.u0, mesh, equations, solver, cache)
-level_u_indices_elements = [Vector{Int64}() for _ in 1:N_bins]
-if n_dims == 2
-  for level in 1:N_bins
-    for element_id in level_info_elements[level]
-      indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
-      append!(level_u_indices_elements[level], indices)
-    end
-  end
-end
 
 # Callbacks
 
@@ -331,9 +141,21 @@ stage_limiter! = PositivityPreservingLimiterZhangShu(thresholds=(5.0e-7, 1.0e-6)
 
 ###############################################################################
 # run the simulation
+#=
 sol = solve(ode, SSPRK43(stage_limiter!);
             ode_default_options()..., callback=callbacks);
+=#
+
+b1 = 0.0
+bS = 1 - b1
+cEnd = 0.5/bS
+
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_P4est/",
+                            bS, cEnd)
+
+dt = 0.0398892400284239579 * 0.01
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = dt,
+                  save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary
-pd = PlotData2D(sol)
-plot(pd["rho"])
-plot!(getmesh(pd))
+Plots.plot(sol)

@@ -147,8 +147,8 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     @assert NumMonCoeffs == NumStages - 2*level
     A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
 
-    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 2]  = A
+    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
+    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
 
     # Add refinement levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -208,7 +208,8 @@ mutable struct PERK_Multi{StageCallbacks}
     newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        NumStageEvalsMin_ * 2^NumDoublings_,
+                        #NumStageEvalsMin_ * 2^NumDoublings_,
+                        NumStageEvalsMin_ + 2 * NumDoublings_,
                         1.0-bS_, bS_,
                         stage_callbacks)
                         # CARE: Hack to eanble linear increasing PERK

@@ -229,12 +229,19 @@ function rhs!(du, u, t,
     end
 
     # Calculate boundary fluxes
-    @trixi_timeit timer() "boundary flux" begin 
-      calc_boundary_flux!(cache, t,
-                          boundary_conditions, mesh,
-                          equations,
-                          dg.surface_integral, dg,
-                          level_info_boundaries_orientation_acc)
+    @trixi_timeit timer() "boundary flux" begin
+      if typeof(mesh) <: TreeMesh
+        calc_boundary_flux!(cache, t,
+                            boundary_conditions, mesh,
+                            equations,
+                            dg.surface_integral, dg,
+                            level_info_boundaries_orientation_acc)
+      else
+        calc_boundary_flux!(cache, t,
+                            boundary_conditions, mesh,
+                            equations,
+                            dg.surface_integral, dg)
+      end
     end
 
     # Prolong solution to mortars
@@ -360,7 +367,7 @@ end
 # mapping terms, stored in `cache.elements.contravariant_vectors`, is peeled apart
 # from the evaluation of the physical fluxes in each Cartesian direction
 function calc_volume_integral!(du, u,
-                               mesh::TreeMesh{2},
+                               mesh::Union{TreeMesh{2}, P4estMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralFluxDifferencing,
                                dg::DGSEM, cache,
