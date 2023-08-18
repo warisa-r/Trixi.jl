@@ -136,7 +136,7 @@ for k in 1:n_elements
   append!(level_info_elements[level], k)
 end
 level_info_elements_count = Vector{Int64}(undef, N_bins)
-for i in eachindex(level_u_indices_elements)
+for i in eachindex(level_info_elements)
   level_info_elements_count[i] = length(level_info_elements[i])
 end
 
@@ -226,6 +226,52 @@ for boundary_id in 1:n_boundaries
 end
 @assert length(level_info_boundaries_acc[end]) == 
   n_boundaries "highest level should contain all boundaries"
+
+level_info_mortars_acc = [Vector{Int64}() for _ in 1:N_bins]
+@unpack mortars = cache
+n_mortars = last(size(mortars.u))
+
+for mortar_id in 1:n_mortars
+  # Get element ids
+  element_id_lower  = mortars.neighbor_ids[1, mortar_id]
+
+  # pull the four corners numbered as right-handed
+  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_lower]
+  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_lower]
+  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_lower]
+  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_lower]
+  # compute the four side lengths and get the smallest
+  L0 = sqrt( sum( (P1-P0).^2 ) )
+  L1 = sqrt( sum( (P2-P1).^2 ) )
+  L2 = sqrt( sum( (P3-P2).^2 ) )
+  L3 = sqrt( sum( (P0-P3).^2 ) )
+  h_lower = min(L0, L1, L2, L3)
+
+  element_id_higher = mortars.neighbor_ids[2, mortar_id]
+
+  # pull the four corners numbered as right-handed
+  P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_higher]
+  P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_higher]
+  P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_higher]
+  P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_higher]
+  # compute the four side lengths and get the smallest
+  L0 = sqrt( sum( (P1-P0).^2 ) )
+  L1 = sqrt( sum( (P2-P1).^2 ) )
+  L2 = sqrt( sum( (P3-P2).^2 ) )
+  L3 = sqrt( sum( (P0-P3).^2 ) )
+  h_higher = min(L0, L1, L2, L3)
+
+  # Determine level
+  h = min(h_left, h_right)
+  level = findfirst(x-> x >= h, h_bins)
+
+  # Add to accumulated container
+  for l in level:N_bins
+    push!(level_info_mortars_acc[l], mortar_id)
+  end
+end
+@assert length(level_info_mortars_acc[end]) == 
+  n_mortars "highest level should contain all mortars" 
 
 ###############################################################################
 # ODE solvers
