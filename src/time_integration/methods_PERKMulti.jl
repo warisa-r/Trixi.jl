@@ -297,6 +297,9 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   @unpack mesh, cache = ode.p
   @unpack elements, interfaces, boundaries = cache
 
+  # TODO: Check mesh-type for different inits of P-ERK helper variables
+  #if typeof(mesh) <:TreeMesh
+
   n_elements   = length(elements.cell_ids)
   n_interfaces = length(interfaces.orientations)
   n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
