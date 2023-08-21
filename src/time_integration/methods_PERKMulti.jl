@@ -195,6 +195,7 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   level_u_indices_elements::Vector{Vector{Int64}}
   t_stage::RealT
   coarsest_lvl::Int64
+  n_levels::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
 end
 
@@ -991,7 +992,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, du_ode_hyp)
+                t0, -1, length(level_u_indices_elements), du_ode_hyp)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -1085,7 +1086,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
 
       # NOTE: For non-AMR, one could use "alg.NumDoublings + 1" for this
-      N_levels = length(integrator.level_u_indices_elements) # Dynamic since this changes during AMR
+      integrator.n_levels = length(integrator.level_u_indices_elements) # Dynamic since this changes during AMR
 
       for stage = 3:alg.NumStages
         # Construct current state
@@ -1093,26 +1094,26 @@ function solve!(integrator::PERK_Multi_Integrator)
           integrator.u_tmp[i] = integrator.u[i]
         end
 
-        for level in eachindex(integrator.level_u_indices_elements) # Ensures only relevant levels are evaluated
+        for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             # CARE: Less effective if not finest level is present
             integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
 
             # Approach where one uses only the highest levels when needed 
             # CARE: Does not work if no coarsest cells are present
-            #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - integrator.n_levels, stage - 2, 1] * integrator.k1[u_ind]
           end
 
-          # Pretty much most efficient, AMR compatible way
+          # TODO Try more efficient way
           if alg.AMatrices[level, stage - 2, 2] > 0
-          #if alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] > 0
+          #if alg.AMatrices[level + alg.NumDoublings + 1 - integrator.n_levels, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
               # CARE: Less effective if not finest level is present
               integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
 
               # Approach where one uses only the highest levels when needed 
               # CARE: Does not work if no coarsest cells are present
-              #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - N_levels, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[level + alg.NumDoublings + 1 - integrator.n_levels, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -1120,7 +1121,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
-        integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], N_levels)
+        integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
         # For statically refined meshes:
         #integrator.coarsest_lvl = alg.HighestActiveLevels[stage]
 

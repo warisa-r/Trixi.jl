@@ -109,7 +109,7 @@ ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spe
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, stage_callbacks = ())
 
-#=
+
 # S = 8
 CFL = 0.25 * 1.0
 CFL = 0.125 * 1.0
@@ -128,7 +128,7 @@ S = 32
 =#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
-=#
+
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
