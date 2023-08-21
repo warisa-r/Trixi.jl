@@ -22,80 +22,8 @@ function ComputeACoeffs(NumStageEvals::Int,
   return reverse(ACoeffs)
 end
 
-function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString)
 
-  # c Vector form Butcher Tableau (defines timestep per stage)
-  c = zeros(Float64, NumStages)
-  for k in 2:NumStages
-    c[k] = (k - 1)/(2.0*(NumStages - 1))
-  end
-  println("Timestep-split: "); display(c); println("\n")
-  # TODO: Not sure if valid for general ConsOrder (not 2)!
-  SE_Factors = reverse(c[2:end-1])
-
-  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK_Multi specific)
-  CoeffsMax = NumStages - 2
-
-  AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
-  for i = 1:NumDoublings+1
-    AMatrices[i, :, 1] = c[3:end]
-  end
-
-  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
-  # k1 is evaluated at all levels
-  ActiveLevels[1] = 1:NumDoublings+1
-
-  for level = 1:NumDoublings + 1
-    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
-    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-    A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), SE_Factors, MonCoeffs)
-   
-
-    #=
-    # TODO: Not sure if I not rather want to read-in values (especially those from Many Stage C++ Optim)
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
-    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-    =#
-
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-
-    # CARE: For linear PERK family: 4,5,6, and not 4, 8, 16, ...
-    #=
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages - level + 1)) * ".txt"
-    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
-    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages - level + 1 - 3):end, 2]  = A
-    =#
-
-    # Add refinement levels to stages
-    for stage = NumStages:-1:NumStages-NumMonCoeffs
-      push!(ActiveLevels[stage], level)
-    end
-  end
-  HighestActiveLevels = maximum.(ActiveLevels)
-
-  for i = 1:NumDoublings+1
-    println("A-Matrix of Butcher tableau of level " * string(i))
-    display(AMatrices[i, :, :]); println()
-  end
-
-  println("Check violation of internal consistency")
-  for i = 1:NumDoublings+1
-    for j = 1:i
-      display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
-    end
-  end
-
-  println("\nActive Levels:"); display(ActiveLevels); println()
-
-  return AMatrices, c, ActiveLevels, HighestActiveLevels
-end
-
-# Version with variable bs, cEnd
-# TODO: Make bS, cEend Keyword arguments (avoid two methods)
+# TODO: Make bS, cEend Keyword arguments
 function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                           bS::Float64, cEnd::Float64)
                                      
@@ -131,7 +59,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    #=
+    
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -139,9 +67,10 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    =#
+    
 
-    # CARE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
+    #=
+    # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages - 2*level
@@ -149,6 +78,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
+    =#
 
     # Add refinement levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -208,12 +138,10 @@ mutable struct PERK_Multi{StageCallbacks}
     newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        #NumStageEvalsMin_ * 2^NumDoublings_,
-                        NumStageEvalsMin_ + 2 * NumDoublings_,
+                        NumStageEvalsMin_ * 2^NumDoublings_,
+                        #NumStageEvalsMin_ + 2 * NumDoublings_,
                         1.0-bS_, bS_,
                         stage_callbacks)
-                        # CARE: Hack to eanble linear increasing PERK
-                        #NumStageEvalsMin_ + NumDoublings_)
 
     newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, newPERK_Multi.HighestActiveLevels = 
       ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
@@ -680,7 +608,15 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1
-    h_bins = LinRange(h_min, h_max, n_levels)
+    if n_levels == 1
+      h_bins = [h_max]
+    else
+      h_bins = LinRange(h_min, h_max, n_levels)
+    end
+
+    println("h_min: ", h_min, " h_max: ", h_max, " h_bins:")
+    display(h_bins)
+    println("\n")
 
     level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
     level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
@@ -758,6 +694,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
     # For efficient treatment of boundaries we need additional datastructures
     n_dims = ndims(mesh) # Spatial dimension
+    # TODO: Not yet adapted for P4est!
     level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
 
     # Determine level for each boundary
@@ -824,7 +761,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       h_higher = min(L0, L1, L2, L3)
 
       # Determine level
-      h = min(h_left, h_right)
+      h = min(h_lower, h_higher)
       level = findfirst(x-> x >= h, h_bins)
 
       # Add to accumulated container
@@ -848,7 +785,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   display(level_info_boundaries_acc); println()
   println("level_info_boundaries_orientation_acc:")
   display(level_info_boundaries_orientation_acc); println()
-
   
   println("level_info_mortars_acc:")
   display(level_info_mortars_acc); println()
@@ -1130,15 +1066,15 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1],
                    integrator.du_ode_hyp)
-      
       =#
+      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      
+
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
@@ -1205,7 +1141,8 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        
+
+
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
           @threaded for u_ind in integrator.level_u_indices_elements[level]
