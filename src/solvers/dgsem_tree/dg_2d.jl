@@ -190,7 +190,7 @@ function rhs!(du, u, t,
     @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
 
     # Calculate volume integral
-    @trixi_timeit timer() "volume integral" begin 
+    @trixi_timeit timer() "volume integral" begin
       calc_volume_integral!(du, u, mesh,
                             have_nonconservative_terms(equations),
                             equations,
@@ -200,7 +200,7 @@ function rhs!(du, u, t,
     end
 
     # Prolong solution to interfaces, i.e., reconstruct interface/trace values
-    @trixi_timeit timer() "prolong2interfaces" begin 
+    @trixi_timeit timer() "prolong2interfaces" begin
       prolong2interfaces!(cache, u, mesh,
                           equations,
                           dg.surface_integral,
@@ -209,7 +209,7 @@ function rhs!(du, u, t,
     end
 
     # Calculate interface fluxes
-    @trixi_timeit timer() "interface flux" begin 
+    @trixi_timeit timer() "interface flux" begin
       calc_interface_flux!(cache.elements.surface_flux_values,
                            mesh,
                            have_nonconservative_terms(equations),
@@ -220,7 +220,7 @@ function rhs!(du, u, t,
     end
 
     # Prolong solution to boundaries
-    @trixi_timeit timer() "prolong2boundaries" begin 
+    @trixi_timeit timer() "prolong2boundaries" begin
       prolong2boundaries!(cache, u, mesh,
                           equations,
                           dg.surface_integral,
@@ -265,7 +265,7 @@ function rhs!(du, u, t,
     end
 
     # Calculate surface integrals
-    @trixi_timeit timer() "surface integral" begin 
+    @trixi_timeit timer() "surface integral" begin
       calc_surface_integral!(du, u, mesh,
                              equations,
                              dg.surface_integral,
@@ -1039,7 +1039,7 @@ end
 
 # TODO: Taal dimension agnostic
 function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeriodic,
-                             mesh::Union{TreeMesh{2}, P4estMesh{2}}, equations, surface_integral, dg::DG,
+                             mesh::TreeMesh{2}, equations, surface_integral, dg::DG,
                              level_info_boundaries_orientation_acc::Vector{Vector{Int64}})
     @assert isempty(eachboundary(dg, cache))
 end
@@ -1723,7 +1723,7 @@ function apply_jacobian!(du, mesh::TreeMesh{2},
     return nothing
 end
 
-function apply_jacobian!(du, mesh::Union{TreeMesh{2}, P4estMesh{2}},
+function apply_jacobian!(du, mesh::TreeMesh{2},
                          equations, dg::DG, cache,
                          level_info_elements_acc::Vector{Int64})
     @threaded for element in level_info_elements_acc
