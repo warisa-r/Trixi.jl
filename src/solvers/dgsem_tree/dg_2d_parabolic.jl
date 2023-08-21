@@ -154,9 +154,9 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{2}, # Currently restricted to T
 
     # Compute and store the viscous fluxes
     @trixi_timeit timer() "calculate viscous fluxes" begin
-    calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh,
-                            equations_parabolic, dg, cache, cache_parabolic,
-                            level_info_elements_acc)
+        calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh,
+                             equations_parabolic, dg, cache, cache_parabolic,
+                             level_info_elements_acc)
     end
 
     # The remainder of this function is essentially a regular rhs! for parabolic
