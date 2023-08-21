@@ -193,7 +193,6 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   level_info_boundaries_orientation_acc::Vector{Vector{Vector{Int64}}}
   level_info_mortars_acc::Vector{Vector{Int64}}
   level_u_indices_elements::Vector{Vector{Int64}}
-  level_u_indices_elements_acc::Vector{Vector{Int64}}
   t_stage::RealT
   coarsest_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
@@ -819,21 +818,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   end
   # TODO: 3D
 
-  # NOTE: Only necessary for hyperbolic-parabolic
-  level_u_indices_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
-  level_u_indices_elements_acc[1] = copy(level_u_indices_elements[1])
-  for level in 2:n_levels
-    level_u_indices_elements_acc[level] = copy(level_u_indices_elements_acc[level-1])
-    append!(level_u_indices_elements_acc[level], level_u_indices_elements[level])
-  end
-  @assert length(level_u_indices_elements_acc[end]) == 
-              nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * n_elements
-
   println("level_u_indices_elements:")
   display(level_u_indices_elements); println()
-
-  println("level_u_indices_elements_acc:")
-  display(level_u_indices_elements_acc); println()
   
 
   #=
@@ -1004,7 +990,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 level_info_interfaces_acc, 
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
-                level_u_indices_elements, level_u_indices_elements_acc,
+                level_u_indices_elements,
                 t0, -1, du_ode_hyp)
             
   # initialize callbacks
@@ -1083,7 +1069,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1],
-                   integrator.level_u_indices_elements_acc[1],
+                   integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
       
       #=
@@ -1152,7 +1138,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
-                    integrator.level_u_indices_elements_acc[integrator.coarsest_lvl],
+                    integrator.level_u_indices_elements, integrator.coarsest_lvl,
                     integrator.du_ode_hyp)
         #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 

@@ -46,7 +46,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
           integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:n_levels]
           integrator.level_u_indices_elements = [Vector{Int64}() for _ in 1:n_levels]
-          integrator.level_u_indices_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
           #resize!(integrator.level_info_elements_acc, n_levels) # TODO: Does unfortunately not work
         else # Just empty datastructures
           for level in 1:n_levels
@@ -59,7 +58,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
             end
             empty!(integrator.level_info_mortars_acc[level])
             empty!(integrator.level_u_indices_elements[level])
-            empty!(integrator.level_u_indices_elements_acc[level])
           end
         end
 
@@ -366,12 +364,6 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
           end
         end
         # TODO: 3D
-
-        integrator.level_u_indices_elements_acc[1] = copy(integrator.level_u_indices_elements[1])
-        for level in 2:n_levels
-          integrator.level_u_indices_elements_acc[level] = copy(integrator.level_u_indices_elements_acc[level-1])
-          append!(integrator.level_u_indices_elements_acc[level], integrator.level_u_indices_elements[level])
-        end
         
       end # "PERK stage identifiers update" timing
     end # if has changed

@@ -430,7 +430,7 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                                    level_info_boundaries_acc::Vector{Int64},
                                    level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                                    level_info_mortars_acc::Vector{Int64},
-                                   level_u_indices_elements_acc::Vector{Int64},
+                                   level_u_indices_elements_acc::Vector{Vector{Int64}}, max_level::Int64,
                                    du_ode_hyp)
     @trixi_timeit timer() "rhs_hyperbolic-parabolic! (level-dependent)" begin 
         rhs!(du_ode_hyp, u_ode, semi, t,level_info_elements_acc,
@@ -444,8 +444,10 @@ function rhs_hyperbolic_parabolic!(du_ode, u_ode, semi::SemidiscretizationHyperb
                        level_info_boundaries_orientation_acc,
                        level_info_mortars_acc)
         
-        @threaded for u_ind in level_u_indices_elements_acc
-            du_ode[u_ind] += du_ode_hyp[u_ind]
+        for level in 1:max_level                       
+            @threaded for u_ind in level_u_indices_elements_acc[level]
+                du_ode[u_ind] += du_ode_hyp[u_ind]
+            end
         end
     end
 end
