@@ -22,8 +22,8 @@ function initial_condition_shear_layer(x, t, equations::CompressibleEulerEquatio
   Ms = 0.1 # maximum Mach number
 
   rho = 1.0
-  v1  = x[2] <= 0.5 ? u0 * tanh(k*(x[2]*0.5 - 0.25)) : u0 * tanh(k*(0.75 -x[2]*0.5))
-  v2  = u0 * delta * sin(2*pi*(x[1]*0.5 + 0.25))
+  v1  = x[2] <= 0.5 ? u0 * tanh(k*(x[2] - 0.25)) : u0 * tanh(k*(0.75 -x[2]))
+  v2  = u0 * delta * sin(2*pi*(x[1]+ 0.25))
   p   = (u0 / Ms)^2 * rho / equations.gamma # scaling to get Ms
 
   return prim2cons(SVector(rho, v1, v2, p), equations)
@@ -66,13 +66,13 @@ display(plotdata)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 1)
+tspan = (0.0, 0.7)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 200
+analysis_interval = 500
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
@@ -91,6 +91,15 @@ callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         alive_callback,
                         amr_callback)
+#=
+visualization_cb = VisualizationCallback(interval=100, variable_names=["v1"])
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        alive_callback,
+                        amr_callback,
+                        visualization_cb)
+=#
 
 ###############################################################################
 # run the simulation
@@ -109,7 +118,7 @@ ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spe
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, stage_callbacks = ())
 
-
+#=
 # S = 8
 CFL = 0.25 * 1.0
 CFL = 0.125 * 1.0
@@ -128,7 +137,7 @@ S = 32
 =#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
-
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
@@ -166,9 +175,9 @@ sol = solve(ode, SSPRK33(), dt=4e-5,
 
 summary_callback() # print the timer summary
 
-plot(sol)
+plot(sol.u)
 pd = PlotData2D(sol)
 plot(pd["v1"])
-plot!(getmesh(pd))
+plot(getmesh(pd))
 
 plot(pd["v2"])
