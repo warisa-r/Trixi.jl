@@ -66,13 +66,13 @@ display(plotdata)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.7)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 500
+analysis_interval = 50000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
@@ -91,39 +91,45 @@ callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         alive_callback,
                         amr_callback)
-#=
-visualization_cb = VisualizationCallback(interval=100, variable_names=["v1"])
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        alive_callback,
-                        amr_callback,
-                        visualization_cb)
-=#
 
 ###############################################################################
 # run the simulation
 
-CFL = 0.57
-CFL = 0.35 # Three refinements
+CFL = 1.0
+CFL = 0.96
+CFL = 0.61
+CFL = 0.35
+
+LevelCFL = [1.0, 0.96, 0.61, 0.35]
+
 # 4: dt 0.00156784012855496261
-dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
+#dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
 # 8: dt 0.00342847820080351092
 # 16: dt 0.00708093033754266813
+
+dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4))
 
 b1   = 0.5
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
-                           bS, cEnd, stage_callbacks = ())
+                           bS, cEnd, 
+                           LevelCFL,
+                           stage_callbacks = ())
 
-#=
+
 # S = 8
-CFL = 0.25 * 1.0
-CFL = 0.125 * 1.0
 
-dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4)) * CFL
+# handles the re-calculation of the maximum Δt after each time step
+stepsize_callback = StepsizeCallback(cfl=4.8)
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        alive_callback,
+                        amr_callback,
+                        stepsize_callback)
+
+dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4))
 S = 8
 
 #=
@@ -136,30 +142,24 @@ dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
 S = 32
 =#
 
+
+
+# S = 3 = p (similar to SSPRK3,3)
+S = 3
+stepsize_callback = StepsizeCallback(cfl=1.05)
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        alive_callback,
+                        amr_callback,
+                        stepsize_callback)
+
+dt = 0.000730023539508692935 / (2.0^(InitialRefinement - 4))
+
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
-=#
+
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
-
-#=
-A = jacobian_ad_forward(semi, 1.0, sol.u[end])
-
-Eigenvalues = eigvals(A)
-
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = nothing
-plotdata = scatter(EigValsReal, EigValsImag, label = "Spectrum")
-display(plotdata)
-=#
 
 #=
 time_int_tol = 1e-6 # InitialRefinement = 4
@@ -168,16 +168,12 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 =#
 
-#=
-sol = solve(ode, SSPRK33(), dt=4e-5,
-            save_everystep=false, callback=callbacks)
-=#
 
 summary_callback() # print the timer summary
 
 plot(sol.u)
 pd = PlotData2D(sol)
-plot(pd["v1"])
+plot(pd["v1"], title = "\$v_x, t=0\$")
 plot(getmesh(pd))
 
 plot(pd["v2"])
