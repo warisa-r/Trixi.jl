@@ -11,9 +11,9 @@ box_flow = newProject("box", "out")
 setPolynomialOrder!(box_flow, 3)
 setMeshFileFormat!(box_flow, "ABAQUS")
 
-# A background grid is required for the mesh generation. In this example we lay a
-# background grid of Cartesian boxes with size 0.2.
-addBackgroundGrid!(box_flow, [0.125, 0.125, 0.0])
+# A background grid is required for the mesh generation. 
+h0 = 0.125
+addBackgroundGrid!(box_flow, [h0, h0, 0.0])
 
 # Add outer boundary curves in counter-clockwise order.
 # Note, the curve names are those that will be present in the mesh file.
@@ -34,11 +34,9 @@ addCurveToOuterBoundary!(box_flow, left)
 
 
 # Add a refinement line for the wake region.
-ref_1 = newRefinementLine("ref_1", "smooth", [-0.5,0.0,0.0], [0.5,0.0,0.0], 0.0625, 0.5)
-ref_2 = newRefinementLine("ref_2", "smooth", [-0.25,0.0,0.0], [0.25,0.0,0.0], 0.03125, 0.25)
+ref_1 = newRefinementCenter("ref_1", "smooth", [0.0,0.0,0.0], h0/2.5, 0.5)
 
 addRefinementRegion!(box_flow, ref_1)
-addRefinementRegion!(box_flow, ref_2)
 
 # Visualize the model, refinement region and background grid
 # prior to meshing.

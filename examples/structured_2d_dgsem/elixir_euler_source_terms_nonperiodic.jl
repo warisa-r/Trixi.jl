@@ -44,7 +44,7 @@ boundary_conditions = (x_neg=boundary_condition,
                       y_neg=boundary_condition,
                       y_pos=boundary_condition,)                
 
-#=
+
 mesh_file = "out/box.inp"
 mesh = P4estMesh{2}(mesh_file)
 
@@ -52,7 +52,7 @@ boundary_conditions = Dict( :Bottom  => boundary_condition,
                             :Top     => boundary_condition,
                             :Right   => boundary_condition,
                             :Left    => boundary_condition )
-=#
+
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     source_terms=source_terms_convergence_test,
@@ -62,7 +62,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -88,12 +88,12 @@ callbacks = CallbackSet(summary_callback,
                         stepsize_callback)
 ###############################################################################
 # run the simulation
-#=
+
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
-=#
 
+#=
 dt = 0.0355976722988998537 * 0.29 # 4, 6, 8, 10, 12, 14, 16
 dt = 0.0355976722988998537 * 0.25 # 4, 8, 16
 
@@ -110,6 +110,8 @@ callbacks = CallbackSet(summary_callback,
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
+=#
+                  
 summary_callback() # print the timer summary
 
 Plots.plot(sol)
