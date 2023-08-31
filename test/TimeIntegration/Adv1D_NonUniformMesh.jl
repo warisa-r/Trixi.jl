@@ -35,7 +35,7 @@ solver = DGSEM(polydeg=PolyDeg, surface_flux=surface_flux)
 coordinates_min = -5.0 # minimum coordinate
 coordinates_max =  5.0 # maximum coordinate
 
-InitialRefinement = 6
+InitialRefinement = 4
 # Create a uniformly refined mesh with periodic boundaries
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 # Start from one cell => Results in 1 + 2 + 4 + 8 + 16 = 2^5 - 1 = 31 cells
@@ -63,7 +63,7 @@ num_leafs = length(LLID)
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4)+1 : Int(3*num_leafs/4)])
 
 
-
+#=
 # Third refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -72,7 +72,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4) : Int(3*num_leafs/4)])
-
+=#
 
 initial_condition = initial_condition_convergence_test
 initial_condition = initial_condition_gauss
@@ -85,14 +85,14 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-CFL = 0.4
+CFL = 0.99
 
 # S=4, D=3
 dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
 
 StartTime = 0.0
 EndTime = 10 * rand()
-EndTime = 0.8
+EndTime = 0.27
 
 
 # Create ODEProblem
@@ -136,11 +136,15 @@ cEnd = 0.5/bS
 
 #callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
 
-ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
-                           bS, cEnd)
+LevelCFL = [1.0, 1.0, 1.0]
 
-#ode_algorithm = Trixi.PRK()               
-#ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/")
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
+                           bS, cEnd,
+                           LevelCFL,
+                           stage_callbacks = ())
+
+           
+#ode_algorithm = PERK(16, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", bS, cEnd)
 
 #=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
