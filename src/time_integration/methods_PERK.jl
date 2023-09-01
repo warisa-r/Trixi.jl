@@ -204,8 +204,8 @@ function solve!(integrator::PERK_Integrator)
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       # k1: 
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
@@ -218,8 +218,8 @@ function solve!(integrator::PERK_Integrator)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
       end
 
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
       @threaded for i in eachindex(integrator.du)
         integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -235,8 +235,8 @@ function solve!(integrator::PERK_Integrator)
                                                   alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
         end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for i in eachindex(integrator.du)
           integrator.k_higher[i] = integrator.du[i] * integrator.dt

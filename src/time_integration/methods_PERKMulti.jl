@@ -59,7 +59,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    
+    #=
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -67,9 +67,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    
+    =#
 
-    #=
+    
     # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
@@ -78,7 +78,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    =#
+    
 
     # Add refinement levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -140,8 +140,8 @@ mutable struct PERK_Multi{StageCallbacks}
     newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        NumStageEvalsMin_ * 2^NumDoublings_,
-                        #NumStageEvalsMin_ + 2 * NumDoublings_,
+                        #NumStageEvalsMin_ * 2^NumDoublings_,
+                        NumStageEvalsMin_ + 2 * NumDoublings_,
                         1.0-bS_, bS_,
                         LevelCFL_,
                         stage_callbacks)
@@ -589,18 +589,22 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_elements = nelements(dg, cache)
     h_min = 42;
     h_max = 0;
-    for k in 1:n_elements
+
+    h_min_per_element = zeros(n_elements)
+
+    for element_id in 1:n_elements
       # pull the four corners numbered as right-handed
-      P0 = cache.elements.node_coordinates[:, 1     , 1     , k]
-      P1 = cache.elements.node_coordinates[:, nnodes, 1     , k]
-      P2 = cache.elements.node_coordinates[:, nnodes, nnodes, k]
-      P3 = cache.elements.node_coordinates[:, 1     , nnodes, k]
+      P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
+      P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
+      P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+      P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
       # compute the four side lengths and get the smallest
       L0 = sqrt( sum( (P1-P0).^2 ) )
       L1 = sqrt( sum( (P2-P1).^2 ) )
       L2 = sqrt( sum( (P3-P2).^2 ) )
       L3 = sqrt( sum( (P0-P3).^2 ) )
       h = min(L0, L1, L2, L3)
+      h_min_per_element[element_id] = h
       if h > h_max 
         h_max = h
       end
@@ -619,6 +623,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
 
     println("h_min: ", h_min, " h_max: ", h_max)
+    println("h_max/h_min: ", h_max/h_min)
     println("h_bins:")
     display(h_bins)
     println("\n")
@@ -626,17 +631,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
     level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
     for element_id in 1:n_elements
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h = min(L0, L1, L2, L3)
+      h = h_min_per_element[element_id]
 
       level = findfirst(x-> x >= h, h_bins)
       append!(level_info_elements[level], element_id)
@@ -657,32 +652,10 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for interface_id in 1:n_interfaces
       # Get element ids
       element_id_left  = interfaces.neighbor_ids[1, interface_id]
-
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_left]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_left]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_left]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_left]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h_left = min(L0, L1, L2, L3)
+      h_left = h_min_per_element[element_id_left]
 
       element_id_right = interfaces.neighbor_ids[2, interface_id]
-
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_right]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_right]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_right]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_right]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h_right = min(L0, L1, L2, L3)
+      h_right = h_min_per_element[element_id_right]
 
       # Determine level
       h = min(h_left, h_right)
@@ -706,18 +679,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for boundary_id in 1:n_boundaries
       # Get element id (boundaries have only one unique associated element)
       element_id = boundaries.neighbor_ids[boundary_id]
-
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h = min(L0, L1, L2, L3)
+      h = h_min_per_element[element_id]
 
       # Determine level
       level = findfirst(x-> x >= h, h_bins)
@@ -738,32 +700,10 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for mortar_id in 1:n_mortars
       # Get element ids
       element_id_lower  = mortars.neighbor_ids[1, mortar_id]
-
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_lower]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_lower]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_lower]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_lower]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h_lower = min(L0, L1, L2, L3)
+      h_lower = h_min_per_element[element_id_lower]
 
       element_id_higher = mortars.neighbor_ids[2, mortar_id]
-
-      # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , element_id_higher]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , element_id_higher]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, element_id_higher]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, element_id_higher]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h_higher = min(L0, L1, L2, L3)
+      h_higher = h_min_per_element[element_id_higher]
 
       # Determine level
       h = min(h_lower, h_higher)

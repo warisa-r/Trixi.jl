@@ -7,7 +7,7 @@ using Trixi
 ###############################################################################
 # semidiscretization of the linear advection equation
 
-advection_velocity = (0.2, -0.7)
+advection_velocity = (1, 1)
 equations = LinearScalarAdvectionEquation2D(advection_velocity)
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
@@ -23,9 +23,17 @@ mesh = P4estMesh(trees_per_dimension, polydeg=3,
                  coordinates_min=coordinates_min, coordinates_max=coordinates_max,
                  initial_refinement_level=0)
 
-# A semidiscretization collects data structures and functions for the spatial discretization
-semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver)
+mesh_file = joinpath(@__DIR__, "square_unstructured_1.inp")
+isfile(mesh_file) || download("https://gist.githubusercontent.com/efaulhaber/a075f8ec39a67fa9fad8f6f84342cbca/raw/a7206a02ed3a5d3cadacd8d9694ac154f9151db7/square_unstructured_1.inp",
+                              mesh_file)
 
+mesh = P4estMesh{2}(mesh_file, polydeg=3, initial_refinement_level=2)
+
+# A semidiscretization collects data structures and functions for the spatial discretization
+semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergence_test, solver,
+                                    boundary_conditions=Dict(
+                                      :all => BoundaryConditionDirichlet(initial_condition_convergence_test)
+                                    ))
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -65,15 +73,30 @@ cEnd = 0.5/bS
 
 #callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
 
-ode_algorithm = PERK_Multi(4, 0, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/P4est/",
-                            bS, cEnd, [1.0])
+ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/P4est/",
+                            bS, cEnd, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+#=
+ode_algorithm = PERK(4, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/P4est/",
+                            bS, cEnd)
+=#
 
-dt = 0.060658954735117735 * 0.99
+# S=4 only
+dt = 0.0272965311996813413 * 1.1
+
+# S=8 only
+dt = dt = 0.0272965311996813413 * 2.3
+
+# S=16 only
+#dt = dt = 0.0272965311996813413 * 4.4
+
+dt = 0.0272965311996813413 * 0.6
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
 
-# Print the timer summary
-summary_callback()
 Plots.plot(sol)
 Plots.plot!(getmesh(PlotData2D(sol)))
+
+# Print the timer summary
+summary_callback()
