@@ -1044,17 +1044,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       # k1: Evaluated on entire domain / all levels
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
       #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-
-      #=
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t_stage, 
-                    integrator.level_info_elements_acc[end],
-                    integrator.level_info_interfaces_acc[end],
-                    integrator.level_info_boundaries_acc[end],
-                    integrator.level_info_boundaries_orientation_acc[end],
-                    integrator.level_info_mortars_acc[end],
-                    integrator.du_ode_hyp,
-                    integrator.level_u_indices_elements[1])
-      =#
+      
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * dt
       end
@@ -1071,7 +1061,6 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
-      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -1080,7 +1069,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
-      
+
       #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
@@ -1137,7 +1126,6 @@ function solve!(integrator::PERK_Multi_Integrator)
         =#
         
         # Joint RHS evaluation with all elements sharing this timestep
-        
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
@@ -1146,6 +1134,7 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.level_u_indices_elements, integrator.coarsest_lvl,
                     integrator.du_ode_hyp)
+
         #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
