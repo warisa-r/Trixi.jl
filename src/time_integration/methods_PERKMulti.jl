@@ -229,7 +229,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   iter = 0
 
   ### Set datastructures for handling of level-dependent integration ###
-  @unpack mesh, cache = ode.p
+  mesh, _, dg, cache = mesh_equations_solver_cache(ode.p)
   @unpack elements, interfaces, boundaries = cache
 
   if typeof(mesh) <:TreeMesh
@@ -586,15 +586,15 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     =#
   elseif typeof(mesh) <:P4estMesh
     nnodes = length(mesh.nodes)
-    n_elements = last(size(mesh.tree_node_coordinates))
+    n_elements = nelements(dg, cache)
     h_min = 42;
     h_max = 0;
     for k in 1:n_elements
       # pull the four corners numbered as right-handed
-      P0 = mesh.tree_node_coordinates[:, 1     , 1     , k]
-      P1 = mesh.tree_node_coordinates[:, nnodes, 1     , k]
-      P2 = mesh.tree_node_coordinates[:, nnodes, nnodes, k]
-      P3 = mesh.tree_node_coordinates[:, 1     , nnodes, k]
+      P0 = cache.elements.node_coordinates[:, 1     , 1     , k]
+      P1 = cache.elements.node_coordinates[:, nnodes, 1     , k]
+      P2 = cache.elements.node_coordinates[:, nnodes, nnodes, k]
+      P3 = cache.elements.node_coordinates[:, 1     , nnodes, k]
       # compute the four side lengths and get the smallest
       L0 = sqrt( sum( (P1-P0).^2 ) )
       L1 = sqrt( sum( (P2-P1).^2 ) )
@@ -618,7 +618,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       h_bins = LinRange(h_min, h_max, n_levels)
     end
 
-    println("h_min: ", h_min, " h_max: ", h_max, " h_bins:")
+    println("h_min: ", h_min, " h_max: ", h_max)
+    println("h_bins:")
     display(h_bins)
     println("\n")
 
@@ -1042,8 +1043,8 @@ function solve!(integrator::PERK_Multi_Integrator)
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * dt
@@ -1061,6 +1062,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -1069,15 +1071,15 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
-
-      #=
+      =#
+      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      =#
+      
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
       end
@@ -1125,6 +1127,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
         =#
         
+        #=
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
@@ -1134,15 +1137,15 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.level_u_indices_elements, integrator.coarsest_lvl,
                     integrator.du_ode_hyp)
-
-        #=
+        =#
+        
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        =#
+        
 
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
