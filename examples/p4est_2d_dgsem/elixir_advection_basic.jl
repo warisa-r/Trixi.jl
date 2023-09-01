@@ -66,7 +66,7 @@ cEnd = 0.5/bS
 #callbacks_Stage = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-6,), variables=(Trixi.scalar,)), )
 
 ode_algorithm = PERK_Multi(4, 0, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/P4est/",
-                            bS, cEnd)
+                            bS, cEnd, [1.0])
 
 dt = 0.060658954735117735 * 0.99
 sol = Trixi.solve(ode, ode_algorithm,
@@ -75,5 +75,5 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
-plot(sol)
-plot!(getmesh(PlotData2D(sol)))
+Plots.plot(sol)
+Plots.plot!(getmesh(PlotData2D(sol)))
