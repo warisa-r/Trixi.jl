@@ -13,17 +13,17 @@ setMeshFileFormat!(cylinder_flow, "ABAQUS")
 
 # A background grid is required for the mesh generation. In this example we lay a
 # background grid of Cartesian boxes with size 0.2.
-addBackgroundGrid!(cylinder_flow, [0.2, 0.2, 0.0])
+addBackgroundGrid!(cylinder_flow, [0.8, 0.8, 0.0])
 
 # Add outer boundary curves in counter-clockwise order.
 # Note, the curve names are those that will be present in the mesh file.
-left = newEndPointsLineCurve("Left", [0.0, 1.0, 0.0], [0.0, -1.0, 0.0])
+left = newEndPointsLineCurve("Left", [0.0, 10.0, 0.0], [0.0, -10.0, 0.0])
 
-bottom = newEndPointsLineCurve("Bottom", [0.0, -1.0, 0.0], [4.0, -1.0, 0.0])
+bottom = newEndPointsLineCurve("Bottom", [0.0, -10, 0.0], [40.0, -10, 0.0])
 
-right = newEndPointsLineCurve("Right", [4.0, -1.0, 0.0], [4.0, 1.0, 0.0])
+right = newEndPointsLineCurve("Right", [40.0, -10, 0.0], [40, 10, 0.0])
 
-top = newEndPointsLineCurve("Top", [4.0, 1.0, 0.0], [0.0, 1.0, 0.0])
+top = newEndPointsLineCurve("Top", [40.0, 10, 0.0], [0.0, 10, 0.0])
 
 # Outer boundary curve chain is created to have counter-clockwise
 # orientation, as required by HOHQMesh generator
@@ -35,8 +35,8 @@ addCurveToOuterBoundary!(cylinder_flow, left)
 
 # Add inner boundary curve
 cylinder = newCircularArcCurve("Circle",        # curve name
-                               [0.6, 0.0, 0.0], # circle center
-                               0.25,            # circle radius
+                               [10, 0.0, 0.0], # circle center
+                               0.5,            # circle radius
                                0.0,             # start angle
                                360.0,           # end angle
                                "degrees")       # angle units
@@ -45,11 +45,11 @@ addCurveToInnerBoundary!(cylinder_flow, cylinder, "inner1")
 
 
 # Add a refinement line for the wake region.
-#refine_line1 = newRefinementLine("wake_region", "smooth", [0.1,0.0,0.0], [4.0,0.0,0.0], 0.1, 0.75)
-#refine_line2 = newRefinementLine("wake_region", "smooth", [0.3,0.0,0.0], [4.0,0.0,0.0], 0.05, 0.25)
+refine_line1 = newRefinementLine("wake_region", "smooth", [10,0.0,0.0], [40,0.0,0.0], 0.4, 3.0)
+refine_line2 = newRefinementLine("inlet", "smooth", [0,-10,0.0], [0,10,0.0], 0.4, 1.0)
 
-#addRefinementRegion!(cylinder_flow, refine_line1)
-#addRefinementRegion!(cylinder_flow, refine_line2)
+addRefinementRegion!(cylinder_flow, refine_line1)
+addRefinementRegion!(cylinder_flow, refine_line2)
 
 # Visualize the model, refinement region and background grid
 # prior to meshing.

@@ -72,7 +72,7 @@ ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 50000
+analysis_interval = 500
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
@@ -120,30 +120,28 @@ ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spe
 
 
 # S = 8
-
 # handles the re-calculation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl=4.8)
+dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4))
+S = 8
+
+stepsize_callback = StepsizeCallback(cfl=4.8*2*0.9)
+dt = 0.00708093033754266813 / (2.0^(InitialRefinement - 4)) * CFL
+S = 16
+
+
+stepsize_callback = StepsizeCallback(cfl=4.8*4*0.5)
+dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
+S = 32
+
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         alive_callback,
                         amr_callback,
                         stepsize_callback)
 
-dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4))
-S = 8
-
 #=
-CFL = 0.25 * 0.8
-dt = 0.00708093033754266813 / (2.0^(InitialRefinement - 4)) * CFL
-S = 16
-
-CFL = 0.25 * 0.4
-dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
-S = 32
-=#
-
-
-
 # S = 3 = p (similar to SSPRK3,3)
 S = 3
 stepsize_callback = StepsizeCallback(cfl=1.05)
@@ -154,6 +152,7 @@ callbacks = CallbackSet(summary_callback,
                         stepsize_callback)
 
 dt = 0.000730023539508692935 / (2.0^(InitialRefinement - 4))
+=#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
 
