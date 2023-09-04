@@ -1428,9 +1428,14 @@ end
     return rho_times_p
 end
 
-@inline function v_x(u, equations::CompressibleEulerEquations2D)
+@inline function v1(u, equations::CompressibleEulerEquations2D)
     rho, rho_v1, _, _ = u
     return rho_v1/rho
+end
+
+@inline function v2(u, equations::CompressibleEulerEquations2D)
+    rho, _, rho_v2, _ = u
+    return rho_v2/rho
 end
 
 # Calculates the entropy flux in direction "orientation" and the entropy variables for a state cons
