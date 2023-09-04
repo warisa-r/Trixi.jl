@@ -237,10 +237,10 @@ function transform_variables!(u_transformed, u, mesh::TreeMesh{1},
 end
 
 # This is the version used when calculating the divergence of the viscous fluxes
-function calc_volume_integral!(du, flux_viscous,
+function calc_volume_integral!(du, flux_viscous::Array{uEltype, 3},
                                mesh::TreeMesh{1},
                                equations_parabolic::AbstractEquationsParabolic,
-                               dg::DGSEM, cache)
+                               dg::DGSEM, cache) where {uEltype <: Real}
     @unpack derivative_dhat = dg.basis
 
     @threaded for element in eachelement(dg, cache)
@@ -259,10 +259,10 @@ function calc_volume_integral!(du, flux_viscous,
     return nothing
 end
 
-function calc_volume_integral!(du, flux_viscous,
+function calc_volume_integral!(du, flux_viscous::Array{uEltype, 3},
                                mesh::TreeMesh{1},
                                equations_parabolic::AbstractEquationsParabolic,
-                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64})
+                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack derivative_dhat = dg.basis
 
     @threaded for element in level_info_elements_acc
@@ -284,10 +284,10 @@ end
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
 function prolong2interfaces!(cache_parabolic,
-                             flux_viscous,
+                             flux_viscous::Array{uEltype, 3},
                              mesh::TreeMesh{1},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
 
     @threaded for interface in eachinterface(dg, cache)
@@ -305,11 +305,11 @@ function prolong2interfaces!(cache_parabolic,
     return nothing
 end
 
-function prolong2interfaces!(cache_parabolic, flux_viscous,
+function prolong2interfaces!(cache_parabolic, flux_viscous::Array{uEltype, 3},
                              mesh::TreeMesh{1},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_interfaces_acc::Vector{Int64})
+                             level_info_interfaces_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
 
     @threaded for interface in level_info_interfaces_acc
@@ -398,10 +398,10 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 function prolong2boundaries!(cache_parabolic,
-                             flux_viscous,
+                             flux_viscous::Array{uEltype, 3},
                              mesh::TreeMesh{1},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack neighbor_sides = boundaries
 
@@ -425,11 +425,11 @@ function prolong2boundaries!(cache_parabolic,
     return nothing
 end
 
-function prolong2boundaries!(cache_parabolic, flux_viscous,
+function prolong2boundaries!(cache_parabolic, flux_viscous::Array{uEltype, 3},
                              mesh::TreeMesh{1},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_boundaries_acc::Vector{Int64})
+                             level_info_boundaries_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack neighbor_sides = boundaries
 
@@ -453,9 +453,9 @@ function prolong2boundaries!(cache_parabolic, flux_viscous,
     return nothing
 end
 
-function calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh::TreeMesh{1},
+function calc_viscous_fluxes!(flux_viscous::Array{uEltype, 3}, gradients, u_transformed, mesh::TreeMesh{1},
                               equations_parabolic::AbstractEquationsParabolic,
-                              dg::DG, cache, cache_parabolic)
+                              dg::DG, cache, cache_parabolic) where {uEltype <: Real}
     @threaded for element in eachelement(dg, cache)
         for i in eachnode(dg)
             # Get solution and gradients
@@ -471,10 +471,10 @@ function calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh::Tree
     end
 end
 
-function calc_viscous_fluxes!(flux_viscous, gradients, u_transformed, mesh::TreeMesh{1},
+function calc_viscous_fluxes!(flux_viscous::Array{uEltype, 3}, gradients, u_transformed, mesh::TreeMesh{1},
                               equations_parabolic::AbstractEquationsParabolic,
                               dg::DG, cache, cache_parabolic,
-                              level_info_elements_acc::Vector{Int64})
+                              level_info_elements_acc::Vector{Int64}) where {uEltype <: Real}
     @threaded for element in level_info_elements_acc
         for i in eachnode(dg)
             # Get solution and gradients
