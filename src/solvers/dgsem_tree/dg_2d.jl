@@ -236,7 +236,7 @@ function rhs!(du, u, t,
                             equations,
                             dg.surface_integral, dg,
                             level_info_boundaries_orientation_acc)
-      else
+      else # TODO: More efficient treatment for non TreeMeshes!
         calc_boundary_flux!(cache, t,
                             boundary_conditions, mesh,
                             equations,
@@ -511,7 +511,8 @@ function calc_volume_integral!(du, u,
                                            UnstructuredMesh2D, P4estMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralShockCapturingHG,
-                               dg::DGSEM, cache, level_info_elements_acc::Vector{Int64})
+                               dg::DGSEM, cache, 
+                               level_info_elements_acc::Vector{Int64})
     @unpack element_ids_dg, element_ids_dgfv = cache
     @unpack volume_flux_dg, volume_flux_fv, indicator = volume_integral
 
@@ -527,8 +528,8 @@ function calc_volume_integral!(du, u,
     @trixi_timeit timer() "pure DG" @threaded for idx_element in eachindex(element_ids_dg)
         element = element_ids_dg[idx_element]
         flux_differencing_kernel!(du, u, element, mesh,
-                           nonconservative_terms, equations,
-                           volume_flux_dg, dg, cache)
+                                  nonconservative_terms, equations,
+                                  volume_flux_dg, dg, cache)
     end
 
     # Loop over blended DG-FV elements
@@ -538,8 +539,8 @@ function calc_volume_integral!(du, u,
 
         # Calculate DG volume integral contribution
         flux_differencing_kernel!(du, u, element, mesh,
-                           nonconservative_terms, equations,
-                           volume_flux_dg, dg, cache, 1 - alpha_element)
+                                  nonconservative_terms, equations,
+                                  volume_flux_dg, dg, cache, 1 - alpha_element)
 
         # Calculate FV volume integral contribution
         fv_kernel!(du, u, mesh, nonconservative_terms, equations, volume_flux_fv,
@@ -1471,6 +1472,81 @@ function calc_mortar_flux!(surface_flux_values,
     @unpack fstar_upper_threaded, fstar_lower_threaded = cache
 
     @threaded for mortar in eachmortar(dg, cache)
+        # Choose thread-specific pre-allocated container
+        fstar_upper = fstar_upper_threaded[Threads.threadid()]
+        fstar_lower = fstar_lower_threaded[Threads.threadid()]
+
+        # Calculate fluxes
+        orientation = orientations[mortar]
+        calc_fstar!(fstar_upper, equations, surface_flux, dg, u_upper, mortar,
+                    orientation)
+        calc_fstar!(fstar_lower, equations, surface_flux, dg, u_lower, mortar,
+                    orientation)
+
+        # Add nonconservative fluxes.
+        # These need to be adapted on the geometry (left/right) since the order of
+        # the arguments matters, based on the global SBP operator interpretation.
+        # The same interpretation (global SBP operators coupled discontinuously via
+        # central fluxes/SATs) explains why we need the factor 0.5.
+        # Alternatively, you can also follow the argumentation of Bohm et al. 2018
+        # ("nonconservative diamond flux")
+        if large_sides[mortar] == 1 # -> small elements on right side
+            for i in eachnode(dg)
+                # Pull the left and right solutions
+                u_upper_ll, u_upper_rr = get_surface_node_vars(u_upper, equations, dg,
+                                                               i, mortar)
+                u_lower_ll, u_lower_rr = get_surface_node_vars(u_lower, equations, dg,
+                                                               i, mortar)
+                # Call pointwise nonconservative term
+                noncons_upper = nonconservative_flux(u_upper_ll, u_upper_rr,
+                                                     orientation, equations)
+                noncons_lower = nonconservative_flux(u_lower_ll, u_lower_rr,
+                                                     orientation, equations)
+                # Add to primary and secondary temporary storage
+                multiply_add_to_node_vars!(fstar_upper, 0.5, noncons_upper, equations,
+                                           dg, i)
+                multiply_add_to_node_vars!(fstar_lower, 0.5, noncons_lower, equations,
+                                           dg, i)
+            end
+        else # large_sides[mortar] == 2 -> small elements on the left
+            for i in eachnode(dg)
+                # Pull the left and right solutions
+                u_upper_ll, u_upper_rr = get_surface_node_vars(u_upper, equations, dg,
+                                                               i, mortar)
+                u_lower_ll, u_lower_rr = get_surface_node_vars(u_lower, equations, dg,
+                                                               i, mortar)
+                # Call pointwise nonconservative term
+                noncons_upper = nonconservative_flux(u_upper_rr, u_upper_ll,
+                                                     orientation, equations)
+                noncons_lower = nonconservative_flux(u_lower_rr, u_lower_ll,
+                                                     orientation, equations)
+                # Add to primary and secondary temporary storage
+                multiply_add_to_node_vars!(fstar_upper, 0.5, noncons_upper, equations,
+                                           dg, i)
+                multiply_add_to_node_vars!(fstar_lower, 0.5, noncons_lower, equations,
+                                           dg, i)
+            end
+        end
+
+        mortar_fluxes_to_elements!(surface_flux_values,
+                                   mesh, equations, mortar_l2, dg, cache,
+                                   mortar, fstar_upper, fstar_lower)
+    end
+
+    return nothing
+end
+
+function calc_mortar_flux!(surface_flux_values,
+                           mesh::TreeMesh{2},
+                           nonconservative_terms::True, equations,
+                           mortar_l2::LobattoLegendreMortarL2,
+                           surface_integral, dg::DG, cache,
+                           level_info_mortars_acc::Vector{Int64})
+    surface_flux, nonconservative_flux = surface_integral.surface_flux
+    @unpack u_lower, u_upper, orientations, large_sides = cache.mortars
+    @unpack fstar_upper_threaded, fstar_lower_threaded = cache
+
+    @threaded for mortar in level_info_mortars_acc
         # Choose thread-specific pre-allocated container
         fstar_upper = fstar_upper_threaded[Threads.threadid()]
         fstar_lower = fstar_lower_threaded[Threads.threadid()]
