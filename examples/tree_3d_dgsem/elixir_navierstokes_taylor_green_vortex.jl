@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -38,15 +38,15 @@ end
 initial_condition = initial_condition_taylor_green_vortex
 
 volume_flux = flux_ranocha
-solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
+solver = DGSEM(polydeg=2, surface_flux=flux_hlle,
                volume_integral=VolumeIntegralFluxDifferencing(volume_flux))
 
 coordinates_min = (-1.0, -1.0, -1.0) .* pi
 coordinates_max = ( 1.0,  1.0,  1.0) .* pi
+InitialRefinement = 3
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=3,
+                initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
-
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                              initial_condition, solver)
@@ -54,27 +54,83 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 20.0)
-ode = semidiscretize(semi, tspan)
+tspan = (0.0, 5.0)
+ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 50
+analysis_interval = 200
+
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                     extra_analysis_integrals=(energy_kinetic,
-                                                               energy_internal,
-                                                               enstrophy))
+                                     extra_analysis_integrals=(enstrophy, ))
+
+amr_indicator = IndicatorLöhner(semi,
+                                variable=Trixi.v2)
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level=InitialRefinement,
+                                      med_level =InitialRefinement+1, med_threshold=0.7, # med_level = current level
+                                      max_level =InitialRefinement+3, max_threshold=0.83)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=10,
+                           adapt_initial_condition=false,
+                           adapt_initial_condition_only_refine=true)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback)
+                        alive_callback,
+                        amr_callback)
 
 ###############################################################################
 # run the simulation
 
+# S = 3, Ref. Level = 1
+S = 3
+CFL = 1.0
+dt = 0.0326516980654560048 / (2.0^(InitialRefinement - 2)) * CFL
+
+#=
+S = 6
+CFL = 1.0
+dt = 0.0776305753039196105 / (2.0^(InitialRefinement - 2)) * CFL
+
+
+S = 12
+CFL = 0.25
+dt = 0.165335757314096554 / (2.0^(InitialRefinement - 2)) * CFL
+
+S = 16
+CFL = 1.0
+dt = 0.221319526090155705 / (2.0^(InitialRefinement - 2)) * CFL
+
+
+S = 24
+CFL = 0.85
+dt = 0.324692290225081 / (2.0^(InitialRefinement - 2)) * CFL
+=#
+
+bS = 1.0
+cEnd = 0.5
+
+ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/", bS, cEnd)
+
+Integrator_Mesh_Level_Dict = Dict([(3, 4), (4, 3), (5, 2), (6, 1)])
+
+#LevelCFL = [1.0, 1.0, 0.7, 0.4]
+LevelCFL = [0.4, 0.7, 1.0, 1.0]
+ode_algorithm = PERK_Multi(3, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/", 
+                           bS, cEnd, LevelCFL, Integrator_Mesh_Level_Dict, stage_callbacks = ())
+
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+
+Plots.plot(sol)
+
+#=
 time_int_tol = 1e-8
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
+=#
+
 summary_callback() # print the timer summary

@@ -32,6 +32,10 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         max_level = maximum_level(mesh.tree)
         n_levels = max_level - min_level + 1
 
+        integrator.min_lvl = min_level
+        integrator.max_lvl = max_level
+        integrator.n_levels = n_levels
+
         n_dims = ndims(mesh.tree) # Spatial dimension
 
         # Next to fine NOT integrated with fine scheme
