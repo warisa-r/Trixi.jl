@@ -12,8 +12,25 @@ setPolynomialOrder!(cylinder_flow, 3)
 setMeshFileFormat!(cylinder_flow, "ABAQUS")
 
 # A background grid is required for the mesh generation. In this example we lay a
-# background grid of Cartesian boxes with size 0.2.
-addBackgroundGrid!(cylinder_flow, [0.8, 0.8, 0.0])
+# background grid of Cartesian boxes
+base_size = 0.5
+addBackgroundGrid!(cylinder_flow, [base_size, base_size, 0.0])
+
+#=
+lower_left = [0.0, -10, 0.0]
+spacing = [base_size, base_size, 0.0]
+Nx = Int(40 / base_size)
+Ny = Int(20 / base_size)
+num_intervals = [Nx, Ny, 0]
+addBackgroundGrid!(cylinder_flow, lower_left, spacing, num_intervals)
+=#
+
+#=
+bounds = [10.0, 0.0, -10.0, 40.0]
+N = [Int(40/base_size), Int(20/base_size), 0]
+addBackgroundGrid!(cylinder_flow, bounds, N)
+=#
+
 
 # Add outer boundary curves in counter-clockwise order.
 # Note, the curve names are those that will be present in the mesh file.
@@ -25,13 +42,13 @@ right = newEndPointsLineCurve("Right", [40.0, -10, 0.0], [40, 10, 0.0])
 
 top = newEndPointsLineCurve("Top", [40.0, 10, 0.0], [0.0, 10, 0.0])
 
+
 # Outer boundary curve chain is created to have counter-clockwise
 # orientation, as required by HOHQMesh generator
 addCurveToOuterBoundary!(cylinder_flow, bottom)
 addCurveToOuterBoundary!(cylinder_flow, right)
 addCurveToOuterBoundary!(cylinder_flow, top)
 addCurveToOuterBoundary!(cylinder_flow, left)
-
 
 # Add inner boundary curve
 cylinder = newCircularArcCurve("Circle",        # curve name
@@ -45,11 +62,11 @@ addCurveToInnerBoundary!(cylinder_flow, cylinder, "inner1")
 
 
 # Add a refinement line for the wake region.
-refine_line1 = newRefinementLine("wake_region", "smooth", [10,0.0,0.0], [40,0.0,0.0], 0.4, 3.0)
-refine_line2 = newRefinementLine("inlet", "smooth", [0,-10,0.0], [0,10,0.0], 0.4, 1.0)
+wake_region = newRefinementLine("wake_region", "smooth", [10,0.0,0.0], [35,0.0,0.0], base_size/2, 5.0)
+cylinder = newRefinementCenter("cylinder", "smooth", [10.0,0.0,0.0],  base_size/2, 3.0)
 
-addRefinementRegion!(cylinder_flow, refine_line1)
-addRefinementRegion!(cylinder_flow, refine_line2)
+addRefinementRegion!(cylinder_flow, wake_region)
+addRefinementRegion!(cylinder_flow, cylinder)
 
 # Visualize the model, refinement region and background grid
 # prior to meshing.
