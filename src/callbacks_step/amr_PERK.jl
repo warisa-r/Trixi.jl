@@ -351,6 +351,7 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         if dimensions == 1
           for level in 1:n_levels
             for element_id in integrator.level_info_elements[level]
+              # First dimension of u: nvariables, following: nnodes (per dim) last: nelements
               indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
@@ -358,12 +359,20 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
         elseif dimensions == 2
           for level in 1:n_levels
             for element_id in integrator.level_info_elements[level]
+              # First dimension of u: nvariables, following: nnodes (per dim) last: nelements
               indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
           end
+        elseif n_dims == 3
+          for level in 1:n_levels
+            for element_id in integrator.level_info_elements[level]
+              # First dimension of u: nvariables, following: nnodes (per dim) last: nelements
+              indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, :, element_id]))
+              append!(integrator.level_u_indices_elements[level], indices)
+            end
+          end
         end
-        # TODO: 3D
         
       end # "PERK stage identifiers update" timing
     end # if has changed

@@ -59,7 +59,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    #=
+    
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -67,9 +67,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    =#
-
     
+
+    #=
     # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
@@ -78,7 +78,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    
+    =#
 
     # Add refinement levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -140,8 +140,8 @@ mutable struct PERK_Multi{StageCallbacks}
     newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        #NumStageEvalsMin_ * 2^NumDoublings_,
-                        NumStageEvalsMin_ + 2 * NumDoublings_,
+                        NumStageEvalsMin_ * 2^NumDoublings_,
+                        #NumStageEvalsMin_ + 2 * NumDoublings_,
                         1.0-bS_, bS_,
                         LevelCFL_,
                         stage_callbacks)
@@ -745,6 +745,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   if n_dims == 1
     for level in 1:n_levels
       for element_id in level_info_elements[level]
+        # First dimension of u: nvariables, following: nnodes (per dim) last: nelements                                    
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
@@ -754,14 +755,24 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
   elseif n_dims == 2
     for level in 1:n_levels
       for element_id in level_info_elements[level]
+        # First dimension of u: nvariables, following: nnodes (per dim) last: nelements
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
+  elseif n_dims == 3
+    for level in 1:n_levels
+      for element_id in level_info_elements[level]
+        # First dimension of u: nvariables, following: nnodes (per dim) last: nelements
+        indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, :, element_id]))
+        append!(level_u_indices_elements[level], indices)
+      end
+      @assert length(level_u_indices_elements[level]) == 
+              nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
+    end
   end
-  # TODO: 3D
 
   println("level_u_indices_elements:")
   display(level_u_indices_elements); println()
