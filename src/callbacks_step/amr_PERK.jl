@@ -10,8 +10,8 @@ function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs..
   semi = integrator.p
 
   @trixi_timeit timer() "AMR" begin
-  has_changed = amr_callback(u_ode, semi,
-                             integrator.t, integrator.iter; kwargs...)
+    has_changed = amr_callback(u_ode, semi,
+                               integrator.t, integrator.iter; kwargs...)
 
     if has_changed
       resize!(integrator, length(u_ode))
