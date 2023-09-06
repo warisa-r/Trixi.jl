@@ -48,7 +48,7 @@ function pure_and_blended_element_ids!(element_ids_dg, element_ids_dgfv, alpha, 
     return nothing
 end
 
-#     pure_and_blended_element_ids!(element_ids_dg, element_ids_dgfv, alpha, dg, cache)
+#     pure_and_blended_element_ids!(element_ids_dg, element_ids_dgfv, alpha, dg, level_info_elements_acc)
 #
 # Given blending factors `alpha` and the solver `dg`, fill
 # `element_ids_dg` with the IDs of elements using a pure DG scheme and
