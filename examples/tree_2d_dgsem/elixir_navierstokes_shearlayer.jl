@@ -77,7 +77,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
-amr_indicator = IndicatorLöhner(semi, variable=v_x)                                          
+amr_indicator = IndicatorLöhner(semi, variable=v1)                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
                                       med_level  = InitialRefinement+1, med_threshold=0.2,
@@ -100,7 +100,9 @@ CFL = 0.96
 CFL = 0.61
 CFL = 0.35
 
-LevelCFL = [1.0, 0.96, 0.61, 0.35]
+Integrator_Mesh_Level_Dict = Dict([(5, 4), (6, 3), (7, 2), (8, 1)])
+
+LevelCFL = [0.35, 0.61, 0.96, 1.0]
 
 # 4: dt 0.00156784012855496261
 #dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
@@ -115,16 +117,16 @@ cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, 
-                           LevelCFL,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-
+#=
 # S = 8
 # handles the re-calculation of the maximum Δt after each time step
 stepsize_callback = StepsizeCallback(cfl=4.8)
 dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4))
 S = 8
-
+#=
 stepsize_callback = StepsizeCallback(cfl=4.8*2*0.9)
 dt = 0.00708093033754266813 / (2.0^(InitialRefinement - 4)) * CFL
 S = 16
@@ -133,7 +135,7 @@ S = 16
 stepsize_callback = StepsizeCallback(cfl=4.8*4*0.5)
 dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
 S = 32
-
+=#
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
@@ -155,7 +157,7 @@ dt = 0.000730023539508692935 / (2.0^(InitialRefinement - 4))
 =#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
-
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 

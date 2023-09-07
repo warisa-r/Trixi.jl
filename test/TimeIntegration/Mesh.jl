@@ -8,7 +8,7 @@ cylinder_flow = newProject("cylinder", "out")
 # Reset polynomial order of the mesh model curves and output format.
 # The "ABAQUS" mesh file format is needed for the adaptive mesh
 # capability of Trixi.jl.
-setPolynomialOrder!(cylinder_flow, 3)
+setPolynomialOrder!(cylinder_flow, 1)
 setMeshFileFormat!(cylinder_flow, "ABAQUS")
 
 # A background grid is required for the mesh generation. In this example we lay a

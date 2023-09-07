@@ -14,7 +14,7 @@
 # Keywords: supersonic flow, shock capturing, AMR, unstructured curved mesh, positivity preservation, compressible Euler, 2D
 
 using Downloads: download
-using OrdinaryDiffEq, LinearAlgebra, Plots
+using OrdinaryDiffEq
 using Trixi
 
 ###############################################################################
@@ -68,7 +68,6 @@ surface_flux = flux_lax_friedrichs
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
-#=
 shock_indicator = IndicatorHennemannGassner(equations, basis,
                                             alpha_max=0.5,
                                             alpha_min=0.001,
@@ -77,18 +76,14 @@ shock_indicator = IndicatorHennemannGassner(equations, basis,
 volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
                                                  volume_flux_dg=volume_flux,
                                                  volume_flux_fv=surface_flux)
-=#
-volume_integral = VolumeIntegralFluxDifferencing(flux_ranocha_turbo)                                               
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
-#=
 # Get the unstructured quad mesh from a file (downloads the file if not available locally)
 default_mesh_file = joinpath(@__DIR__, "abaqus_cylinder_in_channel.inp")
 isfile(default_mesh_file) || download("https://gist.githubusercontent.com/andrewwinters5000/a08f78f6b185b63c3baeff911a63f628/raw/addac716ea0541f588b9d2bd3f92f643eb27b88f/abaqus_cylinder_in_channel.inp",
                                       default_mesh_file)
 mesh_file = default_mesh_file
-=#
-mesh_file = "out/cylinder.inp"
+
 mesh = P4estMesh{2}(mesh_file)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
@@ -97,7 +92,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers
 
-tspan = (0.0, 0.0398892400284239579 * 0.5)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
 
 # Callbacks
@@ -125,14 +120,11 @@ amr_callback = AMRCallback(semi, amr_controller,
                            interval=1,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
-#=
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
                         save_solution,
                         amr_callback)
-=#
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback)
 
 # positivity limiter necessary for this example with strong shocks. Very sensitive
 # to the order of the limiter variables, pressure must come first.
@@ -141,21 +133,6 @@ stage_limiter! = PositivityPreservingLimiterZhangShu(thresholds=(5.0e-7, 1.0e-6)
 
 ###############################################################################
 # run the simulation
-#=
 sol = solve(ode, SSPRK43(stage_limiter!);
             ode_default_options()..., callback=callbacks);
-=#
-
-b1 = 0.0
-bS = 1 - b1
-cEnd = 0.5/bS
-
-ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_P4est/",
-                            bS, cEnd)
-
-dt = 0.0398892400284239579 * 0.01
-sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dt,
-                  save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary
-Plots.plot(sol)

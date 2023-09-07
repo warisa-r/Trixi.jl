@@ -107,7 +107,7 @@ solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volum
 # Get the unstructured quad mesh from a file (downloads the file if not available locally)
 mesh_file = "out/cylinder.inp"
 
-mesh = P4estMesh{2}(mesh_file, initial_refinement_level=0)
+mesh = P4estMesh{2}(mesh_file, initial_refinement_level=0, polydeg=1)
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver;
                                              boundary_conditions=(boundary_conditions, boundary_conditions_para))
@@ -115,7 +115,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers
 
-tspan = (0.0, 20.5)
+tspan = (0.0, 22)
 ode = semidiscretize(semi, tspan)
 
 # Callbacks
@@ -127,7 +127,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-#=
+
 amr_indicator = IndicatorLöhner(semi, variable=Trixi.density)
 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
@@ -141,7 +141,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                           adapt_initial_condition_only_refine=true)
 
 stepsize_callback = StepsizeCallback(cfl=0.01)
-=#
+
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback)
@@ -150,7 +150,7 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 sol = Trixi.solve(ode, Trixi.CarpenterKennedy2N54(),
-            dt=1e-3, callback=callbacks);
+            dt=5e-3, callback=callbacks);
 
 #=
 b1 = 0.0
@@ -170,5 +170,5 @@ summary_callback() # print the timer summary
 Plots.plot(sol)
 
 pd = PlotData2D(sol)
-Plots.plot(pd["v1"])
+Plots.plot(pd["rho"])
 Plots.plot(getmesh(pd))
