@@ -88,8 +88,8 @@ include("containers.jl")
 # Dimension-agnostic parallel setup
 include("dg_parallel.jl")
 
-# Helper struct for parabolic dg
-include("cache_viscous.jl")
+# Helper structs for parabolic AMR
+include("containers_viscous.jl")
 
 # 1D DG implementation
 include("dg_1d.jl")
@@ -108,4 +108,9 @@ include("dg_3d_parabolic.jl")
 # as well as specialized implementations used to improve performance
 include("dg_2d_compressible_euler.jl")
 include("dg_3d_compressible_euler.jl")
+
+# Subcell limiters
+include("subcell_limiters.jl")
+include("subcell_limiters_2d.jl")
+include("dg_2d_subcell_limiters.jl")
 end # @muladd

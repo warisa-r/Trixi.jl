@@ -134,18 +134,28 @@ isdir(outdir) && rm(outdir, recursive=true)
       Trixi.refine!(mesh.tree, LLID[1:Int(num_leafs/8)])
       tspan=(0.0, 1.5)
       semi = SemidiscretizationHyperbolicParabolic(mesh,
-                                             (equations, equations_parabolic),
-                                             initial_condition, solver;
-                                             boundary_conditions=(boundary_conditions,
-                                                                  boundary_conditions_parabolic))
+                                                   (equations, equations_parabolic),
+                                                   initial_condition, solver;
+                                                   boundary_conditions=(boundary_conditions,
+                                                                        boundary_conditions_parabolic))
       ode = semidiscretize(semi, tspan)
       analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
       callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
       sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
-            ode_default_options()..., callback=callbacks)        
-      ac_sol = analysis_callback(sol)
-      @test ac_sol.l2[1] ≈ 1.67452550744728e-6
-      @test ac_sol.linf[1] ≈ 7.905059166368744e-6
+            ode_default_options()..., callback=callbacks)
+      l2_error, linf_error = analysis_callback(sol)
+      @test l2_error ≈ [1.67452550744728e-6]
+      @test linf_error ≈ [7.905059166368744e-6]
+
+      # Ensure that we do not have excessive memory allocations 
+      # (e.g., from type instabilities) 
+      let 
+        t = sol.t[end] 
+        u_ode = sol.u[end] 
+        du_ode = similar(u_ode) 
+        @test (@allocated Trixi.rhs!(du_ode, u_ode, semi, t)) < 100
+        @test (@allocated Trixi.rhs_parabolic!(du_ode, u_ode, semi, t)) < 100
+      end
   end
 
   @trixi_testset "TreeMesh2D: elixir_advection_diffusion_nonperiodic.jl" begin
@@ -219,9 +229,9 @@ isdir(outdir) && rm(outdir, recursive=true)
       callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
       sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt = 1e-5,
             ode_default_options()..., callback=callbacks)           
-      ac_sol = analysis_callback(sol)
-      @test ac_sol.l2 ≈ [0.00024296959173852447; 0.0002093263158670915; 0.0005390572390977262; 0.00026753561392341537]
-      @test ac_sol.linf ≈ [0.0016210102053424436; 0.002593287648655501; 0.002953907343823712; 0.002077119120180271]
+      l2_error, linf_error = analysis_callback(sol)
+      @test l2_error ≈ [0.00024296959173852447; 0.0002093263158670915; 0.0005390572390977262; 0.00026753561392341537]
+      @test linf_error ≈ [0.0016210102053424436; 0.002593287648655501; 0.002953907343823712; 0.002077119120180271]
   end
 
   @trixi_testset "TreeMesh2D: elixir_navierstokes_lid_driven_cavity.jl" begin
@@ -236,6 +246,13 @@ isdir(outdir) && rm(outdir, recursive=true)
     @test_trixi_include(joinpath(examples_dir(), "tree_2d_dgsem", "elixir_navierstokes_taylor_green_vortex.jl"),
       l2 = [0.0009279657228109691, 0.012454661988687185, 0.012454661988689886, 0.030487112728612178],
       linf = [0.002435582543096171, 0.024824039368199546, 0.024824039368212758, 0.06731583711777489]
+    )
+  end
+
+  @trixi_testset "TreeMesh2D: elixir_navierstokes_shearlayer_amr.jl" begin
+    @test_trixi_include(joinpath(examples_dir(), "tree_2d_dgsem", "elixir_navierstokes_shearlayer_amr.jl"),
+      l2 = [0.005353306916161318, 0.4077336028873465, 0.43756829240941464, 1.1759497303478266],
+      linf = [0.034791663521213545, 1.1650592394066237, 1.4841924833734612, 8.713274087336629]
     )
   end
 

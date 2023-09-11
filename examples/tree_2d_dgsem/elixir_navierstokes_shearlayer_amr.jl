@@ -7,12 +7,20 @@ using Trixi
 
 # TODO: parabolic; unify names of these accessor functions
 prandtl_number() = 0.72
-mu() = 1.0/3.0 * 10^(-3) # equivalent to Re = 3000
+mu() = 1.0/3.0 * 10^(-5)
 
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
                                                           Prandtl=prandtl_number())
 
+"""
+A compressible version of the double shear layer initial condition. Adapted from
+Brown and Minion (1995).
+
+- David L. Brown and Michael L. Minion (1995)
+  Performance of Under-resolved Two-Dimensional Incompressible Flow Simulations.
+  [DOI: 10.1006/jcph.1995.1205](https://doi.org/10.1006/jcph.1995.1205)
+"""
 function initial_condition_shear_layer(x, t, equations::CompressibleEulerEquations2D)
   # Shear layer parameters
   k = 80
@@ -47,27 +55,35 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.7)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 50
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                     extra_analysis_integrals=(energy_kinetic,
-                                                               energy_internal,
-                                                               enstrophy))
+analysis_interval = 1000
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
+amr_indicator = IndicatorLöhner(semi, variable=v1)                                          
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level = 3,
+                                      med_level  = 5, med_threshold=0.2,
+                                      max_level  = 7, max_threshold=0.5)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=50,
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback)
+                        alive_callback,
+                        amr_callback)
 
 ###############################################################################
 # run the simulation
 
-time_int_tol = 1e-8
+time_int_tol = 1e-7
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 summary_callback() # print the timer summary

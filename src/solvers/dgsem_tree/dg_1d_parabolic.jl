@@ -17,9 +17,8 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{1},
                         equations_parabolic::AbstractEquationsParabolic,
                         initial_condition, boundary_conditions_parabolic, source_terms,
                         dg::DG, parabolic_scheme, cache, cache_parabolic)
-    #@unpack u_transformed, gradients, flux_viscous = cache_parabolic
-    @unpack cache_viscous = cache_parabolic
-    @unpack u_transformed, gradients, flux_viscous = cache_viscous
+    @unpack viscous_container = cache_parabolic
+    @unpack u_transformed, gradients, flux_viscous = viscous_container
 
     # Convert conservative variables to a form more suitable for viscous flux calculations
     @trixi_timeit timer() "transform variables" begin
@@ -111,8 +110,8 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{1},
                         level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                         level_info_mortars_acc::Vector{Int64})
     #@unpack u_transformed, gradients, flux_viscous = cache_parabolic
-    @unpack cache_viscous = cache_parabolic
-    @unpack u_transformed, gradients, flux_viscous = cache_viscous
+    @unpack viscous_container = cache_parabolic
+    @unpack u_transformed, gradients, flux_viscous = viscous_container
 
     # Convert conservative variables to a form more suitable for viscous flux calculations
     @trixi_timeit timer() "transform variables" begin
@@ -1055,18 +1054,15 @@ function create_cache_parabolic(mesh::TreeMesh{1},
     elements = init_elements(leaf_cell_ids, mesh, equations_hyperbolic, dg.basis, RealT,
                              uEltype)
 
-    # Additions for parabolic
-    n_vars = nvariables(equations_hyperbolic)
-    n_nodes = nnodes(elements)
-    n_elements = nelements(elements)
-
-    cache_viscous = CacheViscous1D{uEltype}(n_vars, n_nodes, n_elements)
-
     interfaces = init_interfaces(leaf_cell_ids, mesh, elements)
 
     boundaries = init_boundaries(leaf_cell_ids, mesh, elements)
 
-    cache = (; elements, interfaces, boundaries, cache_viscous)
+    viscous_container = init_viscous_container_1d(nvariables(equations_hyperbolic),
+                                                  nnodes(elements), nelements(elements),
+                                                  uEltype)
+
+    cache = (; elements, interfaces, boundaries, viscous_container)
 
     return cache
 end

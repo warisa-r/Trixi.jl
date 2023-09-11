@@ -101,18 +101,18 @@ function refine!(u_ode::AbstractVector, adaptor,
         u = wrap_array(u_ode, mesh, equations, dg, cache)
 
         # Resize parabolic helper variables
-        @unpack cache_viscous = cache_parabolic
-        resize!(cache_viscous, nvariables(equations) * nnodes(dg)^ndims(mesh) * nelements(dg, cache))
+        @unpack viscous_container = cache_parabolic
+        resize!(viscous_container, nvariables(equations) * nnodes(dg)^ndims(mesh) * nelements(dg, cache))
 
-        cache_parabolic.cache_viscous.u_transformed = unsafe_wrap(Array, 
-                                                                  pointer(cache_parabolic.cache_viscous._u_transformed),
+        cache_parabolic.viscous_container.u_transformed = unsafe_wrap(Array, 
+                                                                  pointer(cache_parabolic.viscous_container._u_transformed),
                                                                   (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
         for dim in 1:3
-            cache_parabolic.cache_viscous.gradients[dim] = unsafe_wrap(Array, 
-                                                                       pointer(cache_parabolic.cache_viscous._gradients[dim]),
+            cache_parabolic.viscous_container.gradients[dim] = unsafe_wrap(Array, 
+                                                                       pointer(cache_parabolic.viscous_container._gradients[dim]),
                                                                        (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
-            cache_parabolic.cache_viscous.flux_viscous[dim] = unsafe_wrap(Array, 
-                                                                          pointer(cache_parabolic.cache_viscous._flux_viscous[dim]),
+            cache_parabolic.viscous_container.flux_viscous[dim] = unsafe_wrap(Array, 
+                                                                          pointer(cache_parabolic.viscous_container._flux_viscous[dim]),
                                                                           (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
         end
 
@@ -335,18 +335,18 @@ function coarsen!(u_ode::AbstractVector, adaptor,
         u = wrap_array(u_ode, mesh, equations, dg, cache)
 
         # Resize parabolic helper variables
-        @unpack cache_viscous = cache_parabolic
-        resize!(cache_viscous, nvariables(equations) * nnodes(dg)^ndims(mesh) * nelements(dg, cache))
+        @unpack viscous_container = cache_parabolic
+        resize!(viscous_container, nvariables(equations) * nnodes(dg)^ndims(mesh) * nelements(dg, cache))
 
-        cache_parabolic.cache_viscous.u_transformed = unsafe_wrap(Array, 
-                                                                    pointer(cache_parabolic.cache_viscous._u_transformed),
+        cache_parabolic.viscous_container.u_transformed = unsafe_wrap(Array, 
+                                                                    pointer(cache_parabolic.viscous_container._u_transformed),
                                                                     (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
         for dim in 1:3
-            cache_parabolic.cache_viscous.gradients[dim] = unsafe_wrap(Array, 
-                                                                        pointer(cache_parabolic.cache_viscous._gradients[dim]),
+            cache_parabolic.viscous_container.gradients[dim] = unsafe_wrap(Array, 
+                                                                        pointer(cache_parabolic.viscous_container._gradients[dim]),
                                                                         (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
-            cache_parabolic.cache_viscous.flux_viscous[dim] = unsafe_wrap(Array, 
-                                                                            pointer(cache_parabolic.cache_viscous._flux_viscous[dim]),
+            cache_parabolic.viscous_container.flux_viscous[dim] = unsafe_wrap(Array, 
+                                                                            pointer(cache_parabolic.viscous_container._flux_viscous[dim]),
                                                                             (nvariables(equations), nnodes(dg), nnodes(dg), nnodes(dg), nelements(dg, cache)))
         end
 

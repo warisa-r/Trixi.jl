@@ -198,7 +198,8 @@ end
                                              kwargs...)
     # Note that we don't `wrap_array` the vector `u_ode` to be able to `resize!`
     # it when doing AMR while still dispatching on the `mesh` etc.
-    amr_callback(u_ode, mesh_equations_solver_cache(semi)..., semi.cache_parabolic, semi, t, iter; kwargs...)
+    amr_callback(u_ode, mesh_equations_solver_cache(semi)..., semi.cache_parabolic,
+                 semi, t, iter; kwargs...)
 end
 
 # `passive_args` is currently used for Euler with self-gravity to adapt the gravity solver
@@ -355,27 +356,22 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
     return has_changed
 end
 
-# `passive_args` is currently used for Euler with self-gravity to adapt the gravity solver
-# passively without querying its indicator, based on the assumption that both solvers use
-# the same mesh. That's a hack and should be improved in the future once we have more examples
-# and a better understanding of such a coupling.
-# `passive_args` is expected to be an iterable of `Tuple`s of the form
-# `(p_u_ode, p_mesh, p_equations, p_dg, p_cache)`.
 function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
-                                     equations, dg::DG, 
+                                     equations, dg::DG,
                                      cache, cache_parabolic,
                                      semi::SemidiscretizationHyperbolicParabolic,
                                      t, iter;
-                                     only_refine = false, only_coarsen = false,
-                                     passive_args = ())
+                                     only_refine = false, only_coarsen = false)
     @unpack controller, adaptor = amr_callback
 
     u = wrap_array(u_ode, mesh, equations, dg, cache)
-    # TODO: Keep indicator based on hyperbolic variables?
+    # Indicator kept based on hyperbolic variables
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, dg, cache,
                                                           t = t, iter = iter)
 
     if mpi_isparallel()
+        error("MPI has not been verified yet for parabolic AMR")
+
         # Collect lambda for all elements
         lambda_global = Vector{eltype(lambda)}(undef, nelementsglobal(dg, cache))
         # Use parent because n_elements_by_rank is an OffsetArray
@@ -407,18 +403,14 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
                                                                       to_refine)
 
         # Find all indices of elements whose cell ids are in refined_original_cells
-        # NOTE: This assumes same indices for hyperbolic and parabolic part!
+        # Note: This assumes same indices for hyperbolic and parabolic part.
         elements_to_refine = findall(in(refined_original_cells),
                                      cache.elements.cell_ids)
 
         # refine solver
         @trixi_timeit timer() "solver" refine!(u_ode, adaptor, mesh, equations, dg,
-                                               cache, cache_parabolic, elements_to_refine)                                             
-        for (p_u_ode, p_mesh, p_equations, p_dg, p_cache) in passive_args
-            @trixi_timeit timer() "passive solver" refine!(p_u_ode, adaptor, p_mesh,
-                                                           p_equations, p_dg, p_cache,
-                                                           elements_to_refine)
-        end
+                                               cache, cache_parabolic,
+                                               elements_to_refine)
     else
         # If there is nothing to refine, create empty array for later use
         refined_original_cells = Int[]
@@ -476,18 +468,13 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
         end
 
         # Find all indices of elements whose cell ids are in removed_child_cells
-        # NOTE: This assumes same indices for hyperbolic and parabolic part!
+        # Note: This assumes same indices for hyperbolic and parabolic part.
         elements_to_remove = findall(in(removed_child_cells), cache.elements.cell_ids)
 
         # coarsen solver
         @trixi_timeit timer() "solver" coarsen!(u_ode, adaptor, mesh, equations, dg,
-                                                cache, cache_parabolic, elements_to_remove)
-                                                                                        
-        for (p_u_ode, p_mesh, p_equations, p_dg, p_cache) in passive_args
-            @trixi_timeit timer() "passive solver" coarsen!(p_u_ode, adaptor, p_mesh,
-                                                            p_equations, p_dg, p_cache,
-                                                            elements_to_remove)
-        end
+                                                cache, cache_parabolic,
+                                                elements_to_remove)
     else
         # If there is nothing to coarsen, create empty array for later use
         coarsened_original_cells = Int[]
@@ -502,6 +489,8 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
 
     # Dynamically balance computational load by first repartitioning the mesh and then redistributing the cells/elements
     if has_changed && mpi_isparallel() && amr_callback.dynamic_load_balancing
+        error("MPI has not been verified yet for parabolic AMR")
+
         @trixi_timeit timer() "dynamic load balancing" begin
             old_mpi_ranks_per_cell = copy(mesh.tree.mpi_ranks)
 

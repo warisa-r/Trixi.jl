@@ -17,9 +17,8 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{3},
                         equations_parabolic::AbstractEquationsParabolic,
                         initial_condition, boundary_conditions_parabolic, source_terms,
                         dg::DG, parabolic_scheme, cache, cache_parabolic)
-    #@unpack u_transformed, gradients, flux_viscous = cache_parabolic
-    @unpack cache_viscous = cache_parabolic
-    @unpack u_transformed, gradients, flux_viscous = cache_viscous
+    @unpack viscous_container = cache_parabolic
+    @unpack u_transformed, gradients, flux_viscous = viscous_container
 
     # Convert conservative variables to a form more suitable for viscous flux calculations
     @trixi_timeit timer() "transform variables" begin
@@ -132,8 +131,8 @@ function rhs_parabolic!(du, u, t, mesh::TreeMesh{3},
                         level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
                         level_info_mortars_acc::Vector{Int64})
     #@unpack u_transformed, gradients, flux_viscous = cache_parabolic
-    @unpack cache_viscous = cache_parabolic
-    @unpack u_transformed, gradients, flux_viscous = cache_viscous
+    @unpack viscous_container = cache_parabolic
+    @unpack u_transformed, gradients, flux_viscous = viscous_container
 
     # Convert conservative variables to a form more suitable for viscous flux calculations
     @trixi_timeit timer() "transform variables" begin
@@ -729,15 +728,15 @@ function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}}, gradients
     end
 end
 
-function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}}, gradients, u_transformed,
-                              mesh::Union{TreeMesh{3}, P4estMesh{3}},
+function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}},
+                              gradients::Vector{Array{uEltype, 5}}, u_transformed,
+                              mesh::TreeMesh{3},
                               equations_parabolic::AbstractEquationsParabolic,
-                              dg::DG, cache, cache_parabolic,
-                              level_info_elements_acc::Vector{Int64}) where {uEltype <: Real}
+                              dg::DG, cache, cache_parabolic) where {uEltype <: Real}
     gradients_x, gradients_y, gradients_z = gradients
     flux_viscous_x, flux_viscous_y, flux_viscous_z = flux_viscous # output arrays
 
-    @threaded for element in level_info_elements_acc
+    @threaded for element in eachelement(dg, cache)
         for k in eachnode(dg), j in eachnode(dg), i in eachnode(dg)
             # Get solution and gradients
             u_node = get_node_vars(u_transformed, equations_parabolic, dg, i, j, k,
@@ -1861,6 +1860,7 @@ function calc_gradient!(gradients, u_transformed, t,
     end
 
     # Prolong solution to mortars
+    # NOTE: This re-uses the implementation for hyperbolic terms in "dg_3d.jl"
     @trixi_timeit timer() "prolong2mortars" begin
         prolong2mortars!(cache, u_transformed, mesh, equations_parabolic,
                          dg.mortar, dg.surface_integral, dg)
@@ -2179,25 +2179,18 @@ function create_cache_parabolic(mesh::TreeMesh{3},
     elements = init_elements(leaf_cell_ids, mesh, equations_hyperbolic, dg.basis, RealT,
                              uEltype)
 
-    n_vars = nvariables(equations_hyperbolic)
-    n_nodes = nnodes(elements)
-    n_elements = nelements(elements)
-    #=
-    u_transformed = Array{uEltype}(undef, n_vars, n_nodes, n_nodes, n_nodes, n_elements)
-    gradients = ntuple(_ -> similar(u_transformed), ndims(mesh))
-    flux_viscous = ntuple(_ -> similar(u_transformed), ndims(mesh))
-    =#
-    cache_viscous = CacheViscous3D{uEltype}(n_vars, n_nodes, n_elements)
-
     interfaces = init_interfaces(leaf_cell_ids, mesh, elements)
 
     boundaries = init_boundaries(leaf_cell_ids, mesh, elements)
 
     # mortars = init_mortars(leaf_cell_ids, mesh, elements, dg.mortar)
 
+    viscous_container = init_viscous_container_3d(nvariables(equations_hyperbolic),
+                                                  nnodes(elements), nelements(elements),
+                                                  uEltype)
+
     # cache = (; elements, interfaces, boundaries, mortars)
-    #cache = (; elements, interfaces, boundaries, gradients, flux_viscous, u_transformed)
-    cache = (; elements, interfaces, boundaries, cache_viscous)
+    cache = (; elements, interfaces, boundaries, viscous_container)
 
     # Add specialized parts of the cache required to compute the mortars etc.
     # cache = (;cache..., create_cache(mesh, equations_parabolic, dg.mortar, uEltype)...)

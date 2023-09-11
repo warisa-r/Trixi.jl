@@ -23,10 +23,10 @@ end
 # them whenever needed. Then, we reuse the same memory by
 # `unsafe_wrap`ping multi-dimensional `Array`s around the
 # internal storage.
-function Base.resize!(cache_viscous::CacheViscous1D, capacity)
-  resize!(cache_viscous._u_transformed, capacity)
-  resize!(cache_viscous._gradients, capacity)
-  resize!(cache_viscous._flux_viscous, capacity)
+function Base.resize!(viscous_container::CacheViscous1D, capacity)
+  resize!(viscous_container._u_transformed, capacity)
+  resize!(viscous_container._gradients, capacity)
+  resize!(viscous_container._flux_viscous, capacity)
 
   return nothing
 end
@@ -78,11 +78,11 @@ end
 # them whenever needed. Then, we reuse the same memory by
 # `unsafe_wrap`ping multi-dimensional `Array`s around the
 # internal storage.
-function Base.resize!(cache_viscous::Union{CacheViscous2D, CacheViscous3D}, capacity)
-    resize!(cache_viscous._u_transformed, capacity)
-    for dim in 1:length(cache_viscous._gradients)
-      resize!(cache_viscous._gradients[dim], capacity)
-      resize!(cache_viscous._flux_viscous[dim], capacity)
+function Base.resize!(viscous_container::Union{CacheViscous2D, CacheViscous3D}, capacity)
+    resize!(viscous_container._u_transformed, capacity)
+    for dim in 1:length(viscous_container._gradients)
+      resize!(viscous_container._gradients[dim], capacity)
+      resize!(viscous_container._flux_viscous[dim], capacity)
     end
 
     return nothing
