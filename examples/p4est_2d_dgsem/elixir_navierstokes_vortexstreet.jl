@@ -25,8 +25,6 @@ equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(), Pr
   return prim2cons(prim, equations)
 end
 
-initial_condition = initial_condition
-
 # Supersonic inflow boundary condition.
 # Calculate the boundary flux entirely from the external solution state, i.e., set
 # external solution state values for everything entering the domain.
@@ -90,7 +88,7 @@ surface_flux = flux_lax_friedrichs
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
-#=
+
 shock_indicator = IndicatorHennemannGassner(equations, basis,
                                             alpha_max=0.5,
                                             alpha_min=0.001,
@@ -99,8 +97,8 @@ shock_indicator = IndicatorHennemannGassner(equations, basis,
 volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
                                                  volume_flux_dg=volume_flux,
                                                  volume_flux_fv=surface_flux)
-=#
-volume_integral = VolumeIntegralFluxDifferencing(flux_ranocha_turbo)                                               
+
+#volume_integral = VolumeIntegralFluxDifferencing(flux_ranocha_turbo)
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
 
@@ -115,7 +113,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers
 
-tspan = (0.0, 22)
+tspan = (0.0, 20)
 ode = semidiscretize(semi, tspan)
 
 # Callbacks
@@ -127,22 +125,6 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-
-amr_indicator = IndicatorLöhner(semi, variable=Trixi.density)
-
-amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level=0,
-                                      med_level=1, med_threshold=0.05,
-                                      max_level=2, max_threshold=0.1)
-
-amr_callback = AMRCallback(semi, amr_controller,
-                          interval=1,
-                          adapt_initial_condition=true,
-                          adapt_initial_condition_only_refine=true)
-
-stepsize_callback = StepsizeCallback(cfl=0.01)
-
-
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback)
 
@@ -150,7 +132,7 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 sol = Trixi.solve(ode, Trixi.CarpenterKennedy2N54(),
-            dt=5e-3, callback=callbacks);
+            dt=7e-3, callback=callbacks);
 
 #=
 b1 = 0.0
@@ -171,4 +153,4 @@ Plots.plot(sol)
 
 pd = PlotData2D(sol)
 Plots.plot(pd["rho"])
-Plots.plot(getmesh(pd))
+Plots.plot!(getmesh(pd))
