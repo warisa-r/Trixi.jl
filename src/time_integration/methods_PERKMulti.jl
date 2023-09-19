@@ -45,7 +45,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
   SE_Factors = bS * reverse(c[2:end-1])
 
-  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (PERK_Multi specific)
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (consistency)
   CoeffsMax = NumStages - 2
 
   AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
