@@ -4,54 +4,46 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-function ComputeACoeffs(NumStageEvals::Int,
-                        SE_Factors::Vector{Float64}, MonCoeffs::Vector{Float64})
-  ACoeffs = MonCoeffs
+function ComputeACoeffsPERK3(NumStages::Int, NumStageEvals::Int, c::Vector{Float64}, MonCoeffs::Vector{Float64},
+                             aS::Float64, aS1::Float64)
+  ACoeffs = zeros(NumStageEvals - 2)
+  ACoeffs[3:end] = MonCoeffs[2:end]
+  # NOTE: Not sure if this choice of a_{s,s-1}, a_{s-1,s-2} can lead to negative a
+  ACoeffs[1] = aS
+  ACoeffs[2] = aS1
 
-  for stage in 1:NumStageEvals - 2
-    ACoeffs[stage] /= SE_Factors[stage]
-    for prev_stage in 1:stage-1
+  for stage in 3:NumStageEvals - 3
+    for prev_stage in 2:stage-1
       ACoeffs[stage] /= ACoeffs[prev_stage]
     end
+
+    ACoeffs[stage] = (ACoeffs[stage] - 0.25 * aS * c[NumStages - stage + 1]) / (0.75 * c[NumStages - stage])
   end
 
   return reverse(ACoeffs)
 end
 
-function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString, bS::Float64, cEnd::Float64)
+function ComputePERK3_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString, cS2::Float64)
 
   # c Vector form Butcher Tableau (defines timestep per stage)
   c = zeros(NumStages)
-  for k in 2:NumStages
-    c[k] = cEnd * (k - 1)/(NumStages - 1)
+  for k in 2:NumStages-2
+    c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
   end
-  #=
-  for k in 2:NumStages
-    c[k] = (k - 1)/(2.0*(NumStages - 1))
-  end
-  =#
-  println("Timestep-split: "); display(c); println("\n")
-  SE_Factors = bS * reverse(c[2:end-1])
+  c[NumStages - 1] = 1.0/3.0
+  c[NumStages]     = 1.0
 
+  println("Timestep-split: "); display(c); println("\n")
+  
   # - 2 Since First entry of A is always zero (explicit method) and second is given by c (consistency)
   CoeffsMax = NumStages - 2
 
   AMatrix = zeros(CoeffsMax, 2)
   AMatrix[:, 1] = c[3:end]
 
-  
-  PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(NumStages) * ".txt"
-  NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-  @assert NumMonCoeffs == CoeffsMax
-  A = ComputeACoeffs(NumStages, SE_Factors, MonCoeffs)
-  
-  
-  #=
-  # TODO: Not sure if I not rather want to read-in values (especially those from Many Stage C++ Optim)
   PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
   NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
   @assert NumMonCoeffs == CoeffsMax
-  =#
 
   AMatrix[:, 1] -= A
   AMatrix[:, 2]  = A
@@ -62,7 +54,7 @@ function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractS
 end
 
 """
-    PERK()
+    PERK3()
 
 The following structures and methods provide a minimal implementation of
 the paired explicit Runge-Kutta method (https://doi.org/10.1016/j.jcp.2019.05.014)
@@ -72,49 +64,29 @@ This is using the same interface as OrdinaryDiffEq.jl, copied from file "methods
 CarpenterKennedy2N{54, 43} methods.
 """
 
-mutable struct PERK
+mutable struct PERK3
   const NumStages::Int
 
   AMatrix::Matrix{Float64}
   c::Vector{Float64}
-  bS::Float64
-  b1::Float64
-  cEnd::Float64
 
   # Constructor for previously computed A Coeffs
-  function PERK(NumStages_::Int, BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64)
+  function PERK3(NumStages_::Int, BasePathMonCoeffs_::AbstractString, cS2_::Float64)
 
-    newPERK = new(NumStages_)
+    newPERK3 = new(NumStages_)
 
-    newPERK.AMatrix, newPERK.c = 
-      ComputePERK_ButcherTableau(NumStages_, BasePathMonCoeffs_, bS_, cEnd_)
-
-    newPERK.b1 = 1 - bS_
-    newPERK.bS = bS_
-    newPERK.cEnd = cEnd_
-    return newPERK
+    newPERK3.AMatrix, newPERK3.c = 
+      ComputePERK3_ButcherTableau(NumStages_, BasePathMonCoeffs_, cS2_)
+    return newPERK3
   end
-end # struct PERK
+end # struct PERK3
 
-
-# This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
-mutable struct PERK_IntegratorOptions{Callback}
-  callback::Callback # callbacks; used in Trixi
-  adaptive::Bool # whether the algorithm is adaptive; ignored
-  dtmax::Float64 # ignored
-  maxiters::Int # maximal numer of time steps
-  tstops::Vector{Float64} # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
-end
-
-function PERK_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
-  PERK_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
-end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.
-mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
+mutable struct PERK3_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
   u::uType
   du::uType
   u_tmp::uType
@@ -131,12 +103,13 @@ mutable struct PERK_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_Int
   # PERK stages:
   k1::uType
   k_higher::uType
+  k_S1::uType # Required for third order
   t_stage::RealT
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
 end
 
 # Forward integrator.stats.naccept to integrator.iter (see GitHub PR#771)
-function Base.getproperty(integrator::PERK_Integrator, field::Symbol)
+function Base.getproperty(integrator::PERK3_Integrator, field::Symbol)
   if field === :stats
     return (naccept = getfield(integrator, :iter),)
   end
@@ -145,7 +118,7 @@ function Base.getproperty(integrator::PERK_Integrator, field::Symbol)
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::PERK;
+function solve(ode::ODEProblem, alg::PERK3;
                dt, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0)
@@ -155,6 +128,7 @@ function solve(ode::ODEProblem, alg::PERK;
   # PERK stages
   k1       = similar(u0)
   k_higher = similar(u0)
+  k_S1     = similar(u0)
 
   du_ode_hyp = similar(u0) # TODO: Not best solution since this is not needed for hyperbolic problems
 
@@ -162,10 +136,10 @@ function solve(ode::ODEProblem, alg::PERK;
   iter = 0
 
 
-  integrator = PERK_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
-                              (prob=ode,), ode.f, alg,
-                              PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
-                              k1, k_higher, t0, du_ode_hyp)
+  integrator = PERK3_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+                                (prob=ode,), ode.f, alg,
+                                PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                                k1, k_higher, k_S1, t0, du_ode_hyp)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -182,7 +156,7 @@ function solve(ode::ODEProblem, alg::PERK;
   solve!(integrator)
 end
 
-function solve!(integrator::PERK_Integrator)
+function solve!(integrator::PERK3_Integrator)
   @unpack prob = integrator.sol
   @unpack alg = integrator
   t_end = last(prob.tspan)
@@ -203,8 +177,8 @@ function solve!(integrator::PERK_Integrator)
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       # k1: 
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
@@ -217,8 +191,8 @@ function solve!(integrator::PERK_Integrator)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
       end
 
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
       @threaded for i in eachindex(integrator.du)
         integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -234,17 +208,23 @@ function solve!(integrator::PERK_Integrator)
                                                   alg.AMatrix[stage - 2, 2] * integrator.k_higher[i]
         end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for i in eachindex(integrator.du)
           integrator.k_higher[i] = integrator.du[i] * integrator.dt
         end
+
+        # TODO: Stop for loop at NumStages -1 to avoid if
+        if stage == alg.NumStages - 1
+          @threaded for i in eachindex(integrator.du)
+            integrator.k_S1[i] = integrator.k_higher[i]
+          end
+        end
       end
 
       @threaded for i in eachindex(integrator.u)
-        #integrator.u[i] += integrator.k_higher[i]
-        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
+        integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
       end
     end # PERK step
 
@@ -273,31 +253,32 @@ function solve!(integrator::PERK_Integrator)
 end
 
 # get a cache where the RHS can be stored
-get_du(integrator::PERK_Integrator) = integrator.du
-get_tmp_cache(integrator::PERK_Integrator) = (integrator.u_tmp,)
+get_du(integrator::PERK3_Integrator) = integrator.du
+get_tmp_cache(integrator::PERK3_Integrator) = (integrator.u_tmp,)
 
 # some algorithms from DiffEq like FSAL-ones need to be informed when a callback has modified u
-u_modified!(integrator::PERK_Integrator, ::Bool) = false
+u_modified!(integrator::PERK3_Integrator, ::Bool) = false
 
 # used by adaptive timestepping algorithms in DiffEq
-function set_proposed_dt!(integrator::PERK_Integrator, dt)
+function set_proposed_dt!(integrator::PERK3_Integrator, dt)
   integrator.dt = dt
 end
 
 # stop the time integration
-function terminate!(integrator::PERK_Integrator)
+function terminate!(integrator::PERK3_Integrator)
   integrator.finalstep = true
   empty!(integrator.opts.tstops)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::PERK_Integrator, new_size)
+function Base.resize!(integrator::PERK3_Integrator, new_size)
   resize!(integrator.u, new_size)
   resize!(integrator.du, new_size)
   resize!(integrator.u_tmp, new_size)
 
   resize!(integrator.k1, new_size)
   resize!(integrator.k_higher, new_size)
+  resize!(integrator.k_S1, new_size)
 
   # TODO: Move this into parabolic cache or similar
   resize!(integrator.du_ode_hyp, new_size)

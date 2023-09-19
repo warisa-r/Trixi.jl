@@ -18,6 +18,7 @@ include("methods_3Sstar.jl")
 
 include("methods_PERK.jl")
 include("methods_PERKMulti.jl")
+include("methods_PERK3.jl")
 
 include("methods_SSP.jl")
 end # @muladd
