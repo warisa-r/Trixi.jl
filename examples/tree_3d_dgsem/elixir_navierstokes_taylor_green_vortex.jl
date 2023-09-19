@@ -22,6 +22,7 @@ The classical viscous Taylor-Green vortex, as found for instance in
   Simulation of the Compressible Taylor Green Vortex using High-Order Flux Reconstruction Schemes
   [DOI: 10.2514/6.2014-3210](https://doi.org/10.2514/6.2014-3210)
 """
+# See also https://www.sciencedirect.com/science/article/pii/S187775031630299X?via%3Dihub#sec0070
 function initial_condition_taylor_green_vortex(x, t, equations::CompressibleEulerEquations3D)
   A  = 1.0 # magnitude of speed
   Ms = 0.1 # maximum Mach number
