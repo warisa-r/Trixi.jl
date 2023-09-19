@@ -12,7 +12,14 @@ mu() = 1.0/3.0 * 10^(-5)
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
                                                           Prandtl=prandtl_number())
+"""
+A compressible version of the double shear layer initial condition. Adapted from
+Brown and Minion (1995).
 
+- David L. Brown and Michael L. Minion (1995)
+  Performance of Under-resolved Two-Dimensional Incompressible Flow Simulations.
+  [DOI: 10.1006/jcph.1995.1205](https://doi.org/10.1006/jcph.1995.1205)
+"""
 function initial_condition_shear_layer(x, t, equations::CompressibleEulerEquations2D)
   # Shear layer parameters
   k = 80
