@@ -42,7 +42,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
-
+#=
 # First refinement
 # Refine mesh locally 
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -51,7 +51,7 @@ num_leafs = length(LLID)
 # Refine right 3 quarters of mesh
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
-
+=#
 #=
 # Second refinement
 # Refine mesh locally
@@ -128,7 +128,19 @@ limiterp1_callback = Trixi.Limiterp1Callback(indicator_löhner)
 
 callbacks = CallbackSet(summary_callback, analysis_callback, limiterp1_callback)
 =#
-callbacks = CallbackSet(summary_callback, analysis_callback)
+
+amr_controller = ControllerThreeLevel(semi, 
+                                      IndicatorMax(semi, variable=first),
+                                      base_level=InitialRefinement,
+                                      med_level=InitialRefinement+1, med_threshold=0.1, #0.1
+                                      max_level=InitialRefinement+1, max_threshold=0.6) #0.6
+
+
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=5,
+                           adapt_initial_condition=false) # Adaption of initial condition not yet supported
+
+callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
 
 ###############################################################################
 # run the simulation
