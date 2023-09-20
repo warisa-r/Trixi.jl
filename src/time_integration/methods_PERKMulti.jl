@@ -77,7 +77,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
     =#
 
-    # Add refinement levels to stages
+    # Add active levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
@@ -154,24 +154,11 @@ mutable struct PERK_Multi{StageCallbacks}
 end # struct PERK_Multi
 
 
-# This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
-mutable struct PERK_Multi_IntegratorOptions{Callback}
-  callback::Callback # callbacks; used in Trixi
-  adaptive::Bool # whether the algorithm is adaptive; ignored
-  dtmax::Float64 # ignored
-  maxiters::Int # maximal numer of time steps
-  tstops::Vector{Float64} # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
-end
-
-function PERK_Multi_IntegratorOptions(callback, tspan; maxiters=typemax(Int), kwargs...)
-  PERK_Multi_IntegratorOptions{typeof(callback)}(callback, false, Inf, maxiters, [last(tspan)])
-end
-
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.
-mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_Multi_IntegratorOptions}
+mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PERK_IntegratorOptions}
   u::uType
   du::uType
   u_tmp::uType
@@ -183,7 +170,7 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   sol::Sol # faked
   f::F
   alg::Alg # This is our own class written above; Abbreviation for ALGorithm
-  opts::PERK_Multi_IntegratorOptions
+  opts::PERK_IntegratorOptions
   finalstep::Bool # added for convenience
   # PERK_Multi stages:
   k1::uType
@@ -942,7 +929,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
   integrator = PERK_Multi_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                 (prob=ode,), ode.f, alg,
-                PERK_Multi_IntegratorOptions(callback, ode.tspan; kwargs...), false,
+                PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,
                 k1, k_higher,   
                 level_info_elements, level_info_elements_acc, 
                 level_info_interfaces_acc, 
