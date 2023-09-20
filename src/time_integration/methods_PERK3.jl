@@ -4,25 +4,6 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-function ComputeACoeffsPERK3(NumStages::Int, NumStageEvals::Int, c::Vector{Float64}, MonCoeffs::Vector{Float64},
-                             aS::Float64, aS1::Float64)
-  ACoeffs = zeros(NumStageEvals - 2)
-  ACoeffs[3:end] = MonCoeffs[2:end]
-  # NOTE: Not sure if this choice of a_{s,s-1}, a_{s-1,s-2} can lead to negative a
-  ACoeffs[1] = aS
-  ACoeffs[2] = aS1
-
-  for stage in 3:NumStageEvals - 3
-    for prev_stage in 2:stage-1
-      ACoeffs[stage] /= ACoeffs[prev_stage]
-    end
-
-    ACoeffs[stage] = (ACoeffs[stage] - 0.25 * aS * c[NumStages - stage + 1]) / (0.75 * c[NumStages - stage])
-  end
-
-  return reverse(ACoeffs)
-end
-
 function ComputePERK3_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractString, cS2::Float64)
 
   # c Vector form Butcher Tableau (defines timestep per stage)
