@@ -16,7 +16,7 @@ function ComputePERK3_ButcherTableau(NumStages::Int, BasePathMonCoeffs::Abstract
 
   println("Timestep-split: "); display(c); println("\n")
   
-  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (consistency)
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
   CoeffsMax = NumStages - 2
 
   AMatrix = zeros(CoeffsMax, 2)
@@ -52,7 +52,7 @@ mutable struct PERK3
   c::Vector{Float64}
 
   # Constructor for previously computed A Coeffs
-  function PERK3(NumStages_::Int, BasePathMonCoeffs_::AbstractString, cS2_::Float64)
+  function PERK3(NumStages_::Int, BasePathMonCoeffs_::AbstractString, cS2_::Float64=1.0)
 
     newPERK3 = new(NumStages_)
 

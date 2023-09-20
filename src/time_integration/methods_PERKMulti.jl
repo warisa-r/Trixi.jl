@@ -21,7 +21,6 @@ function ComputeACoeffs(NumStageEvals::Int,
 end
 
 
-# TODO: Make bS, cEend Keyword arguments
 function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                           bS::Float64, cEnd::Float64)
                                      
@@ -43,7 +42,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
   SE_Factors = bS * reverse(c[2:end-1])
 
-  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (consistency)
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
   CoeffsMax = NumStages - 2
 
   AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
@@ -130,6 +129,7 @@ mutable struct PERK_Multi{StageCallbacks}
   ActiveLevels::Vector{Vector{Int64}}
   HighestActiveLevels::Vector{Int64}
 
+  # TODO: Add default values for bS, cEnd
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                       BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64,

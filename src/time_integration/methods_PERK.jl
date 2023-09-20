@@ -33,7 +33,7 @@ function ComputePERK_ButcherTableau(NumStages::Int, BasePathMonCoeffs::AbstractS
   println("Timestep-split: "); display(c); println("\n")
   SE_Factors = bS * reverse(c[2:end-1])
 
-  # - 2 Since First entry of A is always zero (explicit method) and second is given by c (consistency)
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
   CoeffsMax = NumStages - 2
 
   AMatrix = zeros(CoeffsMax, 2)
