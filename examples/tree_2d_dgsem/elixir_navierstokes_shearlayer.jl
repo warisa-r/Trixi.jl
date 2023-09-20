@@ -127,6 +127,14 @@ ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spe
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
+cS2 = 1.0
+ode_algorithm = PERK3(8, "/home/daniel/git/MA/PERK/ThirdOrder/cS2_Fixed/", cS2)
+
+ode_algorithm = PERK3_Multi(4, 1, "/home/daniel/git/MA/PERK/ThirdOrder/cS2_Fixed/", 
+                           cS2, LevelCFL, Integrator_Mesh_Level_Dict,
+                           stage_callbacks = ())
+
+
 #=
 # S = 8
 # handles the re-calculation of the maximum Δt after each time step
