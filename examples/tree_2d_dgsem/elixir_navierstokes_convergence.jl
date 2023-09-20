@@ -24,9 +24,10 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 periodicity=(true, false),
                 n_cells_max=30_000) # set maximum capacity of tree data structure
-#=
+
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:128])
+#=
 LLID = Trixi.local_leaf_cells(mesh.tree)
 Trixi.refine!(mesh.tree, LLID[1:128])
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -212,7 +213,7 @@ ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 1
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 #callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
 
@@ -226,8 +227,8 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
-#callbacks = CallbackSet(summary_callback, analysis_callback)
+#callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
@@ -242,11 +243,7 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt =
 # mu = 1e-5, HLLC flux, non-adapted, finer mesh, p = 2
 dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4))
 
-# p = 3
-CFL = 1.0
-dt = 0.0557728984626010091 / (2.0^(InitialRefinement - 3)) * CFL
-
-
+#=
 Integrator_Mesh_Level_Dict = Dict([(4, 3), (5, 2), (6, 1)])
 LevelCFL = [0.6, 1.0, 1.0]
 
@@ -258,9 +255,14 @@ ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/Sp
                            bS, cEnd, 
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
+=#
+
+# p = 3
+CFL = 1.0
+dt = 0.0557728984626010091 / (2.0^(InitialRefinement - 3)) * CFL
 
 Integrator_Mesh_Level_Dict = Dict([(4, 2), (5, 1)])
-LevelCFL = [0.5, 0.5]
+LevelCFL = [1.0, 1.0]
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(4, 1, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
