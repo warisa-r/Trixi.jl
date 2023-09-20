@@ -212,7 +212,7 @@ ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 1000
+analysis_interval = 1
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 #callbacks = CallbackSet(summary_callback, alive_callback, analysis_callback)
 
@@ -220,13 +220,14 @@ amr_indicator = IndicatorMax(semi, variable=Trixi.density)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
                                       med_level  = InitialRefinement+1, med_threshold=2.0,
-                                      max_level  = InitialRefinement+2, max_threshold=2.3)
+                                      max_level  = InitialRefinement+1, max_threshold=2.3)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
 callbacks = CallbackSet(summary_callback, analysis_callback, amr_callback)
+#callbacks = CallbackSet(summary_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
@@ -238,8 +239,12 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol, dt =
 =#
 
 
-# mu = 1e-5, HLLC flux, non-adapted, finer mesh
+# mu = 1e-5, HLLC flux, non-adapted, finer mesh, p = 2
 dt = 0.0319591159226547479 / (2.0^(InitialRefinement - 4))
+
+# p = 3
+CFL = 1.0
+dt = 0.0557728984626010091 / (2.0^(InitialRefinement - 3)) * CFL
 
 
 Integrator_Mesh_Level_Dict = Dict([(4, 3), (5, 2), (6, 1)])
@@ -254,7 +259,17 @@ ode_algorithm = PERK_Multi(4, 2, #"/home/daniel/git/MA/EigenspectraGeneration/Sp
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
+Integrator_Mesh_Level_Dict = Dict([(4, 2), (5, 1)])
+LevelCFL = [0.5, 0.5]
 
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(4, 1, #"/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/Adapted/", 
+                           "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", 
+                           cS2,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
+                           stage_callbacks = ())
+
+#=
 # S = 4             
 # dt for adapted spectrum
 stepsize_callback = StepsizeCallback(cfl=3.3)
@@ -290,6 +305,11 @@ callbacksSingle = CallbackSet(summary_callback, analysis_callback, stepsize_call
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", bS, cEnd)
 callbacks = callbacksSingle
+=#
+
+#=
+ode_algorithm = PERK3(4, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_Convergence/NonAdapted/", cS2)
+=#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary

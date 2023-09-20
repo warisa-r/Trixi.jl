@@ -52,7 +52,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 Trixi.refine!(mesh.tree, LLID[Int(num_leafs/4)+1 : num_leafs])
 
-
+#=
 # Second refinement
 # Refine mesh locally
 LLID = Trixi.local_leaf_cells(mesh.tree)
@@ -61,7 +61,7 @@ num_leafs = length(LLID)
 @assert num_leafs % 4 == 0
 # Refine third quarter to ensure we have only transitions from coarse->medium->fine
 Trixi.refine!(mesh.tree, LLID[Int(2*num_leafs/4)+1 : Int(3*num_leafs/4)])
-
+=#
 
 #=
 # Third refinement
@@ -85,14 +85,17 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-CFL = 0.99
+CFL = 1.6
 
 # S=4, D=3
 dt = 0.0545930727967061102 / (2.0^(InitialRefinement - 4)) * CFL * coordinates_max
 
+# S=4, D=3, p = 3
+dt = 0.0579052756758756036 / (2.0^(InitialRefinement - 3)) * CFL * coordinates_max
+
 StartTime = 0.0
-EndTime = 10 * rand()
-EndTime = 0.27
+EndTime = 10
+#EndTime = 0.27
 
 
 # Create ODEProblem
@@ -138,12 +141,25 @@ cEnd = 0.5/bS
 
 LevelCFL = [1.0, 1.0, 1.0]
 
+#=
 ode_algorithm = PERK_Multi(4, 2, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/",
                            bS, cEnd,
                            LevelCFL,
                            stage_callbacks = ())
+=#
 
-           
+cS2 = 1.0
+ode_algorithm = PERK3(4, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/", cS2)
+
+
+Integrator_Mesh_Level_Dict = Dict([(4, 2), (5, 1)])
+LevelCFL = [1.0, 1.0]
+
+ode_algorithm = PERK3_Multi(4, 1, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/1D_Adv/", 
+                           cS2,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
+                           stage_callbacks = ())
+
 #ode_algorithm = PERK(16, "/home/daniel/git/MA/EigenspectraGeneration/1D_Adv/", bS, cEnd)
 
 #=
