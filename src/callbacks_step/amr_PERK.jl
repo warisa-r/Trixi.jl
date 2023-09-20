@@ -5,7 +5,7 @@
 @muladd begin
 
 # Custom implementation for PERK integrator
-function (amr_callback::AMRCallback)(integrator::PERK_Multi_Integrator; kwargs...)
+function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator, PERK3_Multi_Integrator}; kwargs...)
   u_ode = integrator.u
   semi = integrator.p
 
