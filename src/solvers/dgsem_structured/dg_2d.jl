@@ -49,6 +49,62 @@ function rhs!(du, u, t,
     return nothing
 end
 
+# RHS for PERK integrator
+function rhs!(du, u, t,
+              mesh::StructuredMesh{2}, equations,
+              initial_condition, boundary_conditions, source_terms::Source,
+              dg::DG, cache,
+              level_info_elements_acc::Vector{Int64},
+              level_info_interfaces_acc::Vector{Int64},
+              level_info_boundaries_acc::Vector{Int64},
+              level_info_boundaries_orientation_acc::Vector{Vector{Int64}},
+              level_info_mortars_acc::Vector{Int64}) where {Source}
+    # Reset du
+    @trixi_timeit timer() "reset ∂u/∂t" reset_du!(du, level_info_elements_acc)
+
+    # Calculate volume integral
+    @trixi_timeit timer() "volume integral" begin
+        calc_volume_integral!(du, u, mesh,
+                              have_nonconservative_terms(equations), equations,
+                              dg.volume_integral, dg, cache,
+                              level_info_elements_acc)
+    end
+
+    # Calculate interface fluxes
+    @trixi_timeit timer() "interface flux" begin
+        calc_interface_flux!(cache, u, mesh,
+                             have_nonconservative_terms(equations), equations,
+                             dg.surface_integral, dg, 
+                             level_info_elements_acc)
+    end
+
+    # TODO: Not yet adapted to PERK!
+    # Calculate boundary fluxes
+    @trixi_timeit timer() "boundary flux" begin
+        calc_boundary_flux!(cache, u, t, boundary_conditions, mesh, equations,
+                            dg.surface_integral, dg)
+    end
+
+    # Calculate surface integrals
+    @trixi_timeit timer() "surface integral" begin
+        calc_surface_integral!(du, u, mesh, equations,
+                               dg.surface_integral, dg, cache,
+                               level_info_elements_acc)
+    end
+
+    # Apply Jacobian from mapping to reference element
+    @trixi_timeit timer() "Jacobian" apply_jacobian!(du, mesh, equations, dg, cache, 
+                                                     level_info_elements_acc)
+
+    # Calculate source terms
+    @trixi_timeit timer() "source terms" begin
+        calc_sources!(du, u, t, source_terms, equations, dg, cache,
+                      level_info_elements_acc)
+    end
+
+    return nothing
+end
+
 @inline function weak_form_kernel!(du, u,
                                    element,
                                    mesh::Union{StructuredMesh{2}, UnstructuredMesh2D,
@@ -407,6 +463,35 @@ function calc_interface_flux!(cache, u,
     return nothing
 end
 
+function calc_interface_flux!(cache, u,
+                              mesh::StructuredMesh{2},
+                              nonconservative_terms, # can be True/False
+                              equations, surface_integral, dg::DG,
+                              level_info_elements_acc::Vector{Int64})
+    @unpack elements = cache
+
+    @threaded for element in level_info_elements_acc
+        # Interfaces in negative directions
+        # Faster version of "for orientation in (1, 2)"
+
+        # Interfaces in x-direction (`orientation` = 1)
+        calc_interface_flux!(elements.surface_flux_values,
+                             elements.left_neighbors[1, element],
+                             element, 1, u, mesh,
+                             nonconservative_terms, equations,
+                             surface_integral, dg, cache)
+
+        # Interfaces in y-direction (`orientation` = 2)
+        calc_interface_flux!(elements.surface_flux_values,
+                             elements.left_neighbors[2, element],
+                             element, 2, u, mesh,
+                             nonconservative_terms, equations,
+                             surface_integral, dg, cache)
+    end
+
+    return nothing
+end
+
 @inline function calc_interface_flux!(surface_flux_values, left_element, right_element,
                                       orientation, u,
                                       mesh::StructuredMesh{2},
@@ -628,7 +713,7 @@ function apply_jacobian!(du,
 end
 
 function apply_jacobian!(du,
-                         mesh::P4estMesh{2},
+                         mesh::Union{P4estMesh{2}, StructuredMesh{2}},
                          equations, dg::DG, cache,
                          level_info_elements_acc::Vector{Int64})
     @unpack inverse_jacobian = cache.elements

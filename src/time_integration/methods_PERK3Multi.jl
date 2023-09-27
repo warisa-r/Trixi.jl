@@ -541,7 +541,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       @assert length(level_info_mortars_acc[end]) == n_mortars "highest level should contain all mortars"
     end
     =#
-  elseif typeof(mesh) <:P4estMesh
+  elseif typeof(mesh) <:P4estMesh{2}
     nnodes = length(mesh.nodes)
     n_elements = nelements(dg, cache)
     h_min = 42;

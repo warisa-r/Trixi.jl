@@ -304,7 +304,7 @@ function calc_volume_integral!(du, u,
 end
 
 function calc_volume_integral!(du, u,
-                               mesh::Union{TreeMesh{2}, P4estMesh{2}},
+                               mesh::Union{TreeMesh{2}, P4estMesh{2}, StructuredMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache,
@@ -367,7 +367,7 @@ end
 # mapping terms, stored in `cache.elements.contravariant_vectors`, is peeled apart
 # from the evaluation of the physical fluxes in each Cartesian direction
 function calc_volume_integral!(du, u,
-                               mesh::Union{TreeMesh{2}, P4estMesh{2}},
+                               mesh::Union{TreeMesh{2}, P4estMesh{2}, StructuredMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralFluxDifferencing,
                                dg::DGSEM, cache,
@@ -508,7 +508,7 @@ end
 # TODO: Taal dimension agnostic
 function calc_volume_integral!(du, u,
                                mesh::Union{TreeMesh{2}, StructuredMesh{2},
-                                           UnstructuredMesh2D, P4estMesh{2}},
+                                           P4estMesh{2}},
                                nonconservative_terms, equations,
                                volume_integral::VolumeIntegralShockCapturingHG,
                                dg::DGSEM, cache, 
