@@ -3,9 +3,19 @@ using Trixi
 
 equations = CompressibleEulerEquations2D(1.4)
 
+boundary_conditions = boundary_condition_slip_wall
+
+flux = Trixi.FluxHLL(min_max_speed_davis)
+solver = DGSEM(polydeg=2, surface_flux=flux,
+               volume_integral=VolumeIntegralFluxDifferencing(flux_ranocha))
+
+r0 = 0.5 # inner radius
+r1 = 9.0 # outer radius
+
 function initial_condition_pressure_perturbation(x, t, equations::CompressibleEulerEquations2D)
-  xs = 1.5 # location of the initial disturbance on the x axis
-  w = 1/8 # half width
+  #xs = 1.5 # location of the initial disturbance on the x axis
+  xs = 0.6 * r1 # location of the initial disturbance on the x axis
+  w = 1/8 * r1/2.5 # half width
   p = exp(-log(2) * ((x[1]-xs)^2 + x[2]^2)/w^2) + 1.0
   v1 = 0.0
   v2 = 0.0
@@ -15,28 +25,22 @@ function initial_condition_pressure_perturbation(x, t, equations::CompressibleEu
 end
 initial_condition = initial_condition_pressure_perturbation
 
-boundary_conditions = boundary_condition_slip_wall
 
-solver = DGSEM(polydeg=4, surface_flux=flux_lax_friedrichs,
-               volume_integral=VolumeIntegralFluxDifferencing(flux_ranocha))
-
-r0 = 0.5 # inner radius
-r1 = 5.0 # outer radius
 f1(xi)  = SVector( r0 + 0.5 * (r1 - r0) * (xi + 1), 0.0) # right line
 f2(xi)  = SVector(-r0 - 0.5 * (r1 - r0) * (xi + 1), 0.0) # left line
 f3(eta) = SVector(r0 * cos(0.5 * pi * (eta + 1)), r0 * sin(0.5 * pi * (eta + 1))) # inner circle (Bottom line)
 f4(eta) = SVector(r1 * cos(0.5 * pi * (eta + 1)), r1 * sin(0.5 * pi * (eta + 1))) # outer circle (Top line)
 
-cells_per_dimension = (32, 16)
+cells_per_dimension = (192, 128)
 mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4), periodicity=false)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
-tspan = (0.0, 5)
+tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 summary_callback = SummaryCallback()
@@ -58,72 +62,80 @@ b1 = 0.0
 bS = 1 - b1
 cEnd = 0.5/bS
 
-Integrator_Mesh_Level_Dict = Dict([(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)])
-LevelCFL = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 S_min = 4
-Add_Levels = 6
+
+Add_Levels = 1 # S_max = 6
+Add_Levels = 2 # S_max = 8
+Add_Levels = 3 # S_max = 10
+Add_Levels = 4 # S_max = 12
+Add_Levels = 5 # S_max = 14
+Add_Levels = 6 # S_max = 16
+#=
+Add_Levels = 7 # S_max = 18
+Add_Levels = 8 # S_max = 20
+Add_Levels = 9 # S_max = 22
+Add_Levels = 10 # S_max = 24
+Add_Levels = 11 # S_max = 26
+Add_Levels = 12 # S_max = 28
+Add_Levels = 13 # S_max = 30
+Add_Levels = 14 # S_max = 32
+=#
+Integrator_Mesh_Level_Dict = Dict([(1, 1)])
+for i = 2:Add_Levels+1
+  Integrator_Mesh_Level_Dict[i] = i
+end
+Integrator_Mesh_Level_Dict
+LevelCFL = ones(Add_Levels+1)
+
 ode_algorithm = PERK_Multi(S_min, Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 
-_, _, dg, cache = Trixi.mesh_equations_solver_cache(semi)
+CFL_PERK = ((4 + 2*Add_Levels)/4)/8
 
-nnodes = length(dg.basis.nodes)
-n_elements = nelements(dg, cache)
-n_dims = ndims(mesh) # Spatial dimension
+CFL_Stab = 0.48 # S_max = 6
+CFL_Stab = 0.48 # S_max = 8
+CFL_Stab = 0.47 # S_max = 10
+CFL_Stab = 0.47 # S_max = 12
+CFL_Stab = 0.47 # S_max = 14
+CFL_Stab = 0.46 # S_max = 16
 
-h_min = 42;
-h_max = 0;
-
-h_min_per_element = zeros(n_elements)
-
-for element_id in 1:n_elements
-  # pull the four corners numbered as right-handed
-  P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
-  P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-  P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-  P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
-  # compute the four side lengths and get the smallest
-  L0 = sqrt( sum( (P1-P0).^2 ) )
-  L1 = sqrt( sum( (P2-P1).^2 ) )
-  L2 = sqrt( sum( (P3-P2).^2 ) )
-  L3 = sqrt( sum( (P0-P3).^2 ) )
-  h = min(L0, L1, L2, L3)
-  h_min_per_element[element_id] = h
-  if h > h_max 
-    h_max = h
-  end
-  if h < h_min
-    h_min = h
-  end
-end
-
-n_levels = Add_Levels + 1 # Linearly increasing levels
 #=
-if n_levels == 1
-  h_bins = [h_max]
-else
-  h_bins = LinRange(h_min, h_max, n_levels)
-end
+CFL_Stab = 0.37 # S_max = 18
+CFL_Stab = 0.36 # S_max = 20
+CFL_Stab = 0.33 # S_max = 22
+CFL_Stab = 0.31 # S_max = 24
+CFL_Stab = 0.28 # S_max = 26
+CFL_Stab = 0.27 # S_max = 28
+CFL_Stab = 0.25 # S_max = 30
+CFL_Stab = 0.24 # S_max = 32
 =#
-h_bins = LinRange(h_min, h_max, n_levels+1)
 
-h_min_ref = 0.19509032201612822
-CFL_grid = h_bins[end-1] / h_min_ref
+#=
+# Standalone checks (many-stage methods)
+CFL_Stab = 0.37 # S_max = 18
+CFL_Stab = 0.35 # S_max = 20
+CFL_Stab = 0.33 # S_max = 22
+CFL_Stab = 0.30 # S_max = 24
+CFL_Stab = 0.28 # S_max = 26
+CFL_Stab = 0.28 # S_max = 28
+CFL_Stab = 0.26 # S_max = 30
+CFL_Stab = 0.24 # S_max = 32
 
-CFL_Stab = 0.4
-CFL = CFL_grid * CFL_Stab
+ode_algorithm = PERK(S_min+2*Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
+                     bS, cEnd)
+=#
 
-# S = 4, p = 2, NumCells = 8
-dt = 0.044526100157963813 * CFL                           
+CFL = CFL_Stab * CFL_PERK
+
+# S = 4, p = 2, NumCells = 12
+dt = 0.0830890595862001646 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 pd = PlotData2D(sol)
 plot(pd["p"])
-plot(pd["rho"])
 plot!(getmesh(pd))
