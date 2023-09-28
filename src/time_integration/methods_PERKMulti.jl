@@ -609,11 +609,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
-    if n_levels == 1
-      h_bins = [h_max]
-    else
-      h_bins = LinRange(h_min, h_max, n_levels)
-    end
+    h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
 
     println("h_min: ", h_min, " h_max: ", h_max)
     println("h_max/h_min: ", h_max/h_min)
@@ -626,7 +622,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for element_id in 1:n_elements
       h = h_min_per_element[element_id]
 
-      level = findfirst(x-> x >= h, h_bins)
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
       append!(level_info_elements[level], element_id)
 
       for l in level:n_levels
@@ -652,7 +652,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
       # Determine level
       h = min(h_left, h_right)
-      level = findfirst(x-> x >= h, h_bins)
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
 
       for l in level:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
@@ -675,7 +679,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       h = h_min_per_element[element_id]
 
       # Determine level
-      level = findfirst(x-> x >= h, h_bins)
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
 
       # Add to accumulated container
       for l in level:n_levels
@@ -700,7 +708,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
       # Determine level
       h = min(h_lower, h_higher)
-      level = findfirst(x-> x >= h, h_bins)
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
 
       # Add to accumulated container
       for l in level:n_levels
@@ -709,6 +721,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
     @assert length(level_info_mortars_acc[end]) == 
       n_mortars "highest level should contain all mortars"
+      
   elseif typeof(mesh) <:StructuredMesh{2}
     nnodes = length(dg.basis.nodes)
     n_elements = nelements(dg, cache)
@@ -743,14 +756,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
-    #=
-    if n_levels == 1
-      h_bins = [h_max]
-    else
-      h_bins = LinRange(h_min, h_max, n_levels)
-    end
-    =#
-    h_bins = LinRange(h_min, h_max, n_levels+1)
+    h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
 
     min_level = 1
     max_level = n_levels
@@ -766,7 +772,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for element_id in 1:n_elements
       h = h_min_per_element[element_id]
 
-      #level = findfirst(x-> x >= h, h_bins)
       level = findfirst(x-> x >= h, h_bins) - 1
       # Catch case h = h_min
       if level == 0
