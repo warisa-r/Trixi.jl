@@ -40,7 +40,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
-analysis_interval = 1000
+analysis_interval = 2000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 summary_callback = SummaryCallback()
@@ -67,12 +67,15 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 
 S_min = 4
 
+Add_Levels = 0 # S_max = 4
+#=
 Add_Levels = 1 # S_max = 6
 Add_Levels = 2 # S_max = 8
 Add_Levels = 3 # S_max = 10
 Add_Levels = 4 # S_max = 12
 Add_Levels = 5 # S_max = 14
 Add_Levels = 6 # S_max = 16
+=#
 #=
 Add_Levels = 7 # S_max = 18
 Add_Levels = 8 # S_max = 20
@@ -96,13 +99,15 @@ ode_algorithm = PERK_Multi(S_min, Add_Levels, "/home/daniel/git/MA/EigenspectraG
 
 CFL_PERK = ((4 + 2*Add_Levels)/4)/8
 
+CFL_Stab = 0.47 # S_max = 4
+#=
 CFL_Stab = 0.48 # S_max = 6
 CFL_Stab = 0.48 # S_max = 8
 CFL_Stab = 0.47 # S_max = 10
 CFL_Stab = 0.47 # S_max = 12
 CFL_Stab = 0.47 # S_max = 14
 CFL_Stab = 0.46 # S_max = 16
-
+=#
 #=
 CFL_Stab = 0.37 # S_max = 18
 CFL_Stab = 0.36 # S_max = 20
