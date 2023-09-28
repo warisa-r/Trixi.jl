@@ -743,11 +743,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
+    #=
     if n_levels == 1
       h_bins = [h_max]
     else
       h_bins = LinRange(h_min, h_max, n_levels)
     end
+    =#
+    h_bins = LinRange(h_min, h_max, n_levels+1)
 
     min_level = 1
     max_level = n_levels
@@ -763,7 +766,12 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for element_id in 1:n_elements
       h = h_min_per_element[element_id]
 
-      level = findfirst(x-> x >= h, h_bins)
+      #level = findfirst(x-> x >= h, h_bins)
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
       append!(level_info_elements[level], element_id)
 
       for l in level:n_levels
@@ -1101,7 +1109,11 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
 
         for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
-          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+          # For tree meshes:
+          #Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+
+          # For structured mesh:
+          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[level]
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 1] * integrator.k1[u_ind]
           end
