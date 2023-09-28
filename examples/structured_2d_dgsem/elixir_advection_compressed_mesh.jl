@@ -5,7 +5,7 @@ using Trixi
 ###############################################################################
 # semidiscretization of the linear advection equation
 
-advection_velocity = (-1.0, 0.0)
+advection_velocity = (-1.0, 1.0)
 equations = LinearScalarAdvectionEquation2D(advection_velocity)
 
 initial_condition = initial_condition_convergence_test
@@ -26,7 +26,7 @@ gamma = beta - 1
 f3(s) = SVector(alpha*(s+1)^k + beta*s + gamma, 0)
 f4(s) = SVector(alpha*(s+1)^k + beta*s + gamma, 2.0)
 
-cells_per_dimension = (16, 16)
+cells_per_dimension = (64, 8)
 
 # Create curved mesh with 16 x 16 elements
 mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4))
@@ -38,7 +38,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 1.0
-ode = semidiscretize(semi, (0.0, 1));
+ode = semidiscretize(semi, (0.0, 5));
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
 # and resets the timers
@@ -70,14 +70,14 @@ cEnd = 0.5/bS
 Integrator_Mesh_Level_Dict = Dict([(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)])
 LevelCFL = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 
-CFL = 1.0
+CFL = 0.04527533522559635 / 0.125
 # S = 4, dx = 0.125
 dt = 0.0272965401672991008 * CFL
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
-ode_algorithm = PERK_Multi(4, 1, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/Structured/",
+ode_algorithm = PERK_Multi(4, 6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_Adv/Structured/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 
