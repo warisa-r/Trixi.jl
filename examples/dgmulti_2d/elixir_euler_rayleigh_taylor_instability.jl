@@ -1,5 +1,5 @@
 
-using Trixi, OrdinaryDiffEq
+using Trixi, OrdinaryDiffEq, Plots
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
@@ -101,3 +101,12 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=1.0e-6, reltol=1.0e-6,
             ode_default_options()..., callback=callbacks);
 
 summary_callback() # print the timer summary
+plot(sol)
+
+pd = PlotData2D(sol)
+
+plot(pd["rho"])
+plot!(getmesh(pd))
+
+plot(pd["v1"])
+plot(pd["v2"])

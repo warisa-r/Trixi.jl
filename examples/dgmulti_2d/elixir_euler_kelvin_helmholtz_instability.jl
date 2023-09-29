@@ -1,4 +1,4 @@
-using Trixi, OrdinaryDiffEq
+using Trixi, OrdinaryDiffEq, Plots
 
 dg = DGMulti(polydeg = 3, element_type = Quad(), approximation_type = SBP(),
              surface_integral = SurfaceIntegralWeakForm(FluxLaxFriedrichs()),
@@ -35,7 +35,7 @@ mesh = DGMultiMesh(dg, cells_per_dimension; periodicity=true)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, dg)
 
-tspan = (0.0, 1.0)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -53,3 +53,4 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt = estimate_dt(mesh, dg), save_everystep=false, callback=callbacks);
 
 summary_callback() # print the timer summary
+plot(sol)
