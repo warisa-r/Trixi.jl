@@ -15,16 +15,16 @@ solver = DGSEM(polydeg=3, surface_flux=flux_lax_friedrichs)
 
 # Deformed rectangle that looks like a waving flag,
 # lower and upper faces are sinus curves, left and right are vertical lines.
-f1(s) = SVector(-1.0, 1.0 * (s + 1.0))
-f2(s) = SVector( 1.0, 1.0 * (s + 1.0))
+f1(s) = SVector(-1.0, s)
+f2(s) = SVector( 1.0, s)
 
 k = 1.7
 alpha = 0.4
 beta = 1 - alpha*2^(k-1)
 gamma = beta - 1
 
-f3(s) = SVector(alpha*(s+1)^k + beta*s + gamma, 0)
-f4(s) = SVector(alpha*(s+1)^k + beta*s + gamma, 2.0)
+f3(s) = SVector(alpha*(s+1)^k + beta*s + gamma, -1.0)
+f4(s) = SVector(alpha*(s+1)^k + beta*s + gamma,  1.0)
 
 cells_per_dimension = (64, 8)
 

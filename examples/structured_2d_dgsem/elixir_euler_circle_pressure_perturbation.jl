@@ -40,42 +40,32 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
-analysis_interval = 2000
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
+analysis_interval = 10000
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval,extra_analysis_errors=(:conservation_error,))
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl=0.9)
-
-callbacks = CallbackSet(analysis_callback,
-                        alive_callback,
-                        stepsize_callback,
-                        summary_callback);
-#=
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
-=#
-
-b1 = 0.0
-bS = 1 - b1
-cEnd = 0.5/bS
+save_solution = SaveSolutionCallback(interval=10,
+                                     save_initial_solution=true,
+                                     save_final_solution=true,
+                                     solution_variables=cons2prim)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
+#callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 S_min = 4
 
 Add_Levels = 0 # S_max = 4
-#=
+
 Add_Levels = 1 # S_max = 6
 Add_Levels = 2 # S_max = 8
 Add_Levels = 3 # S_max = 10
 Add_Levels = 4 # S_max = 12
 Add_Levels = 5 # S_max = 14
 Add_Levels = 6 # S_max = 16
-=#
+
 #=
 Add_Levels = 7 # S_max = 18
 Add_Levels = 8 # S_max = 20
@@ -93,6 +83,9 @@ end
 Integrator_Mesh_Level_Dict
 LevelCFL = ones(Add_Levels+1)
 
+b1 = 0.0
+bS = 1 - b1
+cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(S_min, Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
@@ -100,14 +93,14 @@ ode_algorithm = PERK_Multi(S_min, Add_Levels, "/home/daniel/git/MA/EigenspectraG
 CFL_PERK = ((4 + 2*Add_Levels)/4)/8
 
 CFL_Stab = 0.47 # S_max = 4
-#=
+
 CFL_Stab = 0.48 # S_max = 6
 CFL_Stab = 0.48 # S_max = 8
 CFL_Stab = 0.47 # S_max = 10
 CFL_Stab = 0.47 # S_max = 12
 CFL_Stab = 0.47 # S_max = 14
 CFL_Stab = 0.46 # S_max = 16
-=#
+
 #=
 CFL_Stab = 0.37 # S_max = 18
 CFL_Stab = 0.36 # S_max = 20
@@ -140,7 +133,16 @@ CFL = CFL_Stab * CFL_PERK
 dt = 0.0830890595862001646 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+plot(sol)
+
+# TODO: Compare runtime also to SSPRK33 (as Vermiere)
+sol = solve(ode, SSPRK33(),
+            dt=2e-3,
+            save_everystep=false, callback=callbacks);
 
 pd = PlotData2D(sol)
 plot(pd["p"])
 plot!(getmesh(pd))
+
+using Trixi2Vtk
+trixi2vtk("out/PERK/solution_000000.h5")
