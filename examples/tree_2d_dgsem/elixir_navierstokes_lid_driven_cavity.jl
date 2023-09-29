@@ -1,4 +1,4 @@
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -20,7 +20,7 @@ coordinates_max = ( 1.0,  1.0) # maximum coordinates (max(x), max(y))
 
 # Create a uniformly refined mesh
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
+                initial_refinement_level=2,
                 periodicity=false,
                 n_cells_max=30_000) # set maximum capacity of tree data structure
 
@@ -64,9 +64,19 @@ ode = semidiscretize(semi, tspan);
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 100
+analysis_interval = 500
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
-callbacks = CallbackSet(summary_callback, alive_callback)
+amr_indicator = IndicatorLöhner(semi, variable=Trixi.density)
+
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level = 2,
+                                      med_level  = 5, med_threshold=0.0001,
+                                      max_level  = 6, max_threshold=0.0005)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=50,
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
+callbacks = CallbackSet(summary_callback, alive_callback, amr_callback, analysis_callback)
 
 ###############################################################################
 # run the simulation
@@ -75,5 +85,10 @@ time_int_tol = 1e-8
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks)
 summary_callback() # print the timer summary
+plot(sol)
 
-
+pd = PlotData2D(sol)
+plot(pd["rho"])
+plot(pd["v1"])
+plot(pd["v2"])
+plot!(getmesh(pd))
