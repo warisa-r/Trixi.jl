@@ -135,14 +135,18 @@ dt = 0.0830890595862001646 * CFL
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 plot(sol)
 
+#=
 # TODO: Compare runtime also to SSPRK33 (as Vermiere)
 sol = solve(ode, SSPRK33(),
             dt=2e-3,
             save_everystep=false, callback=callbacks);
+=#
 
 pd = PlotData2D(sol)
 plot(pd["p"])
 plot!(getmesh(pd))
+
+plot(getmesh(pd))
 
 using Trixi2Vtk
 trixi2vtk("out/PERK/solution_000000.h5")
