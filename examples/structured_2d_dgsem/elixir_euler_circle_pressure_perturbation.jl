@@ -32,6 +32,7 @@ f3(eta) = SVector(r0 * cos(0.5 * pi * (eta + 1)), r0 * sin(0.5 * pi * (eta + 1))
 f4(eta) = SVector(r1 * cos(0.5 * pi * (eta + 1)), r1 * sin(0.5 * pi * (eta + 1))) # outer circle (Top line)
 
 cells_per_dimension = (192, 128)
+#cells_per_dimension = (48, 32)
 mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4), periodicity=false)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
@@ -58,14 +59,14 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 S_min = 4
 
 Add_Levels = 0 # S_max = 4
-
+#=
 Add_Levels = 1 # S_max = 6
 Add_Levels = 2 # S_max = 8
 Add_Levels = 3 # S_max = 10
 Add_Levels = 4 # S_max = 12
 Add_Levels = 5 # S_max = 14
 Add_Levels = 6 # S_max = 16
-
+=#
 #=
 Add_Levels = 7 # S_max = 18
 Add_Levels = 8 # S_max = 20
