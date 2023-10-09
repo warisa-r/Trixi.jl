@@ -166,6 +166,11 @@ function initialize!(cb::DiscreteCallback{Condition, Affect!}, u_ode, du_ode, t,
                     @printf(io, "   %-14s", "l2_"*v)
                 end
             end
+            if :l1_error in analysis_errors
+                for v in varnames(cons2cons, equations)
+                  @printf(io, "   %-14s", "l1_" * v)
+                end
+            end
             if :linf_error in analysis_errors
                 for v in varnames(cons2cons, equations)
                     @printf(io, "   %-14s", "linf_"*v)
@@ -191,7 +196,11 @@ function initialize!(cb::DiscreteCallback{Condition, Affect!}, u_ode, du_ode, t,
                     @printf(io, "   %-14s", "linf_"*v)
                 end
             end
-
+            if :l1_error_primitive in analysis_errors
+                for v in varnames(cons2prim, equations)
+                  @printf(io, "   %-14s", "l1_" * v)
+                end
+            end
             for quantity in analysis_integrals
                 @printf(io, "   %-14s", pretty_form_ascii(quantity))
             end
@@ -362,7 +371,7 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
     # Calculate and print derived quantities (error norms, entropy etc.)
     # Variable names required for L2 error, Linf error, and conservation error
     if any(q in analysis_errors
-           for q in (:l2_error, :linf_error, :conservation_error, :residual)) &&
+           for q in (:l2_error, :linf_error, :l1_error, :conservation_error, :residual)) &&
        mpi_isroot()
         print(" Variable:    ")
         for v in eachvariable(equations)
@@ -372,7 +381,7 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
     end
 
     # Calculate L2/Linf errors, which are also returned
-    l2_error, linf_error = calc_error_norms(u_ode, t, analyzer, semi, cache_analysis)
+    l2_error, linf_error, l1_error = calc_error_norms(u_ode, t, analyzer, semi, cache_analysis)
 
     if mpi_isroot()
         # L2 error
@@ -391,6 +400,16 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
             for v in eachvariable(equations)
                 @printf("  % 10.8e", linf_error[v])
                 @printf(io, "  % 10.8e", linf_error[v])
+            end
+            println()
+        end
+
+         # L1 error
+        if :l1_error in analysis_errors
+            print(" L1 error:    ")
+            for v in eachvariable(equations)
+                @printf("  % 10.8e", l1_error[v])
+                @printf(io, "  % 10.8e", l1_error[v])
             end
             println()
         end
@@ -435,9 +454,9 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
 
     # L2/L∞ errors of the primitive variables
     if :l2_error_primitive in analysis_errors ||
-       :linf_error_primitive in analysis_errors
-        l2_error_prim, linf_error_prim = calc_error_norms(cons2prim, u_ode, t, analyzer,
-                                                          semi, cache_analysis)
+       :linf_error_primitive in analysis_errors || 
+       :l1_error_primitive in analysis_errors
+       l2_error_prim, linf_error_prim, l1_error_prim = calc_error_norms(cons2prim, u_ode, t, analyzer, semi, cache_analysis)
 
         if mpi_isroot()
             print(" Variable:    ")
@@ -465,13 +484,23 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
                 end
                 println()
             end
+
+            # L1 error
+            if :l1_error_primitive in analysis_errors
+                print(" L1 error prim.: ")
+                for v in eachvariable(equations)
+                    @printf("%10.8e   ", l1_error_prim[v])
+                    @printf(io, "  % 10.8e", l1_error_prim[v])
+                end
+                println()
+            end
         end
     end
 
     # additional integrals
     analyze_integrals(analysis_integrals, io, du, u, t, semi)
 
-    return l2_error, linf_error
+    return l2_error, linf_error, l1_error
 end
 
 # Print level information only if AMR is enabled
@@ -599,9 +628,9 @@ function (cb::DiscreteCallback{Condition, Affect!})(sol) where {Condition,
     @unpack analyzer = analysis_callback
     cache_analysis = analysis_callback.cache
 
-    l2_error, linf_error = calc_error_norms(sol.u[end], sol.t[end], analyzer, semi,
+    l2_error, linf_error, l1_error = calc_error_norms(sol.u[end], sol.t[end], analyzer, semi,
                                             cache_analysis)
-    (; l2 = l2_error, linf = linf_error)
+    (; l2 = l2_error, linf = linf_error, l1 = l1_error)
 end
 
 # some common analysis_integrals
