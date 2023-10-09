@@ -13,7 +13,9 @@ equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
                                                           Prandtl=prandtl_number())
 
 # Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-solver = DGSEM(polydeg=3, surface_flux=flux_lax_friedrichs)
+surf_fux = flux_lax_friedrichs
+surf_fux = FluxHLL(min_max_speed_davis)
+solver = DGSEM(polydeg=3, surface_flux=surf_fux)
 
 coordinates_min = (-1.0, -1.0) # minimum coordinates (min(x), min(y))
 coordinates_max = ( 1.0,  1.0) # maximum coordinates (max(x), max(y))
@@ -59,12 +61,12 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span `tspan`
-tspan = (0.0, 25.0)
+tspan = (0.0, 25)
 ode = semidiscretize(semi, tspan);
 
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 500
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 amr_indicator = IndicatorLöhner(semi, variable=Trixi.density)
 
