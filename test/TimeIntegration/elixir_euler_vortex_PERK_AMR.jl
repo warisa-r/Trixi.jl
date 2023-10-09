@@ -115,7 +115,7 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 2
+PolyDeg = 6
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 
@@ -132,7 +132,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2*EdgeLength)
+#tspan = (0.0, 2*EdgeLength)
+tspan = (0.0, 0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -163,14 +164,21 @@ NumDoublings = 2
 Integrator_Mesh_Level_Dict = Dict([(Refinement, 3), (Refinement+1, 2), (Refinement+2, 1)])
 
 NumBaseStages = 3
-# S = 3, p = 2
+# S = 3, p = 2, d = 2
 dtRefBase = 0.259612106506210694
+# S = 3, p = 2, d = 6
+dtRefBase = 0.0446146026341011772
 
 #=
 NumBaseStages = 4
 # S = 4, p = 3
 dtRefBase = 0.170426237621541077
+
+# S = 3, p = 2, d = 6
+dtRefBase = 0.0616218607581686263
 =#
+
+
 
 CFL_Convergence = 1.0
 
