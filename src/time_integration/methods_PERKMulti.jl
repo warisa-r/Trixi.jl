@@ -56,7 +56,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   ActiveLevels[1] = 1:NumDoublings+1
 
   for level = 1:NumDoublings + 1
-    #=
+    
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
@@ -64,9 +64,9 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    =#
-
     
+
+    #=
     # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
@@ -75,7 +75,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    
+    =#
 
     # Add active levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -140,8 +140,9 @@ mutable struct PERK_Multi{StageCallbacks}
     newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        #NumStageEvalsMin_ * 2^NumDoublings_,
-                        NumStageEvalsMin_ + 2 * NumDoublings_,
+                        NumStageEvalsMin_ * 2^NumDoublings_,
+                        # For "linear" PERK
+                        #NumStageEvalsMin_ + 2 * NumDoublings_,
                         1.0-bS_, bS_,
                         LevelCFL_, Integrator_Mesh_Level_Dict_,
                         stage_callbacks)
@@ -1058,10 +1059,11 @@ function solve!(integrator::PERK_Multi_Integrator)
     # if the next iteration would push the simulation beyond the end time, set dt accordingly
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
+      dt = t_end - integrator.t
       terminate!(integrator)
+    else
+      dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
     end
-
-    dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
@@ -1115,10 +1117,10 @@ function solve!(integrator::PERK_Multi_Integrator)
 
         for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
           # For tree meshes:
-          #Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
 
           # For structured mesh:
-          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[level]
+          #Integrator_lvl = alg.Integrator_Mesh_Level_Dict[level]
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 1] * integrator.k1[u_ind]
           end
