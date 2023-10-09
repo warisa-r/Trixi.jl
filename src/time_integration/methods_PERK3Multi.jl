@@ -572,10 +572,11 @@ function solve!(integrator::PERK3_Multi_Integrator)
     # if the next iteration would push the simulation beyond the end time, set dt accordingly
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
+      dt = t_end - integrator.t
       terminate!(integrator)
+    else
+      dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
     end
-
-    dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       

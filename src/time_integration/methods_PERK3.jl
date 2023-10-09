@@ -22,7 +22,7 @@ function ComputePERK3_ButcherTableau(NumStages::Int, BasePathMonCoeffs::Abstract
   AMatrix = zeros(CoeffsMax, 2)
   AMatrix[:, 1] = c[3:end]
 
-  PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
+  PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * "_" * string(NumStages) * ".txt"
   NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
   @assert NumMonCoeffs == CoeffsMax
 
