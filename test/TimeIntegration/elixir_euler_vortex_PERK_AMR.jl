@@ -7,60 +7,58 @@ using Trixi
 
 # define new structs inside a module to allow re-evaluating the file
 module TrixiExtension
+  using Trixi
 
-using Trixi
-
-struct IndicatorVortex{Cache<:NamedTuple} <: Trixi.AbstractIndicator
-  cache::Cache
-end
-
-function IndicatorVortex(semi)
-  basis = semi.solver.basis
-  alpha = Vector{real(basis)}()
-  A = Array{real(basis), 2}
-  indicator_threaded = [A(undef, nnodes(basis), nnodes(basis))
-                        for _ in 1:Threads.nthreads()]
-  cache = (; semi.mesh, alpha, indicator_threaded) # "Leading semicolon" makes this a named tuple
-
-  return IndicatorVortex{typeof(cache)}(cache)
-end
-
-function (indicator_vortex::IndicatorVortex)(u::AbstractArray{<:Any,4},
-                                             mesh, equations, dg, cache;
-                                             t, kwargs...)
-  mesh = indicator_vortex.cache.mesh
-  alpha = indicator_vortex.cache.alpha
-  indicator_threaded = indicator_vortex.cache.indicator_threaded
-  resize!(alpha, nelements(dg, cache))
-
-
-  # get analytical vortex center (based on assumption that center=[0.0,0.0]
-  # at t=0.0 and that we stop after one period)
-  domain_length = mesh.tree.length_level_0
-  if t < 0.5 * domain_length
-    center = (t, t)
-  else
-    center = (t-domain_length, t-domain_length)
+  struct IndicatorVortex{Cache<:NamedTuple} <: Trixi.AbstractIndicator
+    cache::Cache
   end
 
-  Threads.@threads for element in eachelement(dg, cache)
-    cell_id = cache.elements.cell_ids[element]
-    coordinates = (mesh.tree.coordinates[1, cell_id], mesh.tree.coordinates[2, cell_id])
-    # use the negative radius as indicator since the AMR controller increases
-    # the level with increasing value of the indicator and we want to use
-    # high levels near the vortex center
-    alpha[element] = -periodic_distance_2d(coordinates, center, domain_length)
+  function IndicatorVortex(semi)
+    basis = semi.solver.basis
+    alpha = Vector{real(basis)}()
+    A = Array{real(basis), 2}
+    indicator_threaded = [A(undef, nnodes(basis), nnodes(basis))
+                          for _ in 1:Threads.nthreads()]
+    cache = (; semi.mesh, alpha, indicator_threaded) # "Leading semicolon" makes this a named tuple
+
+    return IndicatorVortex{typeof(cache)}(cache)
   end
 
-  return alpha
-end
+  function (indicator_vortex::IndicatorVortex)(u::AbstractArray{<:Any,4},
+                                              mesh, equations, dg, cache;
+                                              t, kwargs...)
+    mesh = indicator_vortex.cache.mesh
+    alpha = indicator_vortex.cache.alpha
+    indicator_threaded = indicator_vortex.cache.indicator_threaded
+    resize!(alpha, nelements(dg, cache))
 
-function periodic_distance_2d(coordinates, center, domain_length)
-  dx = @. abs(coordinates - center)
-  dx_periodic = @. min(dx, domain_length - dx)
-  return sqrt(sum(abs2, dx_periodic))
-end
 
+    # get analytical vortex center (based on assumption that center=[0.0,0.0]
+    # at t=0.0 and that we stop after one period)
+    domain_length = mesh.tree.length_level_0
+    if t < 0.5 * domain_length
+      center = (t, t)
+    else
+      center = (t-domain_length, t-domain_length)
+    end
+
+    Threads.@threads for element in eachelement(dg, cache)
+      cell_id = cache.elements.cell_ids[element]
+      coordinates = (mesh.tree.coordinates[1, cell_id], mesh.tree.coordinates[2, cell_id])
+      # use the negative radius as indicator since the AMR controller increases
+      # the level with increasing value of the indicator and we want to use
+      # high levels near the vortex center
+      alpha[element] = -periodic_distance_2d(coordinates, center, domain_length)
+    end
+
+    return alpha
+  end
+
+  function periodic_distance_2d(coordinates, center, domain_length)
+    dx = @. abs(coordinates - center)
+    dx_periodic = @. min(dx, domain_length - dx)
+    return sqrt(sum(abs2, dx_periodic))
+  end
 end # module TrixiExtension
 
 import .TrixiExtension
@@ -70,6 +68,8 @@ gamma = 1.4
 
 equations = CompressibleEulerEquations2D(gamma)
 
+EdgeLength = 10
+
 """
     initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
 
@@ -78,7 +78,7 @@ https://spectrum.library.concordia.ca/id/eprint/985444/1/Paired-explicit-Runge-K
 """
 function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
   # Evaluate error after full domain traversion
-  if t == 20
+  if t == 2*EdgeLength
     t = 0
   end
 
@@ -115,13 +115,14 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 3
+PolyDeg = 2
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
-coordinates_min = (-10.0, -10.0)
-coordinates_max = ( 10.0,  10.0)
 
-Refinement = 4
+coordinates_min = (-EdgeLength, -EdgeLength)
+coordinates_max = ( EdgeLength,  EdgeLength)
+
+Refinement = 6
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
                 n_cells_max=100_000)
@@ -131,13 +132,13 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 20.0)
+tspan = (0.0, 2*EdgeLength)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
 analysis_interval = 1000
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      extra_analysis_errors=(:conservation_error,))
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -146,83 +147,53 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval)
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
                                       med_level=Refinement+1, med_threshold=-3.0,
-                                      max_level=Refinement+2, max_threshold=-2.0)                                      
-
-
-#=
-amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
-                                      base_level=Refinement,
-                                      med_level=Refinement+2, med_threshold=-3.0,
-                                      max_level=Refinement+3, max_threshold=-2.0)  
-=#
+                                      max_level=Refinement+2, max_threshold=-2.0)
 
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=5,
-                           adapt_initial_condition=false)
-                           #adapt_initial_condition_only_refine=true)
+                           adapt_initial_condition=true)
 
 callbacksPERK = CallbackSet(summary_callback,
-                            analysis_callback, alive_callback, amr_callback)
-
-# The StepsizeCallback handles the re-calculcation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl=0.65)                    
-callbacksSSPRK22 = CallbackSet(summary_callback,
-                               analysis_callback, alive_callback, amr_callback,
-                               stepsize_callback)                        
+                            analysis_callback, alive_callback, amr_callback)                
 
 ###############################################################################
 # run the simulation
 
-
-NumCells = 2^Refinement
-NumCellsRef = 4
-
-# S = 4
-dtRefBase = 0.415213931783000589
-
-NumBaseStages = 4
+NumBaseStages = 3
 NumDoublings = 2
-CFL = 0.64 # Ref level: 4, S_base = 4
-CFL = 0.5 # Shared
-#CFL = 0.67 # Ref level: 5, S_base = 4
 
-# Shared 
-#dtRefBase = 0.256993495486920
+# S = 4, p = 2
+dtRefBase = 0.259612106506210694
+BaseRefinement = 3
 
-#=
-NumBaseStages = 4
-NumDoublings = 3
-CFL = 0.32 # Ref level: 4, S_base = 4
-CFL = 0.32 # Ref level: 3, S_base = 4
-=#
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement)
 
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL
+Integrator_Mesh_Level_Dict = Dict([(Refinement, 3), (Refinement+1, 2), (Refinement+2, 1)])
+LevelCFL = [0.8, 1.0, 1.0]
 
-b1   = 0.5
+b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-
+#=
 stage_limiter = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-2, 5.0e-2),
                                                      variables=(Trixi.density, pressure)),)
+=#
+
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
-                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/",
-                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/Shared/",
-                           bS, cEnd, stage_callbacks = stage_limiter)
+                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/",
+                           bS, cEnd,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
+                           #stage_callbacks = stage_limiter)
+                           stage_callbacks = ())
 
-                          
-#ode_algorithm = PERK(16, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/", bS, cEnd)
-#ode_algorithm = PERK(Int(NumBaseStages*2^NumDoublings), "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/")
 
-#=
-CFL_AMR = 0.25
-CFL_AMR = 0.5
-CFL_AMR = 1.0
-#CFL_Stability = 0.86
-CFL_Single = CFL_AMR * CFL
-dtOptMin = dtRefBase / (NumCells/NumCellsRef) * CFL_Single 
-=#
+
+ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/", bS, cEnd)
+CFL = 0.8
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
+
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
