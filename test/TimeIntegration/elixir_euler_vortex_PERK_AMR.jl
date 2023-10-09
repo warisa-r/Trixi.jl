@@ -175,23 +175,16 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-#=
-stage_limiter = (PositivityPreservingLimiterZhangShu(thresholds=(5.0e-2, 5.0e-2),
-                                                     variables=(Trixi.density, pressure)),)
-=#
-
-
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
                            "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict,
-                           #stage_callbacks = stage_limiter)
                            stage_callbacks = ())
 
 
 
-ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/", bS, cEnd)
-CFL = 0.8
+ode_algorithm = PERK(6, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/", bS, cEnd)
+CFL = 0.8 * 0.5
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
 
 
