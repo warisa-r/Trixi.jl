@@ -230,16 +230,18 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
 
     # NOTE: For really different grid sizes
-    #=
+    
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
-    =#
+    
     # NOTE: For testcase with artificial assignment
+    #=
     Random.seed!(42)
     min_level = 1 # Hard-coded to our convergence study testcase
     max_level = 3 # Hard-coded to our convergence study testcase
     n_levels = max_level - min_level + 1
-
+    =#
+    
     # Initialize storage for level-wise information
     level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
     level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
@@ -248,9 +250,9 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for element_id in 1:n_elements
       # Determine level
       # NOTE: For really different grid sizes
-      #level = mesh.tree.levels[elements.cell_ids[element_id]]
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
       # NOTE: For testcase with artificial assignment
-      level = rand((1, 2, 3))
+      #level = rand((1, 2, 3))
 
       # Convert to level id
       level_id = max_level + 1 - level
@@ -274,15 +276,16 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
       # Determine level
       # NOTE: For really different grid sizes
-      #=
+      
       level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
       level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
       # Higher element's level determines this interfaces' level
       level_id = max_level + 1 - max(level_left, level_right)
-      =#
+
 
       # NOTE: For testcase with artificial assignment
+      #=
       if element_id_left in level_info_elements[1]
         level_id_left = 1
       elseif element_id_left in level_info_elements[2]
@@ -299,6 +302,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
         level_id_right = 3
       end
       level_id = min(level_id_left, level_id_right)
+      =#
 
       for l in level_id:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
