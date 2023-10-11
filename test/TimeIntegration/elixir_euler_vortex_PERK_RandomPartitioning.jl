@@ -90,7 +90,6 @@ callbacksPERK = CallbackSet(summary_callback,
 
 NumDoublings = 2
 Integrator_Mesh_Level_Dict = Dict([(1, 3), (2, 2), (3, 1)])
-#Integrator_Mesh_Level_Dict = Dict([(1, 1), (2, 2), (3, 3)])
 
 NumBaseStages = 3
 # S = 3, p = 2, d = 2
@@ -98,21 +97,21 @@ dtRefBase = 0.259612106506210694
 # S = 3, p = 2, d = 6
 dtRefBase = 0.0446146026341011772
 
-#=
+
 NumBaseStages = 4
 # S = 4, p = 3
 dtRefBase = 0.170426237621541077
 
 # S = 4, p = 3, d = 6
 dtRefBase = 0.0616218607581686263
-=#
 
-CFL_Conv = 0.5
+
+CFL_Conv = 0.125
 
 BaseRefinement = 3
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Conv
 
-
+#=
 LevelCFL = [0.7, 0.7, 0.7]
 b1   = 0.0
 bS   = 1.0 - b1
@@ -124,9 +123,10 @@ ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings,
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
+=#
 
 
-#=
+LevelCFL = [0.9, 0.9, 0.9]
 cS2 = 1.0 # = c_{S-2}
 ode_algorithm = PERK3_Multi(NumBaseStages, NumDoublings, 
                            #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg3/",
@@ -134,7 +134,7 @@ ode_algorithm = PERK3_Multi(NumBaseStages, NumDoublings,
                            cS2,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
-=#
+
 
 #=
 ode_algorithm = PERK(3, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/", bS, cEnd)
