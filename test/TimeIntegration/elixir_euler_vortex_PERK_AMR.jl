@@ -150,7 +150,7 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+2, max_threshold=-2.0)
 
-CFL_Convergence = 0.25
+CFL_Convergence = 1.0
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=5, # 5 for highest level, adjust for fewer stages accordingly
                            # For convergence study

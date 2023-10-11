@@ -4,7 +4,7 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-using Random # NOTE: Only for tests
+#using Random # NOTE: Only for tests
 
 function ComputeACoeffs(NumStageEvals::Int,
                         SE_Factors::Vector{Float64}, MonCoeffs::Vector{Float64})

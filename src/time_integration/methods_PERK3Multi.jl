@@ -4,7 +4,7 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-using Random # NOTE: Only for tests
+#using Random # NOTE: Only for tests
 
 function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                            cS2::Float64)
