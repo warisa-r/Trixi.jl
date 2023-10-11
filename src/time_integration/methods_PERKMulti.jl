@@ -241,7 +241,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     max_level = 3 # Hard-coded to our convergence study testcase
     n_levels = max_level - min_level + 1
     =#
-    
+
     # Initialize storage for level-wise information
     level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
     level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
@@ -376,17 +376,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       n_mortars = length(mortars.orientations)
 
       for mortar_id in 1:n_mortars
-        # Get element ids
-        # TODO: Check what is the finer level => suffices
-        element_id_lower  = mortars.neighbor_ids[1, mortar_id]
-        element_id_higher = mortars.neighbor_ids[2, mortar_id]
+        # This is by convention always one of the finer elements
+        element_id  = mortars.neighbor_ids[1, mortar_id]
 
         # Determine level
-        level_lower  = mesh.tree.levels[elements.cell_ids[element_id_lower]]
-        level_higher = mesh.tree.levels[elements.cell_ids[element_id_higher]]
+        level  = mesh.tree.levels[elements.cell_ids[element_id]]
 
         # Higher element's level determines this mortars' level
-        level_id = max_level + 1 - max(level_lower, level_higher)
+        level_id = max_level + 1 - level
         # Add to accumulated container
         for l in level_id:n_levels
           push!(level_info_mortars_acc[l], mortar_id)

@@ -271,7 +271,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       end
       level_id = min(level_id_left, level_id_right)
       =#
-      
+
       for l in level_id:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
       end
@@ -344,17 +344,14 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       n_mortars = length(mortars.orientations)
 
       for mortar_id in 1:n_mortars
-        # Get element ids
-        # TODO: Check what is the finer level => suffices
-        element_id_lower  = mortars.neighbor_ids[1, mortar_id]
-        element_id_higher = mortars.neighbor_ids[2, mortar_id]
+        # This is by convention always one of the finer elements
+        element_id  = mortars.neighbor_ids[1, mortar_id]
 
         # Determine level
-        level_lower  = mesh.tree.levels[elements.cell_ids[element_id_lower]]
-        level_higher = mesh.tree.levels[elements.cell_ids[element_id_higher]]
+        level  = mesh.tree.levels[elements.cell_ids[element_id]]
 
         # Higher element's level determines this mortars' level
-        level_id = max_level + 1 - max(level_lower, level_higher)
+        level_id = max_level + 1 - level
         # Add to accumulated container
         for l in level_id:n_levels
           push!(level_info_mortars_acc[l], mortar_id)
