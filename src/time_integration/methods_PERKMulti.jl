@@ -4,7 +4,7 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-#using Random # NOTE: Only for tests
+using Random # NOTE: Only for tests
 
 function ComputeACoeffs(NumStageEvals::Int,
                         SE_Factors::Vector{Float64}, MonCoeffs::Vector{Float64})
@@ -229,12 +229,17 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     n_interfaces = length(interfaces.orientations)
     n_boundaries = length(boundaries.orientations) # TODO Not sure if adequate, especially multiple dimensions
 
+    # NOTE: For really different grid sizes
+    #=
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
+    =#
+    # NOTE: For testcase with artificial assignment
+    Random.seed!(42)
+    min_level = 1 # Hard-coded to our convergence study testcase
+    max_level = 3 # Hard-coded to our convergence study testcase
     n_levels = max_level - min_level + 1
 
-    # NOTE: Next-to-fine is NOT integrated with fine integrator
-    
     # Initialize storage for level-wise information
     level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
     level_info_elements_acc = [Vector{Int64}() for _ in 1:n_levels]
@@ -242,7 +247,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     # Determine level for each element
     for element_id in 1:n_elements
       # Determine level
-      level = mesh.tree.levels[elements.cell_ids[element_id]]
+      # NOTE: For really different grid sizes
+      #level = mesh.tree.levels[elements.cell_ids[element_id]]
+      # NOTE: For testcase with artificial assignment
+      level = rand((1, 2, 3))
+
       # Convert to level id
       level_id = max_level + 1 - level
 
@@ -264,11 +273,33 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       element_id_right = interfaces.neighbor_ids[2, interface_id]
 
       # Determine level
+      # NOTE: For really different grid sizes
+      #=
       level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
       level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
 
       # Higher element's level determines this interfaces' level
       level_id = max_level + 1 - max(level_left, level_right)
+      =#
+
+      # NOTE: For testcase with artificial assignment
+      if element_id_left in level_info_elements[1]
+        level_id_left = 1
+      elseif element_id_left in level_info_elements[2]
+        level_id_left = 2
+      elseif element_id_left in level_info_elements[3]
+        level_id_left = 3
+      end
+
+      if element_id_right in level_info_elements[1]
+        level_id_right = 1
+      elseif element_id_right in level_info_elements[2]
+        level_id_right = 2
+      elseif element_id_right in level_info_elements[3]
+        level_id_right = 3
+      end
+      level_id = min(level_id_left, level_id_right)
+
       for l in level_id:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
       end
@@ -342,6 +373,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
 
       for mortar_id in 1:n_mortars
         # Get element ids
+        # TODO: Check what is the finer level => suffices
         element_id_lower  = mortars.neighbor_ids[1, mortar_id]
         element_id_higher = mortars.neighbor_ids[2, mortar_id]
 
@@ -355,14 +387,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
         for l in level_id:n_levels
           push!(level_info_mortars_acc[l], mortar_id)
         end
-
-        #= TODO: 
-        Add elements on the fine side (higher level) to additional datastructure
-        which serves as an indicator on which cells we impose artificial viscosity, i.e., simulate Navier-Stokes.
-
-        Idea: Number of elements based on the stencil size of the integrator associated with this level
-        =#
-
       end
       @assert length(level_info_mortars_acc[end]) == 
         n_mortars "highest level should contain all mortars"

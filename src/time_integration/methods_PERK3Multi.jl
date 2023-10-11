@@ -198,8 +198,6 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
     n_levels = max_level - min_level + 1
-
-    # NOTE: Next-to-fine is NOT integrated with fine integrator
     
     # Initialize storage for level-wise information
     level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
@@ -308,6 +306,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
 
       for mortar_id in 1:n_mortars
         # Get element ids
+        # TODO: Check what is the finer level => suffices
         element_id_lower  = mortars.neighbor_ids[1, mortar_id]
         element_id_higher = mortars.neighbor_ids[2, mortar_id]
 
@@ -321,14 +320,6 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
         for l in level_id:n_levels
           push!(level_info_mortars_acc[l], mortar_id)
         end
-
-        #= TODO: 
-        Add elements on the fine side (higher level) to additional datastructure
-        which serves as an indicator on which cells we impose artificial viscosity, i.e., simulate Navier-Stokes.
-
-        Idea: Number of elements based on the stencil size of the integrator associated with this level
-        =#
-
       end
       @assert length(level_info_mortars_acc[end]) == 
         n_mortars "highest level should contain all mortars"
