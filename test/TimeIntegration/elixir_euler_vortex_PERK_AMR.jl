@@ -115,7 +115,7 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 6
+PolyDeg = 3
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 
@@ -152,9 +152,9 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
 
 CFL_Convergence = 1.0
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=5, # 5 for highest level, adjust for fewer stages accordingly
+                           interval=5, # 5 for highest level, adjust for fewer stages accordingly
                            # For convergence study
-                           interval=Int(20/CFL_Convergence), 
+                           #interval=Int(20/CFL_Convergence), 
                            adapt_initial_condition=true)
 
 callbacksPERK = CallbackSet(summary_callback,
@@ -170,7 +170,7 @@ NumBaseStages = 3
 # S = 3, p = 2, d = 2
 dtRefBase = 0.259612106506210694
 # S = 3, p = 2, d = 6
-dtRefBase = 0.0446146026341011772
+#dtRefBase = 0.0446146026341011772
 
 
 NumBaseStages = 4
@@ -178,34 +178,33 @@ NumBaseStages = 4
 dtRefBase = 0.170426237621541077
 
 # S = 4, p = 3, d = 6
-dtRefBase = 0.0616218607581686263
+#dtRefBase = 0.0616218607581686263
 
 
 BaseRefinement = 3
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence
 
-dtOptMin = 0.007547169 * CFL_Convergence # For even disible number timesteps/amr_interval
+#dtOptMin = 0.007547169 * CFL_Convergence # For even disible number timesteps/amr_interval
 
 #=
 #LevelCFL = [0.8, 1.0, 1.0] # S = {3,6,12} p = 2, d = 2
-
 LevelCFL = [0.8, 1.0, 1.0] # S = {3,6,12} p = 2, d = 6
-dtOptMin = 0.005580357142857142 # End-values evaluated after refinement
+#dtOptMin = 0.005580357142857142 # End-values evaluated after refinement
 
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings, 
-                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/",
-                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/",
+                           "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/",
+                           #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 =#
 
 LevelCFL = [0.47, 1.0, 1.0] # S = {4,8,16} p = 2, d = 2
-LevelCFL = [0.5, 1.0, 1.0] # S = {4,8,16} p = 2, d = 6
+#LevelCFL = [0.5, 1.0, 1.0] # S = {4,8,16} p = 2, d = 6
 cS2 = 1.0 # = c_{S-2}
 ode_algorithm = PERK3_Multi(NumBaseStages, NumDoublings, 
                            #"/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg3/",
@@ -227,10 +226,14 @@ CFL = 0.5 * 0.25 # S = 16, p = 3
 
 #dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
 
-
+#=
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacksPERK);
+=#
+
+#sol = solve(ode, SSPRK22(), dt = 1e-3, save_everystep=false, callback=callbacksPERK);
+sol = solve(ode, SSPRK33(), dt = 2e-3, save_everystep=false, callback=callbacksPERK);
 
 summary_callback() # print the timer summary
 plot(sol)
