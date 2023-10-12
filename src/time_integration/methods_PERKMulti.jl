@@ -239,8 +239,8 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     Random.seed!(42)
     min_level = 1 # Hard-coded to our convergence study testcase
     max_level = 3 # Hard-coded to our convergence study testcase
-    n_levels = max_level - min_level + 1
     =#
+    n_levels = max_level - min_level + 1
 
     # Initialize storage for level-wise information
     level_info_elements     = [Vector{Int64}() for _ in 1:n_levels]
