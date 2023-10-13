@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -31,7 +31,8 @@ function initial_condition_kelvin_helmholtz_instability(x, t, equations::Compres
 end
 initial_condition = initial_condition_kelvin_helmholtz_instability
 
-surface_flux = flux_lax_friedrichs
+#surface_flux = flux_lax_friedrichs
+surface_flux = flux_hlle
 volume_flux  = flux_ranocha
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
@@ -47,41 +48,74 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (-1.0, -1.0)
 coordinates_max = ( 1.0,  1.0)
+Refinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=5,
+                initial_refinement_level=Refinement,
                 n_cells_max=100_000)
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 3.0)
+tspan = (0.0, 3.5)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+amr_indicator = IndicatorHennemannGassner(semi,
+                                          alpha_max=0.5,
+                                          alpha_min=0.001,
+                                          alpha_smooth=true,
+                                          variable=Trixi.density)
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level=Refinement,
+                                      med_level =Refinement+2, med_threshold=0.2,
+                                      max_level =Refinement+4, max_threshold=0.4)
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=20,
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
+
+analysis_interval = 200
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
-alive_callback = AliveCallback(analysis_interval=analysis_interval)
-
-save_solution = SaveSolutionCallback(interval=20,
-                                     save_initial_solution=true,
-                                     save_final_solution=true,
-                                     solution_variables=cons2prim)
-
-stepsize_callback = StepsizeCallback(cfl=1.3)
-
 callbacks = CallbackSet(summary_callback,
-                        analysis_callback, alive_callback,
-                        save_solution,
-                        stepsize_callback)
+                        analysis_callback,
+                        amr_callback)
 
+CFL_Stability = 0.7
+BaseRefinement = 4                        
+# S = 4, p = 3, Ref = 4  
+dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
+
+# S = 16, p = 3, Ref = 4
+#dt = 0.0722396842546004376 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
 ###############################################################################
 # run the simulation
 
+ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
+#=
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = dt,
+                  save_everystep=false, callback=callbacks);
+=#
+
+
+stepsize_callback = StepsizeCallback(cfl=1.3)
+callbacksNonPERK = CallbackSet(summary_callback,
+                               stepsize_callback,
+                               analysis_callback,
+                               amr_callback)
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
+            save_everystep=false, callback=callbacksNonPERK);
+
+
+plot(sol)
+
+pd = PlotData2D(sol)
+plot(pd["rho"])
+plot!(getmesh(pd))
+
 summary_callback() # print the timer summary
