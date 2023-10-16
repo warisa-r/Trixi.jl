@@ -43,7 +43,7 @@ solver = DGSEM(polydeg=3, surface_flux=flux_hllc,
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
-InitialRefinement = 5
+InitialRefinement = 3
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
@@ -73,103 +73,83 @@ display(plotdata)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.8)
+#tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 500
+analysis_interval = 10000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
-amr_indicator = IndicatorLöhner(semi, variable=v1)                                          
+amr_indicator = IndicatorLöhner(semi, variable=v1)
+
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
-                                      med_level  = InitialRefinement+1, med_threshold=0.2,
-                                      max_level  = InitialRefinement+3, max_threshold=0.5)
+                                      med_level  = InitialRefinement+2, med_threshold=0.15,
+                                      max_level  = InitialRefinement+4, max_threshold=0.45)
+
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level = InitialRefinement,
+                                      med_level  = InitialRefinement+4, med_threshold=0.15,
+                                      max_level  = InitialRefinement+6, max_threshold=0.45)
+
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           interval=20,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
                         amr_callback)
 
 ###############################################################################
 # run the simulation
 
-CFL = 1.0
-CFL = 0.96
-CFL = 0.61
-CFL = 0.35
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 
-Integrator_Mesh_Level_Dict = Dict([(5, 4), (6, 3), (7, 2), (8, 1)])
 
-LevelCFL = [0.35, 0.61, 0.96, 1.0]
+# S = 3 base
 
-# 4: dt 0.00156784012855496261
-#dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4)) * CFL
-# 8: dt 0.00342847820080351092
-# 16: dt 0.00708093033754266813
+# Levels 3-7
+LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.9)])
+# Longer tspan
+#LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.8)])
 
-dt = 0.00156784012855496261 / (2.0^(InitialRefinement - 4))
+# Levels 3-9
+LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.9), (8, 0.125 * 0.8), (9, 1/16 * 0.8)])
 
-b1   = 0.5
+# S= 3, p = 2
+dt = 0.000896571863268036445 / (2.0^(InitialRefinement - 4))
+
+b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(4, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
+
+ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, 
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-cS2 = 1.0
-ode_algorithm = PERK3(8, "/home/daniel/git/MA/PERK/ThirdOrder/cS2_Fixed/", cS2)
-
-ode_algorithm = PERK3_Multi(4, 1, "/home/daniel/git/MA/PERK/ThirdOrder/cS2_Fixed/", 
-                           cS2, LevelCFL, Integrator_Mesh_Level_Dict,
-                           stage_callbacks = ())
-
 
 #=
-# S = 8
+# S = 6
 # handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl=4.8)
-dt = 0.00342847820080351092 / (2.0^(InitialRefinement - 4))
-S = 8
-#=
-stepsize_callback = StepsizeCallback(cfl=4.8*2*0.9)
-dt = 0.00708093033754266813 / (2.0^(InitialRefinement - 4)) * CFL
-S = 16
+stepsize_callback = StepsizeCallback(cfl=3.6)
+S = 6
 
+#stepsize_callback = StepsizeCallback(cfl=7.2)
+#S = 12
 
-stepsize_callback = StepsizeCallback(cfl=4.8*4*0.5)
-dt = 0.013813946938685265 / (2.0^(InitialRefinement - 4)) * CFL
-S = 32
-=#
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
                         amr_callback,
                         stepsize_callback)
-
-#=
-# S = 3 = p (similar to SSPRK3,3)
-S = 3
-stepsize_callback = StepsizeCallback(cfl=1.05)
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        alive_callback,
-                        amr_callback,
-                        stepsize_callback)
-
-dt = 0.000730023539508692935 / (2.0^(InitialRefinement - 4))
-=#
 
 ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
 =#
@@ -187,9 +167,10 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
 
 summary_callback() # print the timer summary
 
-plot(sol.u)
+plot(sol)
 pd = PlotData2D(sol)
-plot(pd["v1"], title = "\$v_x, t=0\$")
-plot(getmesh(pd))
+plot(pd["v1"], title = "\$v_x, t_f=0.8\$")
+plot(pd["v2"], title = "\$v_x, t=0\$")
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.8\$")
 
 plot(pd["v2"])
