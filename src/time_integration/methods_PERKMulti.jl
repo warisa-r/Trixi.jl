@@ -120,7 +120,8 @@ mutable struct PERK_Multi{StageCallbacks}
   const NumStages::Int64
   const b1::Float64
   const bS::Float64
-  const LevelCFL::Vector{Float64}
+  #const LevelCFL::Vector{Float64}
+  const LevelCFL::Dict{Int64, Float64}
   const Integrator_Mesh_Level_Dict::Dict{Int64, Int64}
   stage_callbacks::StageCallbacks
 
@@ -133,7 +134,8 @@ mutable struct PERK_Multi{StageCallbacks}
   # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                       BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64,
-                      LevelCFL_::Vector{Float64}, 
+                      #LevelCFL_::Vector{Float64},
+                      LevelCFL_::Dict{Int64, Float64},
                       Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
                       stage_callbacks=())
 
@@ -190,6 +192,7 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   min_lvl::Int64
   max_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
+  dtRef::RealT
 end
 
 # Forward integrator.stats.naccept to integrator.iter (see GitHub PR#771)
@@ -681,7 +684,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, n_levels, min_level, max_level, du_ode_hyp)
+                t0, -1, n_levels, min_level, max_level, du_ode_hyp, dt)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -714,25 +717,36 @@ function solve!(integrator::PERK_Multi_Integrator)
     end
 
     # if the next iteration would push the simulation beyond the end time, set dt accordingly
+    
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
-      dt = t_end - integrator.t
       terminate!(integrator)
     else
-      dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
+      #dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
+      integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
+    
+    #=
+    if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
+      integrator.dt = t_end - integrator.t
+      println(integrator.dt)
+      terminate!(integrator)
+    end
+    =#
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       
       @threaded for i in eachindex(integrator.du)
-        integrator.k1[i] = integrator.du[i] * dt
+        #integrator.k1[i] = integrator.du[i] * dt
+        integrator.k1[i] = integrator.du[i] * integrator.dt
       end
       
-      integrator.t_stage = integrator.t + alg.c[2] * dt
+      #integrator.t_stage = integrator.t + alg.c[2] * dt
+      integrator.t_stage = integrator.t + alg.c[2] * integrator.dt
       # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
       @threaded for i in eachindex(integrator.u)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
@@ -744,7 +758,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
-      #=
+      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -753,17 +767,18 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
-      =#
       
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      
+      =#
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
-        integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
+        #integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
+        integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 
       for stage = 3:alg.NumStages
@@ -772,9 +787,10 @@ function solve!(integrator::PERK_Multi_Integrator)
           integrator.u_tmp[i] = integrator.u[i]
         end
 
+        #=
         for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
           # For tree meshes:
-          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+          #Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
 
           # For structured mesh:
           #Integrator_lvl = alg.Integrator_Mesh_Level_Dict[level]
@@ -789,12 +805,54 @@ function solve!(integrator::PERK_Multi_Integrator)
             end
           end
         end
+        =#
 
-        integrator.t_stage = integrator.t + alg.c[stage] * dt
+        # Hard-coded "three integrators" approach: Fill lower with lowest
+        # level 1
+        @threaded for u_ind in integrator.level_u_indices_elements[1]
+          integrator.u_tmp[u_ind] += alg.AMatrices[1, stage - 2, 1] * integrator.k1[u_ind] + 
+                                     alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
+        end
+
+        # level 2
+        if integrator.n_levels > 1
+          @threaded for u_ind in integrator.level_u_indices_elements[2]
+            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
+          end
+          # TODO Try more efficient way
+          if alg.AMatrices[2, stage - 2, 2] > 0
+            @threaded for u_ind in integrator.level_u_indices_elements[2]
+              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
+            end
+          end
+        end
+
+        # level 3+
+        for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
+          @threaded for u_ind in integrator.level_u_indices_elements[level]
+            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+          end
+
+          # TODO Try more efficient way
+          if alg.AMatrices[3, stage - 2, 2] > 0
+            @threaded for u_ind in integrator.level_u_indices_elements[level]
+              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+            end
+          end
+        end
+
+        #integrator.t_stage = integrator.t + alg.c[stage] * dt
+        integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
         # TODO: Not sure if still valid with dict-based approach
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
+
+        # Note: For hard-coded three level approach
+        if integrator.coarsest_lvl == 3
+          integrator.coarsest_lvl = integrator.n_levels
+        end
+
         # For statically refined meshes:
         #integrator.coarsest_lvl = alg.HighestActiveLevels[stage]
 
@@ -804,7 +862,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
         =#
         
-        #=
+        
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
@@ -814,20 +872,21 @@ function solve!(integrator::PERK_Multi_Integrator)
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.level_u_indices_elements, integrator.coarsest_lvl,
                     integrator.du_ode_hyp)
-        =#
         
+        #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        
+        =#
 
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
+            #integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
+            integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
           end
         end
       end
@@ -847,7 +906,8 @@ function solve!(integrator::PERK_Multi_Integrator)
     end # PERK_Multi step
 
     integrator.iter += 1
-    integrator.t += dt
+    #integrator.t += dt
+    integrator.t += integrator.dt
 
     # handle callbacks
     if callbacks isa CallbackSet
