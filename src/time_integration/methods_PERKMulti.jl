@@ -716,23 +716,13 @@ function solve!(integrator::PERK_Multi_Integrator)
       error("time step size `dt` is NaN")
     end
 
-    # if the next iteration would push the simulation beyond the end time, set dt accordingly
-    
+    # if the next iteration would push the simulation beyond the end time, set dt accordingly   
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
       terminate!(integrator)
     else
-      #dt = integrator.dt * alg.LevelCFL[alg.Integrator_Mesh_Level_Dict[integrator.max_lvl]]
       integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
-    
-    #=
-    if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
-      integrator.dt = t_end - integrator.t
-      println(integrator.dt)
-      terminate!(integrator)
-    end
-    =#
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
@@ -741,11 +731,9 @@ function solve!(integrator::PERK_Multi_Integrator)
       #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       
       @threaded for i in eachindex(integrator.du)
-        #integrator.k1[i] = integrator.du[i] * dt
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
       
-      #integrator.t_stage = integrator.t + alg.c[2] * dt
       integrator.t_stage = integrator.t + alg.c[2] * integrator.dt
       # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
       @threaded for i in eachindex(integrator.u)
@@ -777,7 +765,6 @@ function solve!(integrator::PERK_Multi_Integrator)
                    integrator.level_info_mortars_acc[1])
       =#
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
-        #integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 
@@ -841,7 +828,6 @@ function solve!(integrator::PERK_Multi_Integrator)
           end
         end
 
-        #integrator.t_stage = integrator.t + alg.c[stage] * dt
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
@@ -885,7 +871,6 @@ function solve!(integrator::PERK_Multi_Integrator)
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            #integrator.k_higher[u_ind] = integrator.du[u_ind] * dt
             integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
           end
         end
@@ -906,7 +891,6 @@ function solve!(integrator::PERK_Multi_Integrator)
     end # PERK_Multi step
 
     integrator.iter += 1
-    #integrator.t += dt
     integrator.t += integrator.dt
 
     # handle callbacks

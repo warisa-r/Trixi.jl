@@ -57,7 +57,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 3.5)
+tspan = (0.0, 2.5)
+#tspan = (0.0, 25.0) # Endtime in paper above
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -70,21 +71,22 @@ amr_indicator = IndicatorHennemannGassner(semi,
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=Refinement,
                                       med_level =Refinement+2, med_threshold=0.2,
-                                      max_level =Refinement+4, max_threshold=0.4)
+                                      #max_level =Refinement+5, max_threshold=0.49)
+                                      max_level =Refinement+4, max_threshold=0.49)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=20,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-analysis_interval = 200
+analysis_interval = 100
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         amr_callback)
 
-CFL_Stability = 0.7
-BaseRefinement = 4                        
+CFL_Stability = 1.0
+BaseRefinement = 4
 # S = 4, p = 3, Ref = 4  
 dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
@@ -94,15 +96,27 @@ dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 ###############################################################################
 # run the simulation
 
-ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
-#=
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
+
+
+# Levels 3-7
+LevelCFL = Dict([(4, 4.0), (4, 2.0), (5, 1.0 * 1.0), (6, 0.5 * 1.0), (7, 0.25 * 0.8), (8, 0.125 * 0.7)])
+
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(4, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/",
+                           cS2,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
+                           stage_callbacks = ())
+
+#ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
-=#
 
 
-stepsize_callback = StepsizeCallback(cfl=1.3)
+
+stepsize_callback = StepsizeCallback(cfl=0.8)
 callbacksNonPERK = CallbackSet(summary_callback,
                                stepsize_callback,
                                analysis_callback,
