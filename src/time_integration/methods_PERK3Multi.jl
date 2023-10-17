@@ -603,8 +603,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
       terminate!(integrator)
-    else
-      integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
+    #else
+    #  integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
@@ -681,6 +681,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
                                      alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
         end
 
+        #=
         # level 2
         if integrator.n_levels > 1
           @threaded for u_ind in integrator.level_u_indices_elements[2]
@@ -693,17 +694,22 @@ function solve!(integrator::PERK3_Multi_Integrator)
             end
           end
         end
+        =#
 
         # level 3+
-        for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
+        #for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
+        for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # TODO Try more efficient way
-          if alg.AMatrices[3, stage - 2, 2] > 0
+          #if alg.AMatrices[3, stage - 2, 2] > 0
+          if alg.AMatrices[2, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -715,7 +721,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
         # Note: For hard-coded three level approach
-        if integrator.coarsest_lvl == 3
+        #if integrator.coarsest_lvl == 3
+        if integrator.coarsest_lvl == 2
           integrator.coarsest_lvl = integrator.n_levels
         end
 

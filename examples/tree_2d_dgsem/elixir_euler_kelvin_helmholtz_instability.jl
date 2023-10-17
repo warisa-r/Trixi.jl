@@ -48,6 +48,7 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (-1.0, -1.0)
 coordinates_max = ( 1.0,  1.0)
+# TODO: Try even base refinement 3?
 Refinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
@@ -57,28 +58,28 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.5)
+tspan = (0.0, 3.0)
 #tspan = (0.0, 25.0) # Endtime in paper above
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
 amr_indicator = IndicatorHennemannGassner(semi,
-                                          alpha_max=0.5,
-                                          alpha_min=0.001,
-                                          alpha_smooth=true,
+                                          alpha_max=1.0,
+                                          alpha_min=0.0001,
+                                          alpha_smooth=false,
                                           variable=Trixi.density)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=Refinement,
-                                      med_level =Refinement+2, med_threshold=0.2,
-                                      #max_level =Refinement+5, max_threshold=0.49)
-                                      max_level =Refinement+4, max_threshold=0.49)
+                                      med_level=Refinement+3, med_threshold=0.7, # med_level = current level
+                                      max_level=Refinement+5, max_threshold=0.9)
+
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20,
+                           interval=10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-analysis_interval = 100
+analysis_interval = 500
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 callbacks = CallbackSet(summary_callback,
@@ -98,38 +99,50 @@ dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
 Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 
+# Three level
+LevelCFL = Dict([(4, 4.0), (4, 2.0), (5, 1.0), (6, 0.5), (7, 0.25), (8, 0.125), (9, 1/16 * 0.68)])
 
-# Levels 3-7
-LevelCFL = Dict([(4, 4.0), (4, 2.0), (5, 1.0 * 1.0), (6, 0.5 * 1.0), (7, 0.25 * 0.8), (8, 0.125 * 0.7)])
+# Two level
+LevelCFL = Dict([(4, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 1/8), (8, 1/16), (9, 1/32 * 1.1)])
+
+stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8
+#stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8, 16
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        stepsize_callback,
+                        amr_callback)
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(4, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/",
+ode_algorithm = PERK3_Multi(4, 1, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/",
                            cS2,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-#ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
+#=
+stepsize_callback = StepsizeCallback(cfl=1.6) # S = 4
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        stepsize_callback,
+                        amr_callback)
+
+ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
+=#
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
 
 
-
-stepsize_callback = StepsizeCallback(cfl=0.8)
-callbacksNonPERK = CallbackSet(summary_callback,
-                               stepsize_callback,
-                               analysis_callback,
-                               amr_callback)
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacksNonPERK);
-
-
 plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"])
-plot!(getmesh(pd))
+#=
+plot(pd["rho"], title = "", colorbar_title = "     \$ρ\$", xlabel = "\$x\$", ylabel = "\$y \$", 
+     colorbar_titlefontrotation = 270, colorbar_titlefontsize = 12)
+=#
+plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
 
 summary_callback() # print the timer summary
