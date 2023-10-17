@@ -59,7 +59,7 @@ function pure_and_blended_element_ids!(element_ids_dg, element_ids_dgfv, alpha, 
     empty!(element_ids_dg)
     empty!(element_ids_dgfv)
 
-    @threaded for element in level_info_elements_acc
+    for element in level_info_elements_acc
         # Clip blending factor for values close to zero (-> pure DG)
         dg_only = isapprox(alpha[element], 0, atol = 1e-12)
         if dg_only
