@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 
@@ -72,12 +72,12 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.15)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -93,8 +93,9 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_smooth=false,
                                           variable=density_pressure)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level=4,
-                                      max_level =6, max_threshold=0.01)
+                                      base_level=3,
+                                      med_level =6, med_threshold=0.005,
+                                      max_level =10, max_threshold=0.01)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=6,
                            adapt_initial_condition=true,
@@ -120,3 +121,9 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
 summary_callback() # print the timer summary
+plot(sol)
+
+pd = PlotData2D(sol)
+plot(pd["rho"])
+plot(pd["p"])
+plot!(getmesh(pd))

@@ -74,7 +74,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           #interval=10,
+                           interval=9,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -122,7 +123,7 @@ ode_algorithm = PERK3_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_H
                            stage_callbacks = ())
 
 
-#=
+
 stepsize_callback = StepsizeCallback(cfl=1.1) # S = 3
 stepsize_callback = StepsizeCallback(cfl=1.6) # S = 4
 
@@ -135,12 +136,13 @@ callbacks = CallbackSet(summary_callback,
                         amr_callback)
 
 ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
-=#
+
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
 
+summary_callback() # print the timer summary
 
 plot(sol)
 
@@ -152,4 +154,3 @@ plot(pd["rho"], title = "", colorbar_title = "     \$ρ\$", xlabel = "\$x\$", yl
 plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
 
-summary_callback() # print the timer summary
