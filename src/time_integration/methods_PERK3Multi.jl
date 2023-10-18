@@ -14,8 +14,17 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
   for k in 2:NumStages-2
     c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
   end
+  # Proposed PERK
+  #=
   c[NumStages - 1] = 1.0/3.0
   c[NumStages]     = 1.0
+  =#
+  
+  # Own PERK based on SSPRK33
+  
+  c[NumStages - 1] = 1.0
+  c[NumStages]     = 0.5
+  
   println("Timestep-split: "); display(c); println("\n")
 
   # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
@@ -681,7 +690,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
                                      alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
         end
 
-        #=
+        
         # level 2
         if integrator.n_levels > 1
           @threaded for u_ind in integrator.level_u_indices_elements[2]
@@ -694,22 +703,22 @@ function solve!(integrator::PERK3_Multi_Integrator)
             end
           end
         end
-        =#
+        
 
         # level 3+
-        #for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
-        for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
+        for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
+        #for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
-            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # TODO Try more efficient way
-          #if alg.AMatrices[3, stage - 2, 2] > 0
-          if alg.AMatrices[2, stage - 2, 2] > 0
+          if alg.AMatrices[3, stage - 2, 2] > 0
+          #if alg.AMatrices[2, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
-              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -721,8 +730,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
         # Note: For hard-coded three level approach
-        #if integrator.coarsest_lvl == 3
-        if integrator.coarsest_lvl == 2
+        if integrator.coarsest_lvl == 3
+        #if integrator.coarsest_lvl == 2
           integrator.coarsest_lvl = integrator.n_levels
         end
 
@@ -771,7 +780,11 @@ function solve!(integrator::PERK3_Multi_Integrator)
       end
       
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
+        # Proposed PERK
+        #integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
+
+        # Own PERK based on SSPRK33
+        integrator.u[i] += (integrator.k1[i] + integrator.k_S1[i] + 4.0 * integrator.k_higher[i])/6.0
       end
       
       #=

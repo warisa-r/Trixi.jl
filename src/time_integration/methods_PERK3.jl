@@ -11,8 +11,14 @@ function ComputePERK3_ButcherTableau(NumStages::Int, BasePathMonCoeffs::Abstract
   for k in 2:NumStages-2
     c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
   end
+    # Proposed PERK
+  #=
   c[NumStages - 1] = 1.0/3.0
   c[NumStages]     = 1.0
+  =#
+  # Own PERK based on SSPRK33
+  c[NumStages - 1] = 1.0
+  c[NumStages]     = 0.5
 
   println("Timestep-split: "); display(c); println("\n")
   
@@ -178,6 +184,12 @@ function solve!(integrator::PERK3_Integrator)
       @threaded for i in eachindex(integrator.du)
         integrator.k_higher[i] = integrator.du[i] * integrator.dt
       end
+
+      if alg.NumStages == 3
+        @threaded for i in eachindex(integrator.du)
+          integrator.k_S1[i] = integrator.k_higher[i]
+        end
+      end
       
       # Higher stages
       for stage = 3:alg.NumStages
@@ -205,7 +217,10 @@ function solve!(integrator::PERK3_Integrator)
       end
 
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
+        # Proposed PERK
+        #integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
+        # Own PERK based on SSPRK33
+        integrator.u[i] += (integrator.k1[i] + integrator.k_S1[i] + 4.0 * integrator.k_higher[i])/6.0
       end
     end # PERK step
 

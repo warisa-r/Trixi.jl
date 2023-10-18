@@ -48,7 +48,6 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (-1.0, -1.0)
 coordinates_max = ( 1.0,  1.0)
-# TODO: Try even base refinement 3?
 Refinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
@@ -79,7 +78,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-analysis_interval = 500
+analysis_interval = 50000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 callbacks = CallbackSet(summary_callback,
@@ -91,16 +90,17 @@ BaseRefinement = 4
 # S = 4, p = 3, Ref = 4  
 dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
+# S = 3, p = 3
+dt = 0.0078961056005209686 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
+
 # S = 16, p = 3, Ref = 4
 #dt = 0.0722396842546004376 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
 ###############################################################################
 # run the simulation
 
-Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 
-# Three level
-LevelCFL = Dict([(4, 4.0), (4, 2.0), (5, 1.0), (6, 0.5), (7, 0.25), (8, 0.125), (9, 1/16 * 0.68)])
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 
 # Two level
 LevelCFL = Dict([(4, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 1/8), (8, 1/16), (9, 1/32 * 1.1)])
@@ -108,26 +108,33 @@ LevelCFL = Dict([(4, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 1/8), (8, 1/16), (
 stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8
 #stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8, 16
 
+stepsize_callback = StepsizeCallback(cfl=3.4) # S = 3, 6, 12
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
                         amr_callback)
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(4, 1, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/",
+ode_algorithm = PERK3_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/",
                            cS2,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
+
 #=
+stepsize_callback = StepsizeCallback(cfl=1.1) # S = 3
 stepsize_callback = StepsizeCallback(cfl=1.6) # S = 4
+
+stepsize_callback = StepsizeCallback(cfl=3.805) # S = 12
+# TODO S=8
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
                         amr_callback)
 
-ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/")
+ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 =#
 
 sol = Trixi.solve(ode, ode_algorithm,
