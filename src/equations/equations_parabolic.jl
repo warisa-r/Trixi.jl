@@ -15,3 +15,9 @@ include("compressible_navier_stokes.jl")
 include("compressible_navier_stokes_1d.jl")
 include("compressible_navier_stokes_2d.jl")
 include("compressible_navier_stokes_3d.jl")
+
+# Resistive and visuous MHD
+abstract type AbstractViscoResistiveMhd{NDIMS, NVARS} <:
+              AbstractEquationsParabolic{NDIMS, NVARS} end
+include("visco_resistive_mhd_2d.jl")
+include("visco_resistive_mhd_3d.jl")
