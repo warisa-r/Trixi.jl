@@ -63,29 +63,38 @@ coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
-                n_cells_max=10_000)
+                n_cells_max=10_000,
+                periodicity=false)
 
+# Paper mentioned above uses outflow BCs
+function boundary_condition_outflow(u_inner, orientation, direction, x, t,
+                                    surface_flux_function,
+                                    equations::IdealGlmMhdEquations2D)
 
-semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
+  return surface_flux_function(u_inner, u_inner, orientation, equations)
+end
+
+boundary_conditions = (x_neg=boundary_condition_outflow,
+                       x_pos=boundary_condition_outflow,
+                       y_neg=boundary_condition_outflow,
+                       y_pos=boundary_condition_outflow)
+
+semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
+                                    boundary_conditions=boundary_conditions)
 
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.1)
+tspan = (0.0, 0.15)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 1000
+analysis_interval = 1000 * 8
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
-
-save_solution = SaveSolutionCallback(interval=100,
-                                     save_initial_solution=true,
-                                     save_final_solution=true,
-                                     solution_variables=cons2prim)
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -94,22 +103,29 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           variable=density_pressure)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
-                                      med_level =6, med_threshold=0.005,
-                                      max_level =10, max_threshold=0.01)
+                                      med_level =7, med_threshold=0.005,
+                                      max_level =9, max_threshold=0.25)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=6,
+                           interval=8*40,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-cfl = 0.35
+cfl = 0.5 # S = 3, no AMR
+cfl = 0.06 # S = 3, AMR
+cfl = 0.1 # S = 3, but SSP implementation, AMR
+
+#cfl = 2.0 # S = 10, no AMR
+
+#cfl = 1.6
+#cfl = 0.8 # S = 10, AMR
+
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
-glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
+glm_speed_callback = GlmSpeedCallback(glm_scale=0.8, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         alive_callback,
-                        save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
@@ -117,9 +133,52 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+# p = 3, BaseRef = 3
+
+# S = 3
+dt = 0.0080186414951458575
+
+# S = 4
+dt = 0.019130091787519633
+
+# S = 6
+dt = 0.0509158711698546568
+
+# S = 8
+dt = 0.082571630552411084
+
+# S = 10
+dt = 0.116699115931260173
+
+# S = 12
+#dt = 0.14293596705974779
+
+# For InitialRefinement = 4
+dt *= 0.5 
+
+Stages = [10, 6, 4, 3]
+
+
+LevelCFL = Dict([(42, 42.0)])
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
+
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/", cS2,
+                            LevelCFL, Integrator_Mesh_Level_Dict)
+
+#ode_algorithm = PERK3(3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/")
+
+#=
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = dt,
+                  save_everystep=false, callback=callbacks);
+=#
+
+# Compare to ssp implementation                  
+sol = solve(ode, SSPRK33(),
+            dt=dt,
             save_everystep=false, callback=callbacks);
+
 summary_callback() # print the timer summary
 plot(sol)
 
