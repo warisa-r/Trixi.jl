@@ -101,10 +101,11 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_min=0.001,
                                           alpha_smooth=false,
                                           variable=density_pressure)
+# For density_pressure                                          
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.0041,
-                                      max_level =9, max_threshold=0.25)
+                                      max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=40,
                            adapt_initial_condition=true,
@@ -166,7 +167,7 @@ cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
-ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
 sol = Trixi.solve(ode, ode_algorithm,
@@ -185,4 +186,4 @@ plot(sol)
 pd = PlotData2D(sol)
 plot(pd["rho"])
 plot(pd["p"], title = "\$ p, t_f = 0.15 \$")
-plot(getmesh(pd))
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.15\$")
