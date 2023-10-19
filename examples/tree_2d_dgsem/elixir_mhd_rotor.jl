@@ -91,7 +91,7 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 1000 * 8
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -103,10 +103,10 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           variable=density_pressure)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
-                                      med_level =7, med_threshold=0.005,
+                                      med_level =7, med_threshold=0.0041,
                                       max_level =9, max_threshold=0.25)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=8*40,
+                           interval=40,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -116,8 +116,8 @@ cfl = 0.1 # S = 3, but SSP implementation, AMR
 
 #cfl = 2.0 # S = 10, no AMR
 
-#cfl = 1.6
-#cfl = 0.8 # S = 10, AMR
+cfl = 0.8 # S = 10 AMR, Non-PERK
+#cfl = 0.8 # S = 10, AMR, PERk
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -166,13 +166,13 @@ cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
-#ode_algorithm = PERK3(3, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/")
+#ode_algorithm = PERK3(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/")
 
-#=
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
-=#
+
 
 # Compare to ssp implementation                  
 sol = solve(ode, SSPRK33(),
@@ -184,5 +184,5 @@ plot(sol)
 
 pd = PlotData2D(sol)
 plot(pd["rho"])
-plot(pd["p"])
-plot!(getmesh(pd))
+plot(pd["p"], title = "\$ p, t_f = 0.15 \$")
+plot(getmesh(pd))
