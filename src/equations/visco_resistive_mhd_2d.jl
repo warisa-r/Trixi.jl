@@ -107,8 +107,6 @@
         tau_11 = 4.0 / 3.0 * dv1dx - 2.0 / 3.0 * dv2dy
         # (4/3 * (v2)_y - 2/3 * ((v1)_x + (v3)_z)
         tau_22 = 4.0 / 3.0 * dv2dy - 2.0 / 3.0 * dv1dx
-        # (4/3 * (v3)_z - 2/3 * ((v1)_x + (v2)_y)
-        tau_33 = 4.0 / 3.0 * 0 - 2.0 / 3.0 * (dv1dx + dv2dy)
     
         # Off diagonal parts, exploit that stress tensor is symmetric
         # ((v1)_y + (v2)_x)
