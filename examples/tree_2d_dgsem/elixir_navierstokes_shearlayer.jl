@@ -129,7 +129,7 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", 
+ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/", 
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, 
                            LevelCFL, Integrator_Mesh_Level_Dict,
@@ -151,7 +151,7 @@ callbacks = CallbackSet(summary_callback,
                         amr_callback,
                         stepsize_callback)
 
-ode_algorithm = PERK(S, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_NavierStokes_ShearLayer/", bS, cEnd)
+ode_algorithm = PERK(S, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/", bS, cEnd)
 =#
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);

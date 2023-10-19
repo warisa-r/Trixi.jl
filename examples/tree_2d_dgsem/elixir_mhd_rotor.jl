@@ -117,7 +117,7 @@ cfl = 0.1 # S = 3, but SSP implementation, AMR
 #cfl = 2.0 # S = 10, no AMR
 
 cfl = 0.8 # S = 10 AMR, Non-PERK
-#cfl = 0.8 # S = 10, AMR, PERk
+cfl = 0.8 # S = 10, AMR, PERK
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -163,10 +163,10 @@ LevelCFL = Dict([(42, 42.0)])
 Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/", cS2,
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
-#ode_algorithm = PERK3(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/MHD_Rotor/")
+ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
 sol = Trixi.solve(ode, ode_algorithm,
