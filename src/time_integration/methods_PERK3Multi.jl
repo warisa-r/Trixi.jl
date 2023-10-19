@@ -95,6 +95,75 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
   return AMatrices, c, ActiveLevels, HighestActiveLevels
 end
 
+function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString, 
+                                           cS2::Float64)
+                                     
+  # c Vector form Butcher Tableau (defines timestep per stage)
+  c = zeros(NumStages)
+  for k in 2:NumStages-2
+    c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
+  end
+  # Proposed PERK
+  #=
+  c[NumStages - 1] = 1.0/3.0
+  c[NumStages]     = 1.0
+  =#
+  
+  # Own PERK based on SSPRK33
+  
+  c[NumStages - 1] = 1.0
+  c[NumStages]     = 0.5
+  
+  println("Timestep-split: "); display(c); println("\n")
+
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
+  CoeffsMax = NumStages - 2
+
+  AMatrices = zeros(length(Stages), CoeffsMax, 2)
+  for i = 1:length(Stages)
+    AMatrices[i, :, 1] = c[3:end]
+  end
+
+  # Datastructure indicating at which stage which level is evaluated
+  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  ActiveLevels[1] = 1:length(Stages)
+
+  for level in eachindex(Stages)
+
+    NumStageEvals = Stages[level]
+    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * "_" * string(NumStages) * ".txt"
+    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
+    @assert NumMonCoeffs == NumStageEvals - 2
+
+    AMatrices[level, CoeffsMax - NumStageEvals + 3:end, 1] -= A
+    AMatrices[level, CoeffsMax - NumStageEvals + 3:end, 2]  = A
+
+    # Add active levels to stages
+    # TODO: Might be different for third order!
+    for stage = NumStages:-1:NumStages-NumMonCoeffs
+      push!(ActiveLevels[stage], level)
+    end
+  end
+  HighestActiveLevels = maximum.(ActiveLevels)
+
+  for i = 1:length(Stages)
+    println("A-Matrix of Butcher tableau of level " * string(i))
+    display(AMatrices[i, :, :]); println()
+  end
+
+  println("Check violation of internal consistency")
+  for i = 1:length(Stages)
+    for j = 1:i
+      display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
+    end
+  end
+
+  println("\nActive Levels:"); display(ActiveLevels); println()
+
+  return AMatrices, c, ActiveLevels, HighestActiveLevels
+end
+
 mutable struct PERK3_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
   const NumDoublings::Int64
@@ -109,7 +178,6 @@ mutable struct PERK3_Multi{StageCallbacks}
   ActiveLevels::Vector{Vector{Int64}}
   HighestActiveLevels::Vector{Int64}
 
-  # Constructor for previously computed A Coeffs
   function PERK3_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                        BasePathMonCoeffs_::AbstractString, cS2_::Float64,
                        #LevelCFL_::Vector{Float64},
@@ -128,6 +196,25 @@ mutable struct PERK3_Multi{StageCallbacks}
 
     newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, newPERK3_Multi.HighestActiveLevels = 
       ComputePERK3_Multi_ButcherTableau(NumDoublings_, newPERK3_Multi.NumStages, BasePathMonCoeffs_, cS2_)
+
+    return newPERK3_Multi
+  end
+
+  function PERK3_Multi(Stages_::Vector{Int64},
+                      BasePathMonCoeffs_::AbstractString, cS2_::Float64,
+                      #LevelCFL_::Vector{Float64},
+                      LevelCFL_::Dict{Int64, Float64},
+                      Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
+                      stage_callbacks=())
+
+    newPERK3_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
+                          length(Stages_) - 1,
+                          maximum(Stages_),
+                          LevelCFL_, Integrator_Mesh_Level_Dict_,
+                          stage_callbacks)
+
+    newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, newPERK3_Multi.HighestActiveLevels = 
+      ComputePERK3_Multi_ButcherTableau(Stages_, newPERK3_Multi.NumStages, BasePathMonCoeffs_, cS2_)
 
     return newPERK3_Multi
   end
@@ -703,21 +790,36 @@ function solve!(integrator::PERK3_Multi_Integrator)
             end
           end
         end
+
+        if integrator.n_levels > 2
+          @threaded for u_ind in integrator.level_u_indices_elements[3]
+            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+          end
+          # TODO Try more efficient way
+          if alg.AMatrices[3, stage - 2, 2] > 0
+            @threaded for u_ind in integrator.level_u_indices_elements[3]
+              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+            end
+          end
+        end
         
 
-        # level 3+
-        for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
+        for level in 4:integrator.n_levels # Ensures only relevant levels are evaluated
+        #for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
         #for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 1] * integrator.k1[u_ind]
+            #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
             #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
           end
 
           # TODO Try more efficient way
-          if alg.AMatrices[3, stage - 2, 2] > 0
+          if alg.AMatrices[4, stage - 2, 2] > 0
+          #if alg.AMatrices[3, stage - 2, 2] > 0
           #if alg.AMatrices[2, stage - 2, 2] > 0
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 2] * integrator.k_higher[u_ind]
+              #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
               #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
@@ -730,7 +832,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
         # Note: For hard-coded three level approach
-        if integrator.coarsest_lvl == 3
+        if integrator.coarsest_lvl == 4
+        #if integrator.coarsest_lvl == 3
         #if integrator.coarsest_lvl == 2
           integrator.coarsest_lvl = integrator.n_levels
         end
@@ -834,6 +937,10 @@ u_modified!(integrator::PERK3_Multi_Integrator, ::Bool) = false
 # used by adaptive timestepping algorithms in DiffEq
 function set_proposed_dt!(integrator::PERK3_Multi_Integrator, dt)
   integrator.dt = dt
+end
+
+function get_proposed_dt(integrator::PERK3_Multi_Integrator)
+  return integrator.dt
 end
 
 # stop the time integration

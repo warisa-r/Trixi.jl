@@ -131,7 +131,6 @@ mutable struct PERK_Multi{StageCallbacks}
   HighestActiveLevels::Vector{Int64}
 
   # TODO: Add default values for bS, cEnd
-  # Constructor for previously computed A Coeffs
   function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                       BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64,
                       #LevelCFL_::Vector{Float64},
