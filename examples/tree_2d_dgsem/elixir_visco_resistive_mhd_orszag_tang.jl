@@ -6,6 +6,7 @@ using Trixi
 # semidiscretization of the compressible ideal GLM-MHD equations
 prandtl_number() = 1.0
 
+# Make less diffusive to still have convection-dominated spectra
 #mu() = 1e-2
 mu() = 1e-3
 #eta() = 1e-2
@@ -24,8 +25,6 @@ The classical Orszag-Tang vortex test case. Here, the setup is taken from
 - https://onlinelibrary.wiley.com/doi/pdf/10.1002/fld.4681
 """
 function initial_condition_orszag_tang(x, t, equations::IdealGlmMhdEquations2D)
-  # setup taken from Derigs et al. DMV article (2018)
-  # domain must be [0, 1] x [0, 1], γ = 5/3
   rho = 1.0
   v1 = -2 * sqrt(pi) * sin(x[2])
   v2 =  2 * sqrt(pi) * sin(x[1])
@@ -40,7 +39,9 @@ end
 initial_condition = initial_condition_orszag_tang
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
-volume_flux  = (flux_central, flux_nonconservative_powell)
+
+#volume_flux  = (flux_central, flux_nonconservative_powell)
+volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
 basis = LobattoLegendreBasis(3)
 
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -91,7 +92,8 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-cfl = 0.8
+#cfl = 0.8
+cfl = 1.1
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
