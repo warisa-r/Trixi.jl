@@ -58,7 +58,7 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 coordinates_min = (0.0, 0.0)
 coordinates_max = (2*pi, 2*pi)
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=6,
+                initial_refinement_level=4,
                 n_cells_max=100000)
 
 
@@ -68,8 +68,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.5)
-ode = semidiscretize(semi, tspan)
+tspan = (0.0, 2.0)
+ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
@@ -85,15 +85,18 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           variable=density_pressure)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
-                                      med_level =6, med_threshold=0.005,
-                                      max_level =9, max_threshold=0.1)
+                                      med_level =7, med_threshold=0.04,
+                                      max_level =9, max_threshold=0.4)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-#cfl = 0.8
-cfl = 1.1
+#cfl = 1.1 #CK2N54
+#cfl = 1.9 # p = 2, SBase = 3
+
+cfl = 1.9 # p = 2 S = 12
+
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
@@ -114,10 +117,38 @@ sol = solve(ode, RDPK3SpFSAL49(), dt = 1e-5,
             save_everystep = false, callback = callbacks)
 =#
 
+# S = 3, p = 2 Ref = 4
+dt = 0.0161709425439767083
+
+# S = 4, p = 2 Ref = 4
+#dt = 0.0274786205467535198
+
+LevelCFL = Dict([(42, 42.0)])
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+
+#=
+ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
+                           bS, cEnd,
+                           LevelCFL, Integrator_Mesh_Level_Dict)
+=#
+
+ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
+                     bS, cEnd)
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt,
+                  save_everystep=false, callback=callbacks);
+
+#=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
-           
+=#
+
+
+
 summary_callback() # print the timer summary
 plot(sol)
 

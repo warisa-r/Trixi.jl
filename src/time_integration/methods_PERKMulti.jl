@@ -719,8 +719,8 @@ function solve!(integrator::PERK_Multi_Integrator)
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
       terminate!(integrator)
-    else
-      integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
+    #else
+    #  integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
@@ -929,6 +929,10 @@ u_modified!(integrator::PERK_Multi_Integrator, ::Bool) = false
 # used by adaptive timestepping algorithms in DiffEq
 function set_proposed_dt!(integrator::PERK_Multi_Integrator, dt)
   integrator.dt = dt
+end
+
+function get_proposed_dt(integrator::PERK_Multi_Integrator)
+  return integrator.dt
 end
 
 # stop the time integration

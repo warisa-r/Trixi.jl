@@ -284,6 +284,10 @@ function set_proposed_dt!(integrator::PERK_Integrator, dt)
   integrator.dt = dt
 end
 
+function get_proposed_dt(integrator::PERK_Integrator)
+  return integrator.dt
+end
+
 # stop the time integration
 function terminate!(integrator::PERK_Integrator)
   integrator.finalstep = true
