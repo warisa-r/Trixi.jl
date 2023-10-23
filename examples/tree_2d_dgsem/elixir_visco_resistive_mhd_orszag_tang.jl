@@ -76,7 +76,10 @@ summary_callback = SummaryCallback()
 analysis_interval = 100
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
-alive_callback = AliveCallback(analysis_interval=analysis_interval)
+save_solution = SaveSolutionCallback(interval=10000,
+                                     save_initial_solution=true,
+                                     save_final_solution=true,
+                                     solution_variables=cons2prim)
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -103,7 +106,7 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
+                        save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
@@ -129,15 +132,15 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
-#=
+
 ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
-=#
 
+#=
 ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
                      bS, cEnd)
-
+=#
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 
