@@ -71,7 +71,6 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
     =#
 
     # Add active levels to stages
-    # TODO: Might be different for third order!
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
@@ -140,7 +139,6 @@ function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
     AMatrices[level, CoeffsMax - NumStageEvals + 3:end, 2]  = A
 
     # Add active levels to stages
-    # TODO: Might be different for third order!
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end

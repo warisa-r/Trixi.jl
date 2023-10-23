@@ -115,7 +115,7 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 3
+PolyDeg = 8
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 
@@ -134,11 +134,13 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 tspan = (0.0, 2*EdgeLength)
 #tspan = (0.0, 0) # Find out minimal error (based on initial distribution)
+tspan= (0.0, 0.5)
+
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 10000
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      extra_analysis_errors=(:conservation_error, :l1_error))
 
@@ -152,13 +154,15 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
 
 CFL_Convergence = 1.0
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=5, # 5 for highest level, adjust for fewer stages accordingly
+                           #interval=5, # 5 for highest level, adjust for fewer stages accordingly
+                           interval=10,
                            # For convergence study
                            #interval=Int(20/CFL_Convergence), 
                            adapt_initial_condition=true)
 
 callbacksPERK = CallbackSet(summary_callback,
-                            analysis_callback, alive_callback, amr_callback)                
+                            analysis_callback, alive_callback,
+                            amr_callback)                
 
 ###############################################################################
 # run the simulation
@@ -203,6 +207,7 @@ ode_algorithm = PERK_Multi(NumBaseStages, NumDoublings,
                            stage_callbacks = ())
 =#
 
+#=
 LevelCFL = [0.47, 1.0, 1.0] # S = {4,8,16} p = 2, d = 2
 #LevelCFL = [0.5, 1.0, 1.0] # S = {4,8,16} p = 2, d = 6
 cS2 = 1.0 # = c_{S-2}
@@ -212,7 +217,7 @@ ode_algorithm = PERK3_Multi(NumBaseStages, NumDoublings,
                            cS2,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
-
+=#
 
 #=
 ode_algorithm = PERK(3, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg2/", bS, cEnd)
@@ -224,13 +229,26 @@ ode_algorithm = PERK3(4, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_Isen
 CFL = 0.5 * 0.25 # S = 16, p = 3
 =#
 
-#dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
+# S = 6, p = 4, combined A
+dtRefBase = 0.05
 
-#=
+Stages = [8, 6]
+LevelCFL = Dict([(42, 42.0)])
+cS2 = 1.0
+ode_algorithm = PERK4_Multi(Stages, 
+                           "/home/daniel/git/MA/PERK/4thOrder/",
+                           cS2,
+                           LevelCFL, Integrator_Mesh_Level_Dict,
+                           stage_callbacks = ())
+
+CFL = 0.1 * 0.5
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
+
+
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
                   save_everystep=false, callback=callbacksPERK);
-=#
+
 
 #sol = solve(ode, SSPRK22(), dt = 1e-3, save_everystep=false, callback=callbacksPERK);
 sol = solve(ode, SSPRK33(), dt = 2e-3, save_everystep=false, callback=callbacksPERK);
