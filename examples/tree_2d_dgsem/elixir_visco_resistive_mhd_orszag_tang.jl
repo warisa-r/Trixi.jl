@@ -12,7 +12,8 @@ mu() = 1e-3
 #eta() = 1e-2
 eta() = 1e-3
 
-equations = IdealGlmMhdEquations2D(5/3)
+gamma = 5/3
+equations = IdealGlmMhdEquations2D(gamma)
 equations_parabolic = ViscoResistiveMhd2D(equations, mu = mu(),
                                           Prandtl = prandtl_number(),
                                           eta = eta(),
@@ -106,7 +107,7 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        save_solution,
+                        #save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
@@ -158,4 +159,5 @@ plot(sol)
 pd = PlotData2D(sol)
 plot(pd["rho"])
 plot(pd["p"])
+plot(pd["B1"])
 plot!(getmesh(pd))
