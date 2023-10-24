@@ -115,7 +115,7 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 8
+PolyDeg = 6
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 
@@ -241,7 +241,7 @@ ode_algorithm = PERK4_Multi(Stages,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-CFL = 0.1 * 0.5
+CFL = 0.3 * 0.25
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
 
 
