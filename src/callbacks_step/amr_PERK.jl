@@ -5,7 +5,9 @@
 @muladd begin
 
 # Custom implementation for PERK integrator
-function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator, PERK3_Multi_Integrator}; kwargs...)
+function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator, 
+                                                       PERK3_Multi_Integrator,
+                                                       PERK4_Multi_Integrator}; kwargs...)
   u_ode = integrator.u
   semi = integrator.p
 
@@ -150,7 +152,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator, PE
               end
             end 
           end
-        end
+        end # 1:n_boundaries
         @assert length(integrator.level_info_boundaries_acc[end]) == 
           n_boundaries "highest level should contain all boundaries"
 
