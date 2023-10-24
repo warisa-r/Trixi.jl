@@ -89,11 +89,6 @@ amr_indicator = IndicatorLöhner(semi, variable=v1)
 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
-                                      med_level  = InitialRefinement+2, med_threshold=0.15,
-                                      max_level  = InitialRefinement+4, max_threshold=0.45)
-
-amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level = InitialRefinement,
                                       med_level  = InitialRefinement+4, med_threshold=0.15,
                                       max_level  = InitialRefinement+6, max_threshold=0.45)
 
