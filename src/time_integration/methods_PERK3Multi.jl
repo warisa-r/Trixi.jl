@@ -256,6 +256,7 @@ mutable struct PERK3_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, P
   max_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
   dtRef::RealT
+  AddRHSCalls::Int64
 end
 
 # Forward integrator.stats.naccept to integrator.iter (see GitHub PR#771)
@@ -661,7 +662,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, n_levels, min_level, max_level, du_ode_hyp, dt)
+                t0, -1, n_levels, min_level, max_level, du_ode_hyp, dt, 0)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -919,6 +920,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
       terminate!(integrator)
     end
   end # "main loop" timer
+
+  println("Additional RHS Calls: ", integrator.AddRHSCalls)
   
   return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                 (prob.u0, integrator.u),

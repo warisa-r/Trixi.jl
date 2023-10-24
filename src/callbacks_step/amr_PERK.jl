@@ -83,6 +83,12 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
         @assert length(integrator.level_info_elements_acc[end]) == 
           n_elements "highest level should contain all elements"
 
+        # NOTE: Additional RHS Call computation
+        integrator_levels = 3 # CARE: Hard-coded to three-level PERK
+        for level = integrator_levels+1:n_levels 
+          integrator.AddRHSCalls += amr_callback.interval * 2^(level - integrator_levels) * length(integrator.level_info_elements[level])
+        end
+
 
         # Determine level for each interface
         for interface_id in 1:n_interfaces

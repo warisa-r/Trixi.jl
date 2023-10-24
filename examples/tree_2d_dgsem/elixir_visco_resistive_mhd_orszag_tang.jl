@@ -138,10 +138,10 @@ ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spe
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 
-#=
+
 ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
                      bS, cEnd)
-=#
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 
