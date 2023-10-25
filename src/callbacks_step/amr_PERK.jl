@@ -85,8 +85,16 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
         # NOTE: Additional RHS Call computation
         integrator_levels = 3 # CARE: Hard-coded to three-level PERK
-        for level = integrator_levels+1:n_levels 
-          integrator.AddRHSCalls += amr_callback.interval * 2^(level - integrator_levels) * length(integrator.level_info_elements[level])
+        integrator_NumStages_lowest = 3 # CARE: Hard-coded to min Evals = 3
+        for level = integrator_levels+1:n_levels
+          #=
+          integrator.AddRHSCalls += amr_callback.interval * 
+                                    (2^(level - integrator_levels) - 1) * integrator_NumStages_lowest * 
+                                    length(integrator.level_info_elements[level])
+          =#
+          integrator.AddRHSCalls += amr_callback.interval * 
+                                    (1 - 2.0^(integrator_levels - level)) * integrator_NumStages_lowest * 
+                                    length(integrator.level_info_elements[level])
         end
 
 
