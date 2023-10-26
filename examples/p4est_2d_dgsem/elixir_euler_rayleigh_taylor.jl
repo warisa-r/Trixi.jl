@@ -4,7 +4,8 @@ using Trixi, OrdinaryDiffEq, Plots
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 
-equations = CompressibleEulerEquations2D(1.4)
+gamma = 5/3
+equations = CompressibleEulerEquations2D(gamma)
 
 """
     initial_condition_rayleigh_taylor_instability(coordinates, t, equations::CompressibleEulerEquations2D)
@@ -51,6 +52,24 @@ defined below.
   return prim2cons(SVector(rho, u, v, p), equations)
 end
 
+@inline function boundary_condition_dirichlet_top(x, t,
+                                                  equations::CompressibleEulerEquations2D)
+  rho = 1.0
+  u = 0.0
+  v = 0.0
+  p = 2.5
+  return prim2cons(SVector(rho, u, v, p), equations)
+end
+
+@inline function boundary_condition_dirichlet_bottom(x, t,
+                                                     equations::CompressibleEulerEquations2D)
+  rho = 2.0
+  u = 0.0
+  v = 0.0
+  p = 1.0
+  return prim2cons(SVector(rho, u, v, p), equations)
+end
+
 @inline function source_terms_rayleigh_taylor_instability(u, x, t,
                                                           equations::CompressibleEulerEquations2D)
   g = 1.0
@@ -59,25 +78,37 @@ end
   return SVector(0.0, 0.0, g*rho, g*rho_v2)
 end
 
-# Create DG solver with polynomial degree = 3 and (local) Lax-Friedrichs/Rusanov flux as surface flux
-solver = DGSEM(polydeg=3, surface_flux=flux_hll,
-               volume_integral = VolumeIntegralFluxDifferencing(flux_ranocha))
+polydeg = 3
+basis = LobattoLegendreBasis(polydeg)
 
-num_elements = 32
+volume_flux = flux_ranocha_turbo
+surface_flux = flux_hll
+shock_indicator = IndicatorHennemannGassner(equations, basis,
+                                            alpha_max=0.5,
+                                            alpha_min=0.001,
+                                            alpha_smooth=true,
+                                            variable=density_pressure)
+volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
+                                                 volume_flux_dg=volume_flux,
+                                                 volume_flux_fv=surface_flux)
+solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
+
+num_elements = 12
 trees_per_dimension = (num_elements, 4 * num_elements)
 mesh = P4estMesh(trees_per_dimension,
-                 polydeg=1, initial_refinement_level=0,
+                 polydeg=3, initial_refinement_level=0,
                  coordinates_min=(0.0, 0.0), coordinates_max=(0.25, 1.0),
                  periodicity=false)
+                 #periodicity=(true, false))
 
 initial_condition = initial_condition_rayleigh_taylor_instability
 
 boundary_conditions = Dict( :x_neg => boundary_condition_slip_wall,
-                            #:x_neg => boundary_condition_periodic,
                             :y_neg => boundary_condition_slip_wall,
+                            #:y_neg => BoundaryConditionDirichlet(boundary_condition_dirichlet_bottom),
+                            #:y_pos => BoundaryConditionDirichlet(boundary_condition_dirichlet_top),
                             :y_pos => boundary_condition_slip_wall,
                             :x_pos => boundary_condition_slip_wall
-                            #:x_pos => boundary_condition_periodic
                             )
 
 #=                            
@@ -95,7 +126,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 
 semi = SemidiscretizationHyperbolic(mesh, equations,
                                     initial_condition, solver;
-                                    boundary_conditions=boundary_conditions)
+                                    boundary_conditions=boundary_conditions,
+                                    source_terms = source_terms_rayleigh_taylor_instability)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -105,17 +137,34 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 500
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl=1.5)
+stepsize_callback = StepsizeCallback(cfl=1.0)
+
+amr_indicator = IndicatorHennemannGassner(semi,
+                                          alpha_max=0.5,
+                                          alpha_min=0.001,
+                                          alpha_smooth=true,
+                                          variable=Trixi.density)
+
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level=0,
+                                      med_level =3, med_threshold=0.00125,
+                                      max_level =6, max_threshold=0.0025)
+
+amr_callback = AMRCallback(semi, amr_controller,
+                           interval=10,
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
 
 callbacks = CallbackSet(summary_callback,
-                        #analysis_callback,
-                        alive_callback,
-                        stepsize_callback)
+                        analysis_callback,
+                        stepsize_callback,
+                        amr_callback,
+                        alive_callback)
 
 ###############################################################################
 # run the simulation
@@ -130,9 +179,10 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
 
+
 summary_callback() # print the timer summary
 plot(sol)
 
 pd = PlotData2D(sol)
-
 plot(pd["rho"])
+plot!(getmesh(pd))
