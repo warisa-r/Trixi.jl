@@ -1459,10 +1459,11 @@ function flux_hlle(u_ll, u_rr, normal_direction::AbstractVector,
     sqrt_rho_rr = sqrt(rho_rr)
     inv_sum_sqrt_rho = inv(sqrt_rho_ll + sqrt_rho_rr)
 
-    v_roe = (sqrt_rho_ll * v_dot_n_ll + sqrt_rho_rr * v_dot_n_rr) * inv_sum_sqrt_rho
     v1_roe = (sqrt_rho_ll * v1_ll + sqrt_rho_rr * v1_rr) * inv_sum_sqrt_rho
     v2_roe = (sqrt_rho_ll * v2_ll + sqrt_rho_rr * v2_rr) * inv_sum_sqrt_rho
     v3_roe = (sqrt_rho_ll * v3_ll + sqrt_rho_rr * v3_rr) * inv_sum_sqrt_rho
+    v_roe = v1_roe * normal_direction[1] + v2_roe * normal_direction[2] +
+            v3_roe * normal_direction[3]
     v_roe_mag = v1_roe^2 + v2_roe^2 + v3_roe^2
 
     H_roe = (sqrt_rho_ll * H_ll + sqrt_rho_rr * H_rr) * inv_sum_sqrt_rho
