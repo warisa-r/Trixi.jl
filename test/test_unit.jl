@@ -897,6 +897,53 @@ isdir(outdir) && rm(outdir, recursive=true)
     end
   end
 
+  @timed_testset "Consistency check for HLLE flux: CEE" begin
+    # Set up equations and dummy conservative variables state
+    equations = CompressibleEulerEquations1D(1.4)
+    u = SVector(1.1, 2.34, 5.5)
+
+    orientations = [1]
+    for orientation in orientations
+      @test flux_hllc(u, u, orientation, equations) ≈ flux(u, orientation, equations)
+    end
+
+    equations = CompressibleEulerEquations2D(1.4)
+    u = SVector(1.1, -0.5, 2.34, 5.5)
+
+    orientations = [1, 2]
+    for orientation in orientations
+      @test flux_hllc(u, u, orientation, equations) ≈ flux(u, orientation, equations)
+    end
+
+    normal_directions = [SVector(1.0, 0.0),
+                          SVector(0.0, 1.0),
+                          SVector(0.5, -0.5),
+                          SVector(-1.2, 0.3)]
+
+    for normal_direction in normal_directions
+      @test flux_hllc(u, u, normal_direction, equations) ≈ flux(u, normal_direction, equations)
+    end
+
+    equations = CompressibleEulerEquations3D(1.4)
+    u = SVector(1.1, -0.5, 2.34, 2.4, 5.5)
+
+    orientations = [1, 2, 3]
+    for orientation in orientations
+      @test flux_hllc(u, u, orientation, equations) ≈ flux(u, orientation, equations)
+    end
+    #=
+    normal_directions = [SVector(1.0, 0.0, 0.0),
+                        SVector(0.0, 1.0, 0.0),
+                        SVector(0.0, 0.0, 1.0),
+                        SVector(0.5, -0.5, 0.2),
+                        SVector(-1.2, 0.3, 1.4)]
+
+    for normal_direction in normal_directions
+      @test flux_hllc(u, u, normal_direction, equations) ≈ flux(u, normal_direction, equations)
+    end
+    =#
+  end
+
   @timed_testset "Consistency check for HLLE flux: SWE" begin
     # Test HLL flux with min_max_speed_einfeldt
     flux_hll = FluxHLL(min_max_speed_einfeldt)
