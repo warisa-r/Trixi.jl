@@ -1252,6 +1252,106 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
     return SVector(f1, f2, f3, f4)
 end
 
+# CARE: Not working!
+"""
+    flux_hllc(u_ll, u_rr, normal_direction, equations::CompressibleEulerEquations2D)
+
+Computes the HLLC flux (HLL with Contact) for compressible Euler equations developed by E.F. Toro
+[Lecture slides](http://www.prague-sum.com/download/2012/Toro_2-HLLC-RiemannSolver.pdf)
+Signal speeds: [DOI: 10.1137/S1064827593260140](https://doi.org/10.1137/S1064827593260140)
+"""
+function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
+                   equations::CompressibleEulerEquations2D)
+    # Calculate primitive variables and speed of sound
+    rho_ll, rho_v1_ll, rho_v2_ll, rho_e_ll = u_ll
+    rho_rr, rho_v1_rr, rho_v2_rr, rho_e_rr = u_rr
+
+    v1_ll = rho_v1_ll / rho_ll
+    v2_ll = rho_v2_ll / rho_ll
+    e_ll = rho_e_ll / rho_ll
+    p_ll = (equations.gamma - 1) * (rho_e_ll - 1 / 2 * rho_ll * (v1_ll^2 + v2_ll^2))
+    c_ll = sqrt(equations.gamma * p_ll / rho_ll)
+
+    v1_rr = rho_v1_rr / rho_rr
+    v2_rr = rho_v2_rr / rho_rr
+    e_rr = rho_e_rr / rho_rr
+    p_rr = (equations.gamma - 1) * (rho_e_rr - 1 / 2 * rho_rr * (v1_rr^2 + v2_rr^2))
+    c_rr = sqrt(equations.gamma * p_rr / rho_rr)
+
+    v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+    v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+
+    # Obtain left and right fluxes
+    f_ll = flux(u_ll, normal_direction, equations)
+    f_rr = flux(u_rr, normal_direction, equations)
+
+    # Compute Roe averages
+    sqrt_rho_ll = sqrt(rho_ll)
+    sqrt_rho_rr = sqrt(rho_rr)
+    sum_sqrt_rho = sqrt_rho_ll + sqrt_rho_rr
+
+    ekin_roe = (sqrt_rho_ll * v1_ll * normal_direction[2] + v2_ll * normal_direction[1] + 
+                sqrt_rho_rr * v1_rr * normal_direction[2] + v2_rr * normal_direction[1])^2
+    vel_roe = (sqrt_rho_ll * v_dot_n_ll + sqrt_rho_rr * v_dot_n_rr) / sum_sqrt_rho
+    ekin_roe = 0.5 * (vel_roe^2 + ekin_roe / sum_sqrt_rho^2)
+
+    H_ll = (rho_e_ll + p_ll) / rho_ll
+    H_rr = (rho_e_rr + p_rr) / rho_rr
+    H_roe = (sqrt_rho_ll * H_ll + sqrt_rho_rr * H_rr) / sum_sqrt_rho
+    
+    c_roe = sqrt((equations.gamma - 1) * (H_roe - ekin_roe))
+    Ssl = min(v_dot_n_ll - c_ll, vel_roe - c_roe)
+    Ssr = max(v_dot_n_rr + c_rr, vel_roe + c_roe)
+    sMu_L = Ssl - v_dot_n_ll
+    sMu_R = Ssr - v_dot_n_rr
+
+    if Ssl >= 0.0
+        f1 = f_ll[1]
+        f2 = f_ll[2]
+        f3 = f_ll[3]
+        f4 = f_ll[4]
+    elseif Ssr <= 0.0
+        f1 = f_rr[1]
+        f2 = f_rr[2]
+        f3 = f_rr[3]
+        f4 = f_rr[4]
+    else
+        SStar = (p_rr - p_ll + rho_ll * v_dot_n_ll * sMu_L - rho_rr * v_dot_n_rr * sMu_R) /
+                (rho_ll * sMu_L - rho_rr * sMu_R)
+        if Ssl <= 0.0 <= SStar
+            densStar = rho_ll * sMu_L / (Ssl - SStar)
+            enerStar = e_ll + (SStar - v_dot_n_ll) * (SStar + p_ll / (rho_ll * sMu_L))
+            UStar1 = densStar
+            UStar2 = densStar * (SStar * normal_direction[1] + v1_ll * normal_direction[2])
+
+            UStar3 = densStar * (SStar * normal_direction[2] + v2_ll * normal_direction[1])
+            #UStar3 = densStar * (SStar * normal_direction[2] + v_dot_n_ll)
+            UStar4 = densStar * enerStar
+            f1 = f_ll[1] + Ssl * (UStar1 - rho_ll)
+            f2 = f_ll[2] + Ssl * (UStar2 - rho_v1_ll)
+            f3 = f_ll[3] + Ssl * (UStar3 - rho_v2_ll)
+            f4 = f_ll[4] + Ssl * (UStar4 - rho_e_ll)
+        else
+            densStar = rho_rr * sMu_R / (Ssr - SStar)
+            enerStar = e_rr + (SStar - v_dot_n_rr) * (SStar + p_rr / (rho_rr * sMu_R))
+            UStar1 = densStar
+            UStar2 = densStar * (SStar * normal_direction[1] + v1_rr * normal_direction[2])
+            #UStar2 = densStar * (SStar + v1_rr * normal_direction[2])
+            #UStar2 = densStar * (SStar * normal_direction[1] + v_dot_n_rr)
+
+            UStar3 = densStar * (SStar * normal_direction[2] + v2_rr * normal_direction[1])
+            #UStar3 = densStar * (SStar + v2_rr * normal_direction[1])
+            #UStar3 = densStar * (SStar * normal_direction[2] + v_dot_n_rr)
+            UStar4 = densStar * enerStar
+            f1 = f_rr[1] + Ssr * (UStar1 - rho_rr)
+            f2 = f_rr[2] + Ssr * (UStar2 - rho_v1_rr)
+            f3 = f_rr[3] + Ssr * (UStar3 - rho_v2_rr)
+            f4 = f_rr[4] + Ssr * (UStar4 - rho_e_rr)
+        end
+    end
+    return SVector(f1, f2, f3, f4)
+end
+
 """
     flux_hlle(u_ll, u_rr, orientation, equations::CompressibleEulerEquations2D)
 
@@ -1327,6 +1427,96 @@ function flux_hlle(u_ll, u_rr, orientation::Integer,
         # Compute left and right fluxes
         f_ll = flux(u_ll, orientation, equations)
         f_rr = flux(u_rr, orientation, equations)
+
+        f1 = (SsR * f_ll[1] - SsL * f_rr[1] + SsL * SsR * (u_rr[1] - u_ll[1])) /
+             (SsR - SsL)
+        f2 = (SsR * f_ll[2] - SsL * f_rr[2] + SsL * SsR * (u_rr[2] - u_ll[2])) /
+             (SsR - SsL)
+        f3 = (SsR * f_ll[3] - SsL * f_rr[3] + SsL * SsR * (u_rr[3] - u_ll[3])) /
+             (SsR - SsL)
+        f4 = (SsR * f_ll[4] - SsL * f_rr[4] + SsL * SsR * (u_rr[4] - u_ll[4])) /
+             (SsR - SsL)
+    end
+
+    return SVector(f1, f2, f3, f4)
+end
+
+"""
+    flux_hlle(u_ll, u_rr, normal_direction, equations::CompressibleEulerEquations2D)
+
+Computes the HLLE (Harten-Lax-van Leer-Einfeldt) flux for the compressible Euler equations.
+Special estimates of the signal velocites and linearization of the Riemann problem developed
+by Einfeldt to ensure that the internal energy and density remain positive during the computation
+of the numerical flux.
+
+- Bernd Einfeldt (1988)
+  On Godunov-type methods for gas dynamics.
+  [DOI: 10.1137/0725021](https://doi.org/10.1137/0725021)
+- Bernd Einfeldt, Claus-Dieter Munz, Philip L. Roe and Björn Sjögreen (1991)
+  On Godunov-type methods near low densities.
+  [DOI: 10.1016/0021-9991(91)90211-3](https://doi.org/10.1016/0021-9991(91)90211-3)
+"""
+function flux_hlle(u_ll, u_rr, normal_direction::AbstractVector,
+                   equations::CompressibleEulerEquations2D)
+    # Calculate primitive variables, enthalpy and speed of sound
+    rho_ll, v1_ll, v2_ll, p_ll = cons2prim(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, p_rr = cons2prim(u_rr, equations)
+
+    v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+    v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+
+    norm_ = norm(normal_direction)
+
+    # `u_ll[4]` is total energy `rho_e_ll` on the left
+    H_ll = (u_ll[4] + p_ll) / rho_ll
+    c_ll = sqrt(equations.gamma * p_ll / rho_ll) * norm_
+
+    # `u_rr[4]` is total energy `rho_e_rr` on the right
+    H_rr = (u_rr[4] + p_rr) / rho_rr
+    c_rr = sqrt(equations.gamma * p_rr / rho_rr) * norm_
+
+    # Compute Roe averages
+    sqrt_rho_ll = sqrt(rho_ll)
+    sqrt_rho_rr = sqrt(rho_rr)
+    inv_sum_sqrt_rho = inv(sqrt_rho_ll + sqrt_rho_rr)
+    
+    v1_roe = (sqrt_rho_ll * v1_ll + sqrt_rho_rr * v1_rr) * inv_sum_sqrt_rho
+    v2_roe = (sqrt_rho_ll * v2_ll + sqrt_rho_rr * v2_rr) * inv_sum_sqrt_rho
+    v_roe = v1_roe * normal_direction[1] + v2_roe * normal_direction[2]
+    v_roe_mag = (v1_roe * normal_direction[1])^2 + (v2_roe * normal_direction[2])^2
+
+    H_roe = (sqrt_rho_ll * H_ll + sqrt_rho_rr * H_rr) * inv_sum_sqrt_rho
+    c_roe = sqrt((equations.gamma - 1) * (H_roe - 0.5 * v_roe_mag)) * norm_
+
+    # Compute convenience constant for positivity preservation, see
+    # https://doi.org/10.1016/0021-9991(91)90211-3
+    beta = sqrt(0.5 * (equations.gamma - 1) / equations.gamma)
+
+    # Estimate the edges of the Riemann fan (with positivity conservation)
+    SsL = min(v_roe - c_roe, v_dot_n_ll - beta * c_ll, zero(v_roe))
+    SsR = max(v_roe + c_roe, v_dot_n_rr + beta * c_rr, zero(v_roe))
+
+    if SsL >= 0.0 && SsR > 0.0
+        # Positive supersonic speed
+        f_ll = flux(u_ll, normal_direction, equations)
+
+        f1 = f_ll[1]
+        f2 = f_ll[2]
+        f3 = f_ll[3]
+        f4 = f_ll[4]
+    elseif SsR <= 0.0 && SsL < 0.0
+        # Negative supersonic speed
+        f_rr = flux(u_rr, normal_direction, equations)
+
+        f1 = f_rr[1]
+        f2 = f_rr[2]
+        f3 = f_rr[3]
+        f4 = f_rr[4]
+    else
+        # Subsonic case
+        # Compute left and right fluxes
+        f_ll = flux(u_ll, normal_direction, equations)
+        f_rr = flux(u_rr, normal_direction, equations)
 
         f1 = (SsR * f_ll[1] - SsL * f_rr[1] + SsL * SsR * (u_rr[1] - u_ll[1])) /
              (SsR - SsL)
