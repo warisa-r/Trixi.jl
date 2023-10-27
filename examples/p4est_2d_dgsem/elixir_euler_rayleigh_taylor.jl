@@ -82,7 +82,7 @@ polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
 
 volume_flux = flux_ranocha_turbo
-surface_flux = flux_hll
+surface_flux = flux_hlle # flux_hllc
 shock_indicator = IndicatorHennemannGassner(equations, basis,
                                             alpha_max=0.5,
                                             alpha_min=0.001,
@@ -93,7 +93,8 @@ volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
                                                  volume_flux_fv=surface_flux)
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
-num_elements = 12
+#num_elements = 12
+num_elements = 4
 trees_per_dimension = (num_elements, 4 * num_elements)
 mesh = P4estMesh(trees_per_dimension,
                  polydeg=3, initial_refinement_level=0,
