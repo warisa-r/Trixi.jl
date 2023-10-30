@@ -81,7 +81,7 @@ end
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
 
-volume_flux = flux_ranocha_turbo
+volume_flux = flux_ranocha
 surface_flux = flux_hlle # flux_hllc
 shock_indicator = IndicatorHennemannGassner(equations, basis,
                                             alpha_max=0.5,
@@ -93,8 +93,8 @@ volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
                                                  volume_flux_fv=surface_flux)
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
-#num_elements = 12
-num_elements = 4
+num_elements = 12
+#num_elements = 4
 trees_per_dimension = (num_elements, 4 * num_elements)
 mesh = P4estMesh(trees_per_dimension,
                  polydeg=3, initial_refinement_level=0,
@@ -133,7 +133,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 3.0)
+tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -175,11 +175,32 @@ sol = solve(ode, RDPK3SpFSAL49(); abstol=1.0e-6, reltol=1.0e-6,
             ode_default_options()..., callback=callbacks);
 =#
 
+# S = 3, p = 2
+dt = 0.00142227114120032641
+# S = 10 p = 2
+dt = 0.00656249996216502054
 
+LevelCFL = Dict([(42, 42.0)])
+Integrator_Mesh_Level_Dict = Dict([(42, 42)])
+b1   = 0.0
+bS   = 1.0 - b1
+cEnd = 0.5/bS
+
+Stages = [10, 5, 3]
+
+ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/",
+                           bS, cEnd,
+                           LevelCFL, Integrator_Mesh_Level_Dict)
+
+
+sol = Trixi.solve(ode, ode_algorithm, dt = dt,
+                  save_everystep=false, callback=callbacks)
+
+#=                           
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
             dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep=false, callback=callbacks);
-
+=#
 
 summary_callback() # print the timer summary
 plot(sol)
