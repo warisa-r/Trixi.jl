@@ -102,6 +102,88 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 end
 
 
+function ComputePERK_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString, 
+                                          bS::Float64, cEnd::Float64)
+                                     
+  # c Vector form Butcher Tableau (defines timestep per stage)
+  c = zeros(Float64, NumStages)
+  
+  for k in 2:NumStages
+    c[k] = cEnd * (k - 1)/(NumStages - 1)
+  end
+  
+  # CARE: Deliberately using negative timestep to have bad TV properties
+  #=
+  for k in 2:NumStages
+    c[k] = -1 * cEnd * (k - 1)/(NumStages - 1)
+  end
+  c[NumStages] = cEnd
+  =#
+  println("Timestep-split: "); display(c); println("\n")
+
+  SE_Factors = bS * reverse(c[2:end-1])
+
+  # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
+  CoeffsMax = NumStages - 2
+
+  NumMethods = length(Stages)
+  AMatrices = zeros(NumMethods, CoeffsMax, 2)
+  for i = 1:NumMethods
+    AMatrices[i, :, 1] = c[3:end]
+  end
+
+  # Datastructure indicating at which stage which level is evaluated
+  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  ActiveLevels[1] = 1:NumMethods
+
+  for level in eachindex(Stages)
+    
+    NumStageEvals = Stages[level]
+    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(NumStageEvals) * ".txt"
+    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
+    @assert NumMonCoeffs == NumStageEvals - 2
+    A = ComputeACoeffs(NumStageEvals, SE_Factors, MonCoeffs)
+
+    AMatrices[level, CoeffsMax - (NumStageEvals - 3):end, 1] -= A
+    AMatrices[level, CoeffsMax - (NumStageEvals - 3):end, 2]  = A
+    
+
+    #=
+    # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
+    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
+    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
+    @assert NumMonCoeffs == NumStages - 2*level
+    A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
+
+    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
+    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
+    =#
+
+    # Add active levels to stages
+    for stage = NumStages:-1:NumStages-NumMonCoeffs
+      push!(ActiveLevels[stage], level)
+    end
+  end
+  HighestActiveLevels = maximum.(ActiveLevels)
+
+  for i = 1:NumMethods
+    println("A-Matrix of Butcher tableau of level " * string(i))
+    display(AMatrices[i, :, :]); println()
+  end
+
+  println("Check violation of internal consistency")
+  for i = 1:NumMethods
+    for j = 1:i
+      display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
+    end
+  end
+
+  println("\nActive Levels:"); display(ActiveLevels); println()
+
+  return AMatrices, c, ActiveLevels, HighestActiveLevels
+end
+
 """
     PERK_Multi()
 
@@ -153,6 +235,26 @@ mutable struct PERK_Multi{StageCallbacks}
 
     return newPERK_Multi
   end
+
+  function PERK_Multi(Stages_::Vector{Int64},
+                      BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64,
+                      #LevelCFL_::Vector{Float64},
+                      LevelCFL_::Dict{Int64, Float64},
+                      Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
+                      stage_callbacks=())
+
+    newPERK_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
+                          length(Stages_) - 1,
+                          maximum(Stages_),
+                          1.0-bS_, bS_,
+                          LevelCFL_, Integrator_Mesh_Level_Dict_,
+                          stage_callbacks)
+
+    newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, newPERK_Multi.HighestActiveLevels = 
+      ComputePERK_Multi_ButcherTableau(Stages_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
+
+    return newPERK_Multi
+  end
 end # struct PERK_Multi
 
 
@@ -188,8 +290,6 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   t_stage::RealT
   coarsest_lvl::Int64
   n_levels::Int64
-  min_lvl::Int64
-  max_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
   dtRef::RealT
   #AddRHSCalls::Int64
@@ -410,14 +510,17 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       # pull the four corners numbered as right-handed
       P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
       P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-      P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-      P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+      #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+      #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
       # compute the four side lengths and get the smallest
       L0 = sqrt( sum( (P1-P0).^2 ) )
+      #=
       L1 = sqrt( sum( (P2-P1).^2 ) )
       L2 = sqrt( sum( (P3-P2).^2 ) )
       L3 = sqrt( sum( (P0-P3).^2 ) )
-      h = min(L0, L1, L2, L3)
+      =#
+      #h = min(L0, L1, L2, L3)
+      h = L0
       h_min_per_element[element_id] = h
       if h > h_max 
         h_max = h
@@ -427,10 +530,19 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       end
     end
 
+    #=
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
     n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
     h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
+    =#
+    
+    n_levels = Int(round(h_max / h_min))
+    if n_levels == 1
+      h_bins = [h_max]
+    else
+      h_bins = LinRange(h_min, h_max, n_levels)
+    end
 
     println("h_min: ", h_min, " h_max: ", h_max)
     println("h_max/h_min: ", h_max/h_min)
@@ -542,7 +654,6 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     end
     @assert length(level_info_mortars_acc[end]) == 
       n_mortars "highest level should contain all mortars"
-      
   elseif typeof(mesh) <:StructuredMesh{2}
     nnodes = length(dg.basis.nodes)
     n_elements = nelements(dg, cache)
@@ -686,7 +797,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 level_info_mortars_acc, 
                 level_u_indices_elements,
                 # CARE: Highest level = 9 
-                t0, -1, n_levels, min_level, max_level, du_ode_hyp, dt, 0.0)
+                t0, -1, n_levels, du_ode_hyp, dt, 0.0)
             
   # initialize callbacks
   if callback isa CallbackSet
