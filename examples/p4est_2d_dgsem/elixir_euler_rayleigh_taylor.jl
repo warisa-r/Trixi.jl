@@ -133,7 +133,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.0)
+tspan = (0.0, 3.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -188,7 +188,7 @@ cEnd = 0.5/bS
 
 Stages = [10, 5, 3]
 
-ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/",
+ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p2",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 #=
