@@ -94,7 +94,6 @@ volume_integral = VolumeIntegralShockCapturingHG(shock_indicator;
 solver = DGSEM(polydeg=polydeg, surface_flux=surface_flux, volume_integral=volume_integral)
 
 num_elements = 12
-#num_elements = 4
 trees_per_dimension = (num_elements, 4 * num_elements)
 mesh = P4estMesh(trees_per_dimension,
                  polydeg=3, initial_refinement_level=0,
@@ -188,7 +187,7 @@ cEnd = 0.5/bS
 
 Stages = [10, 5, 3]
 
-ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p2",
+ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p2/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 #=
