@@ -324,18 +324,14 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
     # Determine level for each interface
     for interface_id in 1:n_interfaces
-      # Get element ids
-      element_id_left  = interfaces.neighbor_ids[1, interface_id]
-      element_id_right = interfaces.neighbor_ids[2, interface_id]
+      # Get element id: Interfaces only between elements of same size
+      element_id  = interfaces.neighbor_ids[1, interface_id]
 
       # Determine level
-      # NOTE: For really different grid sizes
-      
-      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
 
       # Higher element's level determines this interfaces' level
-      level_id = max_level + 1 - max(level_left, level_right)
+      level_id = max_level + 1 - level
       
 
       # NOTE: For testcase with artificial assignment

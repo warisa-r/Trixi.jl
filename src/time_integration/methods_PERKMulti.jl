@@ -374,18 +374,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
     # Determine level for each interface
     for interface_id in 1:n_interfaces
-      # Get element ids
-      element_id_left  = interfaces.neighbor_ids[1, interface_id]
-      element_id_right = interfaces.neighbor_ids[2, interface_id]
+      # Get element id: Interfaces only between elements of same size
+      element_id  = interfaces.neighbor_ids[1, interface_id]
 
       # Determine level
-      # NOTE: For really different grid sizes
-      
-      level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-      level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
 
       # Higher element's level determines this interfaces' level
-      level_id = max_level + 1 - max(level_left, level_right)
+      level_id = max_level + 1 - level
 
 
       # NOTE: For testcase with artificial assignment
@@ -537,11 +533,11 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
     =#
     
-    n_levels = Int(round(h_max / h_min))
+    n_levels = Int(log2(round(h_max / h_min))) + 1
     if n_levels == 1
       h_bins = [h_max]
     else
-      h_bins = LinRange(h_min, h_max, n_levels)
+      h_bins = [ceil(h_min, digits = 10) * 2^i for i = 0:n_levels-1]
     end
 
     println("h_min: ", h_min, " h_max: ", h_max)
@@ -555,11 +551,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     for element_id in 1:n_elements
       h = h_min_per_element[element_id]
 
+      level = findfirst(x-> x >= h, h_bins)
+      #=
       level = findfirst(x-> x >= h, h_bins) - 1
       # Catch case h = h_min
       if level == 0
         level = 1
       end
+      =#
       append!(level_info_elements[level], element_id)
 
       for l in level:n_levels
@@ -576,20 +575,19 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
     level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
     # Determine level for each interface
     for interface_id in 1:n_interfaces
-      # Get element ids
-      element_id_left  = interfaces.neighbor_ids[1, interface_id]
-      h_left = h_min_per_element[element_id_left]
-
-      element_id_right = interfaces.neighbor_ids[2, interface_id]
-      h_right = h_min_per_element[element_id_right]
+      # For interfaces: Elements of same size
+      element_id = interfaces.neighbor_ids[1, interface_id]
+      h = h_min_per_element[element_id]
 
       # Determine level
-      h = min(h_left, h_right)
+      level = findfirst(x-> x >= h, h_bins)
+      #=
       level = findfirst(x-> x >= h, h_bins) - 1
       # Catch case h = h_min
       if level == 0
         level = 1
       end
+      =#
 
       for l in level:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
@@ -612,11 +610,14 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       h = h_min_per_element[element_id]
 
       # Determine level
+      level = findfirst(x-> x >= h, h_bins)
+      #=
       level = findfirst(x-> x >= h, h_bins) - 1
       # Catch case h = h_min
       if level == 0
         level = 1
       end
+      =#
 
       # Add to accumulated container
       for l in level:n_levels
@@ -639,13 +640,17 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       element_id_higher = mortars.neighbor_ids[2, mortar_id]
       h_higher = h_min_per_element[element_id_higher]
 
-      # Determine level
       h = min(h_lower, h_higher)
+
+      # Determine level
+      level = findfirst(x-> x >= h, h_bins)
+      #=
       level = findfirst(x-> x >= h, h_bins) - 1
       # Catch case h = h_min
       if level == 0
         level = 1
       end
+      =#
 
       # Add to accumulated container
       for l in level:n_levels

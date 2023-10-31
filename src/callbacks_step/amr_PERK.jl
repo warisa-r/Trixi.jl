@@ -90,16 +90,14 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
           # Determine level for each interface
           for interface_id in 1:n_interfaces
-            # Get element ids
-            element_id_left  = interfaces.neighbor_ids[1, interface_id]
-            element_id_right = interfaces.neighbor_ids[2, interface_id]
+            # Get element id: Interfaces only between elements of same size
+            element_id  = interfaces.neighbor_ids[1, interface_id]
 
             # Determine level
-            level_left  = mesh.tree.levels[elements.cell_ids[element_id_left]]
-            level_right = mesh.tree.levels[elements.cell_ids[element_id_right]]
+            level = mesh.tree.levels[elements.cell_ids[element_id]]
 
             # Higher element's level determines this interfaces' level
-            level_id = max_level + 1 - max(level_left, level_right)
+            level_id = max_level + 1 - level
             for l in level_id:integrator.n_levels
               push!(integrator.level_info_interfaces_acc[l], interface_id)
             end
@@ -268,7 +266,6 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               h = h_min_per_element[element_id]
 
               level = findfirst(x-> x >= h, h_bins)
-              #level = findfirst(x-> x ≈ h, h_bins)
 
               append!(integrator.level_info_elements[level], element_id)
 
@@ -283,17 +280,12 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
             # Determine level for each interface
             for interface_id in 1:n_interfaces
-              # Get element ids
-              element_id_left  = interfaces.neighbor_ids[1, interface_id]
-              h_left = h_min_per_element[element_id_left]
-
-              element_id_right = interfaces.neighbor_ids[2, interface_id]
-              h_right = h_min_per_element[element_id_right]
+              # For interfaces: Elements of same size
+              element_id = interfaces.neighbor_ids[1, interface_id]
+              h = h_min_per_element[element_id]
 
               # Determine level
-              h = min(h_left, h_right)
               level = findfirst(x-> x >= h, h_bins)
-              #level = findfirst(x-> x ≈ h, h_bins)
 
               for l in level:integrator.n_levels
                 push!(integrator.level_info_interfaces_acc[l], interface_id)
@@ -312,7 +304,6 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
               # Determine level
               level = findfirst(x-> x >= h, h_bins)
-              #level = findfirst(x-> x ≈ h, h_bins)
 
               # Add to accumulated container
               for l in level:integrator.n_levels
@@ -326,17 +317,12 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
             n_mortars = last(size(mortars.u))
 
             for mortar_id in 1:n_mortars
-              # Get element ids
-              element_id_lower  = mortars.neighbor_ids[1, mortar_id]
-              h_lower = h_min_per_element[element_id_lower]
-
-              element_id_higher = mortars.neighbor_ids[2, mortar_id]
-              h_higher = h_min_per_element[element_id_higher]
+              # This is by convention always one of the finer elements
+              element_id  = mortars.neighbor_ids[1, mortar_id]
+              h = h_min_per_element[element_id]
 
               # Determine level
-              h = min(h_lower, h_higher)
               level = findfirst(x-> x >= h, h_bins)
-              #level = findfirst(x-> x ≈ h, h_bins)
 
               # Add to accumulated container
               for l in level:integrator.n_levels
