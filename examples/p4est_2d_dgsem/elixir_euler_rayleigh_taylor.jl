@@ -142,7 +142,8 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl=1.0)
+stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
+stepsize_callback = StepsizeCallback(cfl=1.0) # p = 3, E = 3, 4, 6, 11
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -194,6 +195,15 @@ ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/S
 ode_algorithm = PERK(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/",
                      bS, cEnd)                        
 =#
+
+# S = 11, p = 3
+dt = 0.007080
+
+Stages = [11, 6, 4, 3]
+
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/", cS2,
+                            LevelCFL, Integrator_Mesh_Level_Dict)
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)

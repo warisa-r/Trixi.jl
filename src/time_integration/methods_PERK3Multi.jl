@@ -252,8 +252,6 @@ mutable struct PERK3_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, P
   t_stage::RealT
   coarsest_lvl::Int64
   n_levels::Int64
-  min_lvl::Int64
-  max_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
   dtRef::RealT
   AddRHSCalls::Int64
@@ -690,7 +688,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, n_levels, min_level, max_level, du_ode_hyp, dt, 0)
+                t0, -1, n_levels, du_ode_hyp, dt, 0)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -818,6 +816,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
           end
         end
 
+        # level 3
         if integrator.n_levels > 2
           @threaded for u_ind in integrator.level_u_indices_elements[3]
             integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
