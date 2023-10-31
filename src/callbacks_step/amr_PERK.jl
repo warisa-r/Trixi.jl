@@ -244,7 +244,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               integrator.level_info_interfaces_acc = [Vector{Int64}() for _ in 1:integrator.n_levels]
               integrator.level_info_boundaries_acc = [Vector{Int64}() for _ in 1:integrator.n_levels]
               # For efficient treatment of boundaries we need additional datastructures
-              integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:integrator.n_levels]
+              #integrator.level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:integrator.n_levels]
               integrator.level_info_mortars_acc = [Vector{Int64}() for _ in 1:integrator.n_levels]
               integrator.level_u_indices_elements = [Vector{Int64}() for _ in 1:integrator.n_levels]
               #resize!(integrator.level_info_elements_acc, integrator.n_levels) # TODO: Does unfortunately not work
@@ -254,9 +254,11 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
                 empty!(integrator.level_info_elements_acc[level])
                 empty!(integrator.level_info_interfaces_acc[level])
                 empty!(integrator.level_info_boundaries_acc[level])
+                #=
                 for dim in 1:2*n_dims
                   empty!(integrator.level_info_boundaries_orientation_acc[level][dim])
                 end
+                =#
                 empty!(integrator.level_info_mortars_acc[level])
                 empty!(integrator.level_u_indices_elements[level])
               end
