@@ -137,13 +137,11 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 500
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
-alive_callback = AliveCallback(analysis_interval=analysis_interval)
-
 stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
-stepsize_callback = StepsizeCallback(cfl=1.0) # p = 3, E = 3, 4, 6, 11
+stepsize_callback = StepsizeCallback(cfl=1.3) # p = 3, E = 3, 4, 6, 11
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -157,15 +155,14 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =6, max_threshold=0.0025)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           interval=20,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
-                        amr_callback,
-                        alive_callback)
+                        amr_callback)
 
 ###############################################################################
 # run the simulation
@@ -205,8 +202,12 @@ cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
+#ode_algorithm = PERK3(11, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/")
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
+
+
 
 #=
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
@@ -218,5 +219,5 @@ summary_callback() # print the timer summary
 plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"])
-plot!(getmesh(pd))
+plot(pd["rho"], title = "\$ ρ, t_f = 3.0 \$")
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
