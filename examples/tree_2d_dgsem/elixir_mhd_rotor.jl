@@ -107,7 +107,7 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0041,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=40, # PERK
+                           interval=40, # PERK, DGLDDRK73_C
                            #interval=40*8, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
@@ -115,6 +115,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 cfl = 0.08 # SSPRK33
 cfl = 0.8 # DGLDDRK73_C
 cfl = 0.82 # S = 10, AMR, PERK
+#cfl = 0.8 # S = 10, AMR, PERK Single
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -164,11 +165,9 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
-
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
-
 
 #=
 sol = solve(ode, SSPRK33();
@@ -185,7 +184,9 @@ sol = solve(ode, DGLDDRK73_C();
             thread = OrdinaryDiffEq.True())
 
 
-summary_callback() # print the timer summary
+summary_callback() # print the timer summary                    
+
+
 plot(sol)
 
 pd = PlotData2D(sol)

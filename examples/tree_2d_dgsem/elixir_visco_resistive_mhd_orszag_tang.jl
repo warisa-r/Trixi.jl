@@ -133,24 +133,40 @@ b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
+# TODO: Do also p=3
 
-ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
+ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 
-#=
-ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/",
+
+ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/",
                      bS, cEnd)
-=#
+
+
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 
-#=
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
-=#
+
+cfl = 0.6 # ParsaniKetchesonDeconinck3S82
+
+stepsize_callback = StepsizeCallback(cfl=cfl)
+
+glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        #save_solution,
+                        amr_callback,
+                        stepsize_callback,
+                        glm_speed_callback)
+
+sol = solve(ode, ParsaniKetchesonDeconinck3S82();
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks,
+            thread = OrdinaryDiffEq.True())
+
 
 
 
