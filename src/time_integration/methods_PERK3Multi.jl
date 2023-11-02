@@ -43,7 +43,7 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
   # Datastructure indicating at which stage which level contributes to state
   EvalLevels = [Vector{Int64}() for _ in 1:NumStages]
   # k1 is evaluated at all levels
-  EvalLevels[1] = 1:length(Stages)
+  EvalLevels[1] = 1:NumStages
   # Second stage: Only finest method
   EvalLevels[2] = [1]
 
@@ -285,7 +285,7 @@ mutable struct PERK3_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, P
   n_levels::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
   dtRef::RealT
-  AddRHSCalls::Int64
+  AddRHSCalls::Float64
 end
 
 # Forward integrator.stats.naccept to integrator.iter (see GitHub PR#771)
@@ -650,6 +650,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       n_mortars "highest level should contain all mortars"
   end
 
+  #=
   println("level_info_elements:")
   display(level_info_elements); println()
   println("level_info_elements_acc:")
@@ -665,7 +666,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
   
   println("level_info_mortars_acc:")
   display(level_info_mortars_acc); println()
-
+  =#
   
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
@@ -706,8 +707,8 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
     end
   end
 
-  println("level_u_indices_elements:")
-  display(level_u_indices_elements); println()
+  #println("level_u_indices_elements:")
+  #display(level_u_indices_elements); println()
 
   ### Done with setting up for handling of level-dependent integration ###
 
@@ -720,7 +721,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, n_levels, du_ode_hyp, dt, 0)
+                t0, -1, n_levels, du_ode_hyp, dt, 0.0)
             
   # initialize callbacks
   if callback isa CallbackSet

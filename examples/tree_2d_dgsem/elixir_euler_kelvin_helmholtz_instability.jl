@@ -74,8 +74,10 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=10,
-                           interval=9,
+                           #interval=9,
+                           #interval=18, #RDPK3SpFSAL35
+                           interval=16, #SSPRK43
+                           #interval=12, #DGLDDRK73_C
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -106,41 +108,55 @@ Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 # Two level
 LevelCFL = Dict([(4, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 1/8), (8, 1/16), (9, 1/32 * 1.1)])
 
-stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8
-#stepsize_callback = StepsizeCallback(cfl=2.4) # S = 4, 8, 16
-
-stepsize_callback = StepsizeCallback(cfl=3.4) # S = 3, 6, 12
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        stepsize_callback,
-                        amr_callback)
-
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/",
                            cS2,
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-
-
-stepsize_callback = StepsizeCallback(cfl=1.1) # S = 3
-stepsize_callback = StepsizeCallback(cfl=1.6) # S = 4
-
 stepsize_callback = StepsizeCallback(cfl=3.805) # S = 12
-# TODO S=8
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
                         amr_callback)
 
-ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
+#ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 
-
+#=
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dt,
                   save_everystep=false, callback=callbacks);
+=#
+
+callbacksDE = CallbackSet(summary_callback,
+                          analysis_callback,
+                          amr_callback)
+
+#=
+tol = 1e-6 # maximum error tolerance
+sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
+            ode_default_options()..., callback=callbacksDE,
+            thread = OrdinaryDiffEq.True());
+=#
+
+
+sol = solve(ode, SSPRK43();
+            ode_default_options()..., callback=callbacksDE,
+            thread = OrdinaryDiffEq.True());
+
+
+stepsize_callback = StepsizeCallback(cfl=3.0) # S = 12
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        stepsize_callback,
+                        amr_callback)
+
+sol = solve(ode, DGLDDRK73_C();
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks,
+            thread = OrdinaryDiffEq.True())
 
 summary_callback() # print the timer summary
 
