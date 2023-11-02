@@ -40,6 +40,13 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:NumDoublings+1
 
+  # Datastructure indicating at which stage which level contributes to state
+  EvalLevels = [Vector{Int64}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  EvalLevels[1] = 1:length(Stages)
+  # Second stage: Only finest method
+  EvalLevels[2] = [1]
+
   for level = 1:NumDoublings + 1
     
     #=
@@ -74,8 +81,14 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
+
+    # Add eval levels to stages
+    for stage = NumStages:-1:NumStages-NumMonCoeffs+1
+      push!(EvalLevels[stage], level)
+    end
   end
   HighestActiveLevels = maximum.(ActiveLevels)
+  HighestEvalLevels   = maximum.(EvalLevels)
 
   for i = 1:NumDoublings+1
     println("A-Matrix of Butcher tableau of level " * string(i))
@@ -90,8 +103,9 @@ function ComputePERK3_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Ba
   end
 
   println("\nActive Levels:"); display(ActiveLevels); println()
+  println("\nHighestEvalLevels:"); display(HighestEvalLevels); println()
 
-  return AMatrices, c, ActiveLevels, HighestActiveLevels
+  return AMatrices, c, ActiveLevels, HighestActiveLevels, HighestEvalLevels
 end
 
 function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString, 
@@ -128,6 +142,13 @@ function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:length(Stages)
 
+  # Datastructure indicating at which stage which level contributes to state
+  EvalLevels = [Vector{Int64}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  EvalLevels[1] = 1:length(Stages)
+  # Second stage: Only finest method
+  EvalLevels[2] = [1]
+
   for level in eachindex(Stages)
 
     NumStageEvals = Stages[level]
@@ -142,8 +163,14 @@ function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
     for stage = NumStages:-1:NumStages-NumMonCoeffs
       push!(ActiveLevels[stage], level)
     end
+
+    # Add eval levels to stages
+    for stage = NumStages:-1:NumStages-NumMonCoeffs+1
+      push!(EvalLevels[stage], level)
+    end
   end
   HighestActiveLevels = maximum.(ActiveLevels)
+  HighestEvalLevels   = maximum.(EvalLevels)
 
   for i = 1:length(Stages)
     println("A-Matrix of Butcher tableau of level " * string(i))
@@ -158,8 +185,9 @@ function ComputePERK3_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   end
 
   println("\nActive Levels:"); display(ActiveLevels); println()
+  println("\nHighestEvalLevels:"); display(HighestEvalLevels); println()
 
-  return AMatrices, c, ActiveLevels, HighestActiveLevels
+  return AMatrices, c, ActiveLevels, HighestActiveLevels, HighestEvalLevels
 end
 
 mutable struct PERK3_Multi{StageCallbacks}
@@ -175,6 +203,7 @@ mutable struct PERK3_Multi{StageCallbacks}
   c::Vector{Float64}
   ActiveLevels::Vector{Vector{Int64}}
   HighestActiveLevels::Vector{Int64}
+  HighestEvalLevels::Vector{Int64}
 
   function PERK3_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
                        BasePathMonCoeffs_::AbstractString, cS2_::Float64,
@@ -192,7 +221,8 @@ mutable struct PERK3_Multi{StageCallbacks}
                         LevelCFL_, Integrator_Mesh_Level_Dict_,
                         stage_callbacks)
 
-    newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, newPERK3_Multi.HighestActiveLevels = 
+    newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, 
+    newPERK3_Multi.HighestActiveLevels, newPERK3_Multi.HighestEvalLevels = 
       ComputePERK3_Multi_ButcherTableau(NumDoublings_, newPERK3_Multi.NumStages, BasePathMonCoeffs_, cS2_)
 
     return newPERK3_Multi
@@ -211,7 +241,8 @@ mutable struct PERK3_Multi{StageCallbacks}
                           LevelCFL_, Integrator_Mesh_Level_Dict_,
                           stage_callbacks)
 
-    newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, newPERK3_Multi.HighestActiveLevels = 
+    newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, 
+    newPERK3_Multi.HighestActiveLevels, newPERK3_Multi.HighestEvalLevels = 
       ComputePERK3_Multi_ButcherTableau(Stages_, newPERK3_Multi.NumStages, BasePathMonCoeffs_, cS2_)
 
     return newPERK3_Multi
@@ -469,7 +500,8 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
       #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
       # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
+      #L0 = sqrt( sum( (P1-P0).^2 ) )
+      L0 = abs(P1[1] - P0[1])
       #=
       L1 = sqrt( sum( (P2-P1).^2 ) )
       L2 = sqrt( sum( (P3-P2).^2 ) )
@@ -779,74 +811,28 @@ function solve!(integrator::PERK3_Multi_Integrator)
           integrator.u_tmp[i] = integrator.u[i]
         end
 
-        #=
-        for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
-          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+        # Loop over different methods with own associated level
+        for level = 1:min(alg.NumDoublings-1, integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 1] * integrator.k1[u_ind]
-          end
-
-          # TODO Try more efficient way
-          if alg.AMatrices[Integrator_lvl, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
           end
         end
-        =#
-
-        # Hard-coded "three integrators" approach: Fill lower with lowest
-        # level 1
-        @threaded for u_ind in integrator.level_u_indices_elements[1]
-          integrator.u_tmp[u_ind] += alg.AMatrices[1, stage - 2, 1] * integrator.k1[u_ind] + 
-                                     alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
-        end
-
-        
-        # level 2
-        if integrator.n_levels > 1
-          @threaded for u_ind in integrator.level_u_indices_elements[2]
-            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
-          end
-          # TODO Try more efficient way
-          if alg.AMatrices[2, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[2]
-              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
-          end
-        end
-
-        # level 3
-        if integrator.n_levels > 2
-          @threaded for u_ind in integrator.level_u_indices_elements[3]
-            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
-          end
-          # TODO Try more efficient way
-          if alg.AMatrices[3, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[3]
-              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
-          end
-        end
-        
-
-        for level in 4:integrator.n_levels # Ensures only relevant levels are evaluated
-        #for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
-        #for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
+        for level = 1:min(alg.HighestEvalLevels[stage], integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 1] * integrator.k1[u_ind]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
           end
+        end
 
-          # TODO Try more efficient way
-          if alg.AMatrices[4, stage - 2, 2] > 0
-          #if alg.AMatrices[3, stage - 2, 2] > 0
-          #if alg.AMatrices[2, stage - 2, 2] > 0
+        # "Remainder": Non-efficiently integrated
+        for level = alg.NumDoublings:integrator.n_levels
+          @threaded for u_ind in integrator.level_u_indices_elements[level]
+            integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumDoublings, stage - 2, 1] * integrator.k1[u_ind]
+          end
+        end
+        if alg.HighestEvalLevels[stage] == alg.NumDoublings
+          for level = alg.HighestEvalLevels[stage]+1:integrator.n_levels
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 2] * integrator.k_higher[u_ind]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumDoublings, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -857,10 +843,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
         # TODO: Not sure if still valid with dict-based approach
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
-        # Note: For hard-coded three level approach
-        if integrator.coarsest_lvl == 4
-        #if integrator.coarsest_lvl == 3
-        #if integrator.coarsest_lvl == 2
+        if integrator.coarsest_lvl == alg.NumDoublings
           integrator.coarsest_lvl = integrator.n_levels
         end
 
@@ -900,7 +883,6 @@ function solve!(integrator::PERK3_Multi_Integrator)
           end
         end
 
-        # TODO: Stop for loop at NumStages -1 to avoid if
         if stage == alg.NumStages - 1
           @threaded for i in eachindex(integrator.du)
             integrator.k_S1[i] = integrator.k_higher[i]

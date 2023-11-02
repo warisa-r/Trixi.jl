@@ -194,7 +194,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
               #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
               # compute the four side lengths and get the smallest
-              L0 = sqrt( sum( (P1-P0).^2 ) )
+              #L0 = sqrt( sum( (P1-P0).^2 ) )
               L0 = abs(P1[1] - P0[1])
               #=
               L1 = sqrt( sum( (P2-P1).^2 ) )
