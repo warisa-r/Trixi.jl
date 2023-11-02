@@ -75,9 +75,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=9,
-                           #interval=18, #RDPK3SpFSAL35
-                           interval=16, #SSPRK43
+                           #interval=18, #RDPK3SpFSAL35, SSPRK43
                            #interval=12, #DGLDDRK73_C
+                           interval=32, #SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -140,13 +140,14 @@ sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
             thread = OrdinaryDiffEq.True());
 =#
 
-
+#=
 sol = solve(ode, SSPRK43();
             ode_default_options()..., callback=callbacksDE,
             thread = OrdinaryDiffEq.True());
+=#
 
-
-stepsize_callback = StepsizeCallback(cfl=3.0) # S = 12
+#=
+stepsize_callback = StepsizeCallback(cfl=3.0) # DGLDDRK73_C
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
@@ -154,6 +155,19 @@ callbacks = CallbackSet(summary_callback,
                         amr_callback)
 
 sol = solve(ode, DGLDDRK73_C();
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks,
+            thread = OrdinaryDiffEq.True())
+=#
+
+stepsize_callback = StepsizeCallback(cfl=1.0) # SSPRK33
+
+callbacks = CallbackSet(summary_callback,
+                        analysis_callback,
+                        stepsize_callback,
+                        amr_callback)
+
+sol = solve(ode, SSPRK33();
             dt = 1.0,
             ode_default_options()..., callback=callbacks,
             thread = OrdinaryDiffEq.True())
