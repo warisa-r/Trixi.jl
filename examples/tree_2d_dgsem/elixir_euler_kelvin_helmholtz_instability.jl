@@ -59,7 +59,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 tspan = (0.0, 3.0)
 #tspan = (0.0, 25.0) # Endtime in paper above
-ode = semidiscretize(semi, tspan)
+
+#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
@@ -123,57 +124,58 @@ callbacks = CallbackSet(summary_callback,
 
 #ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 
-#=
-sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dt,
-                  save_everystep=false, callback=callbacks);
-=#
+for i = 1:10
+  ode = semidiscretize(semi, tspan)
 
-callbacksDE = CallbackSet(summary_callback,
+  #=
+  sol = Trixi.solve(ode, ode_algorithm,
+                    dt = dt,
+                    save_everystep=false, callback=callbacks);
+  =#
+
+  callbacksDE = CallbackSet(summary_callback,
+                            analysis_callback,
+                            amr_callback)
+
+  #=
+  tol = 1e-6 # maximum error tolerance
+  sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
+              ode_default_options()..., callback=callbacksDE,
+              thread = OrdinaryDiffEq.True());
+  =#
+
+  #=
+  stepsize_callback = StepsizeCallback(cfl=3.0) # DGLDDRK73_C
+
+  callbacks = CallbackSet(summary_callback,
                           analysis_callback,
+                          stepsize_callback,
                           amr_callback)
 
-#=
-tol = 1e-6 # maximum error tolerance
-sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
-            ode_default_options()..., callback=callbacksDE,
-            thread = OrdinaryDiffEq.True());
-=#
+  sol = solve(ode, DGLDDRK73_C();
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks,
+              thread = OrdinaryDiffEq.True())
+  =#
+
+  #=
+  stepsize_callback = StepsizeCallback(cfl=1.0) # SSPRK33
+
+  callbacks = CallbackSet(summary_callback,
+                          analysis_callback,
+                          stepsize_callback,
+                          amr_callback)
+
+  sol = solve(ode, SSPRK33();
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks,
+              thread = OrdinaryDiffEq.True())
+  =#
+
+  summary_callback() # print the timer summary
+end
 
 #=
-sol = solve(ode, SSPRK43();
-            ode_default_options()..., callback=callbacksDE,
-            thread = OrdinaryDiffEq.True());
-=#
-
-#=
-stepsize_callback = StepsizeCallback(cfl=3.0) # DGLDDRK73_C
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        stepsize_callback,
-                        amr_callback)
-
-sol = solve(ode, DGLDDRK73_C();
-            dt = 1.0,
-            ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True())
-=#
-
-stepsize_callback = StepsizeCallback(cfl=1.0) # SSPRK33
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        stepsize_callback,
-                        amr_callback)
-
-sol = solve(ode, SSPRK33();
-            dt = 1.0,
-            ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True())
-
-summary_callback() # print the timer summary
-
 plot(sol)
 
 pd = PlotData2D(sol)
@@ -183,4 +185,4 @@ plot(pd["rho"], title = "", colorbar_title = "     \$ρ\$", xlabel = "\$x\$", yl
 =#
 plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
-
+=#

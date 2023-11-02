@@ -192,6 +192,7 @@ function ComputePERK_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int,
     end
   end
   HighestActiveLevels = maximum.(ActiveLevels)
+  HighestEvalLevels   = maximum.(EvalLevels)
 
   for i = 1:NumMethods
     println("A-Matrix of Butcher tableau of level " * string(i))

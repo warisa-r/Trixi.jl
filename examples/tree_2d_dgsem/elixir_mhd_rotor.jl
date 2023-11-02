@@ -45,6 +45,19 @@ function initial_condition_rotor(x, t, equations::IdealGlmMhdEquations2D)
 end
 initial_condition = initial_condition_rotor
 
+# Paper mentioned above uses outflow BCs
+function boundary_condition_outflow(u_inner, orientation, direction, x, t,
+                                    surface_flux_function,
+                                    equations::IdealGlmMhdEquations2D)
+
+  return surface_flux_function(u_inner, u_inner, orientation, equations)
+end
+
+boundary_conditions = (x_neg=boundary_condition_outflow,
+                       x_pos=boundary_condition_outflow,
+                       y_neg=boundary_condition_outflow,
+                       y_pos=boundary_condition_outflow)
+
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
 volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
 polydeg = 4
@@ -66,19 +79,6 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 n_cells_max=10_000,
                 periodicity=false)
 
-# Paper mentioned above uses outflow BCs
-function boundary_condition_outflow(u_inner, orientation, direction, x, t,
-                                    surface_flux_function,
-                                    equations::IdealGlmMhdEquations2D)
-
-  return surface_flux_function(u_inner, u_inner, orientation, equations)
-end
-
-boundary_conditions = (x_neg=boundary_condition_outflow,
-                       x_pos=boundary_condition_outflow,
-                       y_neg=boundary_condition_outflow,
-                       y_pos=boundary_condition_outflow)
-
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
@@ -91,7 +91,7 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 1000
+analysis_interval = 10000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -107,18 +107,14 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0041,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=40,
+                           interval=40, # PERK
+                           #interval=40*8, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-cfl = 0.5 # S = 3, no AMR
-cfl = 0.06 # S = 3, AMR
-cfl = 0.1 # S = 3, but SSP implementation, AMR
-
-#cfl = 2.0 # S = 10, no AMR
-
-cfl = 0.8 # S = 10 AMR, Non-PERK
-cfl = 0.8 # S = 10, AMR, PERK
+cfl = 0.08 # SSPRK33
+cfl = 0.8 # DGLDDRK73_C
+cfl = 0.82 # S = 10, AMR, PERK
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -126,7 +122,6 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.8, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
@@ -175,10 +170,20 @@ sol = Trixi.solve(ode, ode_algorithm,
                   save_everystep=false, callback=callbacks);
 
 
-# Compare to ssp implementation                  
-sol = solve(ode, SSPRK33(),
+#=
+sol = solve(ode, SSPRK33();
             dt=dt,
-            save_everystep=false, callback=callbacks);
+            save_everystep=false, callback=callbacks,
+            ode_default_options()...,
+            thread = OrdinaryDiffEq.True());
+=#
+
+
+sol = solve(ode, DGLDDRK73_C();
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks,
+            thread = OrdinaryDiffEq.True())
+
 
 summary_callback() # print the timer summary
 plot(sol)
