@@ -184,11 +184,11 @@ bS   = 1.0 - b1
 cEnd = 0.5/bS
 
 Stages = [10, 5, 3]
-
+#=
 ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p2/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
-#=
+
 ode_algorithm = PERK(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/",
                      bS, cEnd)                        
 =#
@@ -209,10 +209,20 @@ sol = Trixi.solve(ode, ode_algorithm, dt = dt,
 
 
 
+sol = solve(ode, DGLDDRK73_C();
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks,
+            thread = OrdinaryDiffEq.True())
+
+callbacksDE = CallbackSet(summary_callback,
+            analysis_callback,
+            amr_callback)
+
 #=
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition=false),
-            dt=1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep=false, callback=callbacks);
+tol = 1e-6 # maximum error tolerance
+sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
+ode_default_options()..., callback=callbacksDE,
+thread = OrdinaryDiffEq.True());
 =#
 
 summary_callback() # print the timer summary
