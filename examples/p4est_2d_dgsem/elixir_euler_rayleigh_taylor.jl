@@ -169,11 +169,6 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-#=
-sol = solve(ode, RDPK3SpFSAL49(); abstol=1.0e-6, reltol=1.0e-6,
-            ode_default_options()..., callback=callbacks);
-=#
-
 # S = 3, p = 2
 dt = 0.00142227114120032641
 # S = 10 p = 2
@@ -210,22 +205,22 @@ sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
 =#
 
-
+#=
 sol = solve(ode, DGLDDRK73_C();
             dt = 1.0,
             ode_default_options()..., callback=callbacks,
             thread = OrdinaryDiffEq.True())
+=#
 
 callbacksDE = CallbackSet(summary_callback,
             analysis_callback,
             amr_callback)
 
-#=
-tol = 1e-6 # maximum error tolerance
+tol = 1e-5 # maximum error tolerance
 sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
-ode_default_options()..., callback=callbacksDE,
-thread = OrdinaryDiffEq.True());
-=#
+            ode_default_options()..., callback=callbacksDE,
+            thread = OrdinaryDiffEq.True());
+
 
 summary_callback() # print the timer summary
 plot(sol)
