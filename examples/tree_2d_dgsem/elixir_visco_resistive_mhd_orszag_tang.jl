@@ -74,7 +74,7 @@ ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 save_solution = SaveSolutionCallback(interval=10000,
@@ -87,19 +87,20 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_min=0.001,
                                           alpha_smooth=false,
                                           variable=density_pressure)
+
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.04,
                                       max_level =9, max_threshold=0.4)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           #interval=10,
+                           interval=31, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-#cfl = 1.1 #CK2N54
-#cfl = 1.9 # p = 2, SBase = 3
 
-cfl = 1.9 # p = 2 S = 12
+cfl = 1.9 # p = 2, S = 12
+cfl = 1.9 # p = 3, S = 11
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -115,12 +116,6 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-#=
-time_int_tol = 1e-12
-sol = solve(ode, RDPK3SpFSAL49(), dt = 1e-5,
-            save_everystep = false, callback = callbacks)
-=#
-
 # S = 3, p = 2 Ref = 4
 dt = 0.0161709425439767083
 
@@ -135,21 +130,35 @@ cEnd = 0.5/bS
 
 # TODO: Do also p=3
 
-ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/",
+# S = 4, p = 3, Ref = 4
+dt = 0.0155320306832436481
+# Series: 4, 6, 11
+
+#=
+ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p2/",
                            bS, cEnd,
                            LevelCFL, Integrator_Mesh_Level_Dict)
 
 
-ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/",
+ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p2/",
                      bS, cEnd)
+=#
 
+#=
+Stages = [11, 6, 4]
 
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2,
+                            LevelCFL, Integrator_Mesh_Level_Dict)
+
+ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")                            
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
+=#
 
-
-cfl = 0.6 # ParsaniKetchesonDeconinck3S82
+#cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
+cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -157,17 +166,34 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        #save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
 
-sol = solve(ode, ParsaniKetchesonDeconinck3S82();
+sol = solve(ode, SSPRK33();
             dt = 1.0,
             ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True())
+            thread = OrdinaryDiffEq.True());
 
+for i = 1:10
+  solver = DGSEM(basis, surface_flux, volume_integral)
 
+  coordinates_min = (0.0, 0.0)
+  coordinates_max = (2*pi, 2*pi)
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                  initial_refinement_level=4,
+                  n_cells_max=100000)
+  
+  
+  semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver) 
+  
+  ode = semidiscretize(semi, tspan; split_form = false)
+
+  sol = solve(ode, DGLDDRK73_C();
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks,
+              thread = OrdinaryDiffEq.True());
+end
 
 
 summary_callback() # print the timer summary
