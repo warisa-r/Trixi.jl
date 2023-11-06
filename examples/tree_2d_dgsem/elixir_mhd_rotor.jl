@@ -91,7 +91,7 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 10000
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -116,6 +116,7 @@ cfl = 0.03 # SSPRK33
 #cfl = 0.8 # DGLDDRK73_C
 #cfl = 0.82 # S = 10, AMR, PERK
 #cfl = 0.8 # S = 10, AMR, PERK Single
+#cfl = 0.7 # 3,4,6 PERK
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -153,7 +154,8 @@ dt = 0.116699115931260173
 # For InitialRefinement = 4
 dt *= 0.5 
 
-Stages = [10, 6, 4, 3]
+#Stages = [10, 6, 4, 3]
+Stages = [6, 4, 3]
 
 
 LevelCFL = Dict([(42, 42.0)])
@@ -164,27 +166,39 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
-#=
-sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dt,
-                  save_everystep=false, callback=callbacks);
-=#
-
-sol = solve(ode, SSPRK33();
-            dt=dt,
-            save_everystep=false, callback=callbacks,
-            ode_default_options()...,
-            thread = OrdinaryDiffEq.True());
 
 
+for i = 1:10
+    mesh = TreeMesh(coordinates_min, coordinates_max,
+                initial_refinement_level=4,
+                n_cells_max=10_000,
+                periodicity=false)
 
-sol = solve(ode, DGLDDRK73_C();
-            dt = 1.0,
-            ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True())
+    semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
+                                        boundary_conditions=boundary_conditions)
 
+    ode = semidiscretize(semi, tspan)
 
-summary_callback() # print the timer summary                    
+    #=
+    sol = Trixi.solve(ode, ode_algorithm,
+                    dt = dt,
+                    save_everystep=false, callback=callbacks);
+    =#
+    
+    sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+                dt=dt,
+                save_everystep=false, callback=callbacks,
+                ode_default_options()...);
+    
+
+    #=
+    sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks)
+    =#
+end
+
+summary_callback() # print the timer summary
 
 
 plot(sol)
