@@ -143,7 +143,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
 stepsize_callback = StepsizeCallback(cfl=1.3) # p = 3, E = 3, 4, 6, 11
 
-stepsize_callback = StepsizeCallback(cfl=1.1) # DGLDDRK73_C
+#stepsize_callback = StepsizeCallback(cfl=1.1) # DGLDDRK73_C
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -157,7 +157,7 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =6, max_threshold=0.0025)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20,
+                           interval=20, # PERK 3, 4, 6, 11
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -194,7 +194,7 @@ ode_algorithm = PERK(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/Ray
 dt = 0.007080
 
 Stages = [11, 6, 4, 3]
-#=
+
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
@@ -203,7 +203,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
-=#
+
 
 #=
 sol = solve(ode, DGLDDRK73_C();
@@ -212,6 +212,7 @@ sol = solve(ode, DGLDDRK73_C();
             thread = OrdinaryDiffEq.True())
 =#
 
+#=
 callbacksDE = CallbackSet(summary_callback,
             analysis_callback,
             amr_callback)
@@ -220,7 +221,7 @@ tol = 1e-5 # maximum error tolerance
 sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
             ode_default_options()..., callback=callbacksDE,
             thread = OrdinaryDiffEq.True());
-
+=#
 
 summary_callback() # print the timer summary
 plot(sol)
