@@ -137,7 +137,7 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
