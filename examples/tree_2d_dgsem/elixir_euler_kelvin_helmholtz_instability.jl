@@ -76,9 +76,10 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=9,
-                           #interval=18, #RDPK3SpFSAL35, SSPRK43
+                           #interval=18, #RDPK3SpFSAL35
+                           interval=20, #ParsaniKetchesonDeconinck3S53
                            #interval=12, #DGLDDRK73_C
-                           interval=32, #SSPRK33
+                           #interval=32, #SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -124,7 +125,12 @@ callbacks = CallbackSet(summary_callback,
 
 #ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 
-for i = 1:10
+for i = 1:1
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                initial_refinement_level=Refinement,
+                n_cells_max=100_000)
+  semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
+
   ode = semidiscretize(semi, tspan)
 
   #=
@@ -133,15 +139,15 @@ for i = 1:10
                     save_everystep=false, callback=callbacks);
   =#
 
+  #=
   callbacksDE = CallbackSet(summary_callback,
                             analysis_callback,
                             amr_callback)
 
-  #=
+  
   tol = 1e-6 # maximum error tolerance
-  sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
-              ode_default_options()..., callback=callbacksDE,
-              thread = OrdinaryDiffEq.True());
+  sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
+              ode_default_options()..., callback=callbacksDE);
   =#
 
   #=
@@ -152,10 +158,9 @@ for i = 1:10
                           stepsize_callback,
                           amr_callback)
 
-  sol = solve(ode, DGLDDRK73_C();
+  sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
-              ode_default_options()..., callback=callbacks,
-              thread = OrdinaryDiffEq.True())
+              ode_default_options()..., callback=callbacks)
   =#
 
   #=
@@ -166,11 +171,21 @@ for i = 1:10
                           stepsize_callback,
                           amr_callback)
 
-  sol = solve(ode, SSPRK33();
+  sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
-              ode_default_options()..., callback=callbacks,
-              thread = OrdinaryDiffEq.True())
+              ode_default_options()..., callback=callbacks)
   =#
+
+  stepsize_callback = StepsizeCallback(cfl=1.7) # ParsaniKetchesonDeconinck3S53
+
+  callbacks = CallbackSet(summary_callback,
+                          analysis_callback,
+                          stepsize_callback,
+                          amr_callback)
+
+  sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks)
 
   summary_callback() # print the timer summary
 end

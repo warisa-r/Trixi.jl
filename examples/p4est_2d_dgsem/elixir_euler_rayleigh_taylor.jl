@@ -141,9 +141,12 @@ analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
-stepsize_callback = StepsizeCallback(cfl=1.3) # p = 3, E = 3, 4, 6, 11
+#stepsize_callback = StepsizeCallback(cfl=1.46) # p = 3, E = 3, 4, 6, 11
+stepsize_callback = StepsizeCallback(cfl=1.4) # p = 3, E = 3, 4, 6, 11
 
 #stepsize_callback = StepsizeCallback(cfl=1.1) # DGLDDRK73_C
+
+stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -157,7 +160,10 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =6, max_threshold=0.0025)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20, # PERK 3, 4, 6, 11
+                           #interval=20, # PERK 3, 4, 6, 11
+                           #interval=17, #RDPK3SpFSAL35
+                           #interval=25, # DGLDDRK73_C
+                           interval = 21, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -200,17 +206,20 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/")
-
+#=
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
-
+=#
 
 #=
-sol = solve(ode, DGLDDRK73_C();
+sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True())
+            ode_default_options()..., callback=callbacks)
 =#
+
+sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks)
 
 #=
 callbacksDE = CallbackSet(summary_callback,
@@ -218,11 +227,9 @@ callbacksDE = CallbackSet(summary_callback,
             amr_callback)
 
 tol = 1e-5 # maximum error tolerance
-sol = solve(ode, RDPK3SpFSAL35(); abstol=tol, reltol=tol,
-            ode_default_options()..., callback=callbacksDE,
-            thread = OrdinaryDiffEq.True());
+sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
+            ode_default_options()..., callback=callbacksDE);
 =#
-
 summary_callback() # print the timer summary
 plot(sol)
 
