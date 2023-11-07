@@ -151,7 +151,8 @@ function solve!(integrator::PERK3_Integrator)
 
   integrator.finalstep = false
 
-  @trixi_timeit timer() "main loop" while !integrator.finalstep
+  #@trixi_timeit timer() "main loop" while !integrator.finalstep
+  while !integrator.finalstep
     if isnan(integrator.dt)
       error("time step size `dt` is NaN")
     end
@@ -162,7 +163,7 @@ function solve!(integrator::PERK3_Integrator)
       terminate!(integrator)
     end
 
-    @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
+    #@trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       # k1: 
       #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
@@ -222,7 +223,7 @@ function solve!(integrator::PERK3_Integrator)
         # Own PERK based on SSPRK33
         integrator.u[i] += (integrator.k1[i] + integrator.k_S1[i] + 4.0 * integrator.k_higher[i])/6.0
       end
-    end # PERK step
+    #end # PERK step
 
     integrator.iter += 1
     integrator.t += integrator.dt
