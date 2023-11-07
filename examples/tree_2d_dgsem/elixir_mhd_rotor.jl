@@ -108,7 +108,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=40, # PERK, DGLDDRK73_C
-                           interval=40*26, # SSPRK33
+                           #interval=40*26, # SSPRK33
+                            interval = 10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -116,7 +117,8 @@ cfl = 0.03 # SSPRK33
 #cfl = 0.8 # DGLDDRK73_C
 #cfl = 0.82 # S = 10, AMR, PERK
 #cfl = 0.8 # S = 10, AMR, PERK Single
-#cfl = 0.7 # 3,4,6 PERK
+cfl = 0.7 # 3,4,6 PERK
+cfl = 0.2
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -168,7 +170,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
-for i = 1:10
+for i = 1:1
     mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=10_000,
@@ -185,17 +187,22 @@ for i = 1:10
                     save_everystep=false, callback=callbacks);
     =#
     
+    #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
                 dt=dt,
                 save_everystep=false, callback=callbacks,
                 ode_default_options()...);
-    
-
+    =#
     #=
-    sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+    sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
     =#
+    
+    sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks)
+    
 end
 
 summary_callback() # print the timer summary
