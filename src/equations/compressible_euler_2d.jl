@@ -1286,7 +1286,7 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
     v1_roe = (sqrt_rho_ll * v1_ll + sqrt_rho_rr * v1_rr) / sum_sqrt_rho
     v2_roe = (sqrt_rho_ll * v2_ll + sqrt_rho_rr * v2_rr) / sum_sqrt_rho
     vel_roe = v1_roe * normal_direction[1] + v2_roe * normal_direction[2]
-    vel_roe_mag = (v1_roe * normal_direction[1])^2 + (v2_roe * normal_direction[2])^2
+    vel_roe_mag = v1_roe^2 + v2_roe^2
 
     e_ll = u_ll[4] / rho_ll
     e_rr = u_rr[4] / rho_rr
