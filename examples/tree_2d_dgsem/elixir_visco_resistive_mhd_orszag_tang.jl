@@ -40,6 +40,7 @@ end
 initial_condition = initial_condition_orszag_tang
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
+#surface_flux = (flux_hll, flux_nonconservative_powell)
 
 #volume_flux  = (flux_central, flux_nonconservative_powell)
 volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
@@ -74,7 +75,7 @@ ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 200
+analysis_interval = 200000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 amr_indicator = IndicatorHennemannGassner(semi,
@@ -89,8 +90,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =9, max_threshold=0.4)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           #interval=10,
                            #interval=31, # SSPRK33
+                           interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -141,20 +143,32 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
 
 
 Stages = [11, 6, 4]
+Stages = [10, 6, 4]
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2,
+ode_algorithm = PERK3_Multi(Stages, #"/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2,
+                            "/home/daniel/git/MA/EigenspectraGeneration/Spectra/ViscousOrszagTang/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
-
-
+#=
+for i = 1:1
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                  initial_refinement_level=4,
+                  n_cells_max=100000)
+  
+  semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver) 
+  
+  ode = semidiscretize(semi, tspan; split_form = false)
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 
-
+end
+=#
 cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
+
+cfl = 1.2 # ParsaniKetchesonDeconinck3S53
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -167,10 +181,9 @@ callbacks = CallbackSet(summary_callback,
                         glm_speed_callback)
 
 #=
-sol = solve(ode, SSPRK33();
+sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks,
-            thread = OrdinaryDiffEq.True());
+            ode_default_options()..., callback=callbacks);
 =#
 
 for i = 1:1
@@ -182,9 +195,14 @@ for i = 1:1
   
   ode = semidiscretize(semi, tspan; split_form = false)
 
+  #=
   sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
+  =#
+  sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks)                
 end
 
 
