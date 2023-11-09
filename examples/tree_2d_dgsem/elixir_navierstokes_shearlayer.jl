@@ -7,7 +7,7 @@ using Trixi, LinearAlgebra
 
 # TODO: parabolic; unify names of these accessor functions
 prandtl_number() = 0.72
-mu() = 1.0/3.0 * 10^(-5)
+mu() = 1.0/40000
 
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
@@ -51,36 +51,19 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                              initial_condition, solver)
-#=
-A = jacobian_ad_forward(semi)
-
-Eigenvalues = eigvals(A)
-
-# Complex conjugate eigenvalues have same modulus
-Eigenvalues = Eigenvalues[imag(Eigenvalues) .>= 0]
-
-# Sometimes due to numerical issues some eigenvalues have positive real part, which is erronous (for hyperbolic eqs)
-Eigenvalues = Eigenvalues[real(Eigenvalues) .< 0]
-
-EigValsReal = real(Eigenvalues)
-EigValsImag = imag(Eigenvalues)
-
-plotdata = nothing
-plotdata = scatter!(EigValsReal, EigValsImag, label = "Spectrum")
-display(plotdata)
-=#
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.8)
-#tspan = (0.0, 2.0)
+tspan = (0.0, 1.2)
+
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 10000
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval,)
@@ -93,29 +76,35 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level  = InitialRefinement+6, max_threshold=0.45)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20,
+                           #interval=20, # PERK
+                           interval=17, # PERk single
+                           #interval = 31, # ParsaniKetchesonDeconinck3S53
+                           #interval=15, # DGLDDRK73_C
+                           #interval=40, # RDPK3SpFSAL35
+                           #interval=112, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
+cfl = 2.2 # p = 2,  E = 3, 6, 12
+cfl = 2.1 # p = 3, E = 3, 4, 7, 13
+cfl = 3.0 # p = 3, E = 3, 4, 7
+
+#cfl = 3.3 # DGLDDRK73_C
+#cfl = 1.9 # ParsaniKetchesonDeconinck3S53
+#cfl = 1.0 # SSPRK33
+
+stepsize_callback = StepsizeCallback(cfl=cfl)
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
+                        stepsize_callback,
                         amr_callback)
 
 ###############################################################################
 # run the simulation
 
+LevelCFL = Dict([(42, 42.0)])
 Integrator_Mesh_Level_Dict = Dict([(42, 42)])
-
-
-# S = 3 base
-
-# Levels 3-7
-LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.9)])
-# Longer tspan
-#LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.8)])
-
-# Levels 3-9
-LevelCFL = Dict([(3, 4.0), (4, 2.0), (5, 1.0 * 0.9), (6, 0.5 * 0.9), (7, 0.25 * 0.9), (8, 0.125 * 0.8), (9, 1/16 * 0.8)])
 
 # S= 3, p = 2
 dt = 0.000896571863268036445 / (2.0^(InitialRefinement - 4))
@@ -123,49 +112,71 @@ dt = 0.000896571863268036445 / (2.0^(InitialRefinement - 4))
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
-
+#=
 ode_algorithm = PERK_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/", 
                            #"/home/daniel/git/MA/Optim_Monomials/SecOrdCone_EiCOS/",
                            bS, cEnd, 
                            LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
-
-
-#=
-# S = 6
-# handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl=3.6)
-S = 6
-
-#stepsize_callback = StepsizeCallback(cfl=7.2)
-#S = 12
-
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        amr_callback,
-                        stepsize_callback)
-
-ode_algorithm = PERK(S, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/", bS, cEnd)
 =#
 
-sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+cS2 = 1.0
+Stages = [13, 7, 4, 3]
+Stages = [7, 4, 3]
 
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2,
+                            LevelCFL, Integrator_Mesh_Level_Dict)
 
-#=
-time_int_tol = 1e-6 # InitialRefinement = 4
-#time_int_tol = 1e-7 # InitialRefinement = 5
-sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
+ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
+
+for i = 1:10
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                initial_refinement_level=InitialRefinement,
+                n_cells_max=100_000)
+
+  semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
+                                              initial_condition, solver)
+
+  ode = semidiscretize(semi, tspan; split_form = false)
+
+  sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+
+  #=
+  callbacksDE = CallbackSet(summary_callback,
+                            analysis_callback,
+                            amr_callback)
+
+  tol = 1e-4 # maximum error tolerance
+  sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
+              ode_default_options()..., callback=callbacksDE);
+  =#
+  
+  #=
+  sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks)
+  =#
+
+  #=
+  sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks)
+  =#
+  #=
+  sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+            dt = 1.0,
             ode_default_options()..., callback=callbacks)
-=#
+  =#            
+end
+
 
 
 summary_callback() # print the timer summary
 
 plot(sol)
 pd = PlotData2D(sol)
-plot(pd["v1"], title = "\$v_x, t_f=0.8\$")
+plot(pd["v1"], title = "\$v_x, t_f=1.2\$")
 plot(pd["v2"], title = "\$v_x, t=0\$")
-plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.8\$")
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 1.2\$")
 
 plot(pd["v2"])
