@@ -107,18 +107,18 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0041,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=40, # PERK, DGLDDRK73_C
+                           interval=40, # PERK, DGLDDRK73_C
                            #interval=40*26, # SSPRK33
-                            interval = 10,
+                           #interval = 10,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
 cfl = 0.03 # SSPRK33
-#cfl = 0.8 # DGLDDRK73_C
+cfl = 0.8 # DGLDDRK73_C
 #cfl = 0.82 # S = 10, AMR, PERK
 #cfl = 0.8 # S = 10, AMR, PERK Single
-cfl = 0.7 # 3,4,6 PERK
-cfl = 0.2
+#cfl = 0.7 # 3,4,6 PERK
+#cfl = 0.2
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
