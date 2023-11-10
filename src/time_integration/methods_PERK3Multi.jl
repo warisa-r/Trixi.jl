@@ -194,9 +194,6 @@ mutable struct PERK3_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
   const NumDoublings::Int64
   const NumStages::Int64
-  #const LevelCFL::Vector{Float64}
-  const LevelCFL::Dict{Int64, Float64}
-  const Integrator_Mesh_Level_Dict::Dict{Int64, Int64}
   stage_callbacks::StageCallbacks
 
   AMatrices::Array{Float64, 3}
@@ -206,10 +203,7 @@ mutable struct PERK3_Multi{StageCallbacks}
   HighestEvalLevels::Vector{Int64}
 
   function PERK3_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
-                       BasePathMonCoeffs_::AbstractString, cS2_::Float64,
-                       #LevelCFL_::Vector{Float64},
-                       LevelCFL_::Dict{Int64, Float64},
-                       Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
+                       BasePathMonCoeffs_::AbstractString, cS2_::Float64;
                        stage_callbacks=())
 
     newPERK3_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
@@ -218,7 +212,6 @@ mutable struct PERK3_Multi{StageCallbacks}
                         NumStageEvalsMin_ * 2^NumDoublings_,
                         # Note: This is for linear increasing PERK
                         #NumStageEvalsMin_ + 2 * NumDoublings_,
-                        LevelCFL_, Integrator_Mesh_Level_Dict_,
                         stage_callbacks)
 
     newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, 
@@ -229,16 +222,12 @@ mutable struct PERK3_Multi{StageCallbacks}
   end
 
   function PERK3_Multi(Stages_::Vector{Int64},
-                       BasePathMonCoeffs_::AbstractString, cS2_::Float64,
-                       #LevelCFL_::Vector{Float64},
-                       LevelCFL_::Dict{Int64, Float64},
-                       Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
+                       BasePathMonCoeffs_::AbstractString, cS2_::Float64;
                        stage_callbacks=())
 
     newPERK3_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
                           length(Stages_) - 1,
                           maximum(Stages_),
-                          LevelCFL_, Integrator_Mesh_Level_Dict_,
                           stage_callbacks)
 
     newPERK3_Multi.AMatrices, newPERK3_Multi.c, newPERK3_Multi.ActiveLevels, 
@@ -758,8 +747,6 @@ function solve!(integrator::PERK3_Multi_Integrator)
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
       terminate!(integrator)
-    #else
-    #  integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
 
     #@trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
@@ -842,7 +829,6 @@ function solve!(integrator::PERK3_Multi_Integrator)
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
-        # TODO: Not sure if still valid with dict-based approach
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
         if integrator.coarsest_lvl == alg.NumDoublings
