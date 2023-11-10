@@ -76,8 +76,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level  = InitialRefinement+6, max_threshold=0.45)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK
-                           interval=17, # PERk single
+                           interval=20, # PERK
+                           #interval=17, # PERk single
                            #interval = 31, # ParsaniKetchesonDeconinck3S53
                            #interval=15, # DGLDDRK73_C
                            #interval=40, # RDPK3SpFSAL35
@@ -103,9 +103,6 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-LevelCFL = Dict([(42, 42.0)])
-Integrator_Mesh_Level_Dict = Dict([(42, 42)])
-
 # S= 3, p = 2
 dt = 0.000896571863268036445 / (2.0^(InitialRefinement - 4))
 
@@ -124,10 +121,9 @@ cS2 = 1.0
 Stages = [13, 7, 4, 3]
 Stages = [7, 4, 3]
 
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2,
-                            LevelCFL, Integrator_Mesh_Level_Dict)
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2)
 
-ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
+#ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
 
 for i = 1:10
   mesh = TreeMesh(coordinates_min, coordinates_max,
