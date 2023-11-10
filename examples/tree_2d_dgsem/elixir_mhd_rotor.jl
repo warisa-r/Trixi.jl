@@ -107,17 +107,18 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0025,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=40, # PERK
-                           #interval=40*26, # SSPRK33
+                           #interval=60, # PERK Single
+                           interval=40, # PERK, SSPRK33
                            #interval = 30, # DGLDDRK73_C
-                           interval = 40, # ParsaniKetchesonDeconinck3S53
+                           #interval = 40, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-cfl = 0.03 # SSPRK33
 cfl = 0.65 # DGLDDRK73_C
 cfl = 0.85 # 3,4,6 PERK
-cfl = 0.5 # ParsaniKetchesonDeconinck3S53
+#cfl = 0.5 # ParsaniKetchesonDeconinck3S53, SSPRK33
+#cfl = 0.6
+cfl = 1.0
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -161,7 +162,7 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
 
-#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
 for i = 1:1
@@ -175,11 +176,11 @@ for i = 1:1
 
     ode = semidiscretize(semi, tspan)
 
-    #=
+    
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    =#
+    
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -187,11 +188,11 @@ for i = 1:1
                 save_everystep=false, callback=callbacks,
                 ode_default_options()...);
     =#
-    
+    #=
     sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
-    
+    =#
     
     #=
     sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
