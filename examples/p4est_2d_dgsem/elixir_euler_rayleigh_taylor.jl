@@ -141,12 +141,14 @@ analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.0) # p = 2, E = 3, 5, 10
-#stepsize_callback = StepsizeCallback(cfl=1.46) # p = 3, E = 3, 4, 6, 11
-stepsize_callback = StepsizeCallback(cfl=1.4) # p = 3, E = 3, 4, 6, 11
+stepsize_callback = StepsizeCallback(cfl=1.46) # p = 3, E = 3, 4, 6, 11
+#stepsize_callback = StepsizeCallback(cfl=1.4) # p = 3, E = 3, 4, 6, 11
+
+stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
 
 #stepsize_callback = StepsizeCallback(cfl=1.1) # DGLDDRK73_C
 
-stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
+#stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -161,9 +163,10 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=20, # PERK 3, 4, 6, 11
+                           interval=20, # PERK 3, 4, 6
                            #interval=17, #RDPK3SpFSAL35
                            #interval=25, # DGLDDRK73_C
-                           interval = 21, # ParsaniKetchesonDeconinck3S53
+                           #interval = 21, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -199,17 +202,18 @@ ode_algorithm = PERK(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/Ray
 # S = 11, p = 3
 dt = 0.007080
 
-Stages = [11, 6, 4, 3]
+#Stages = [11, 6, 4, 3]
+Stages = [6, 4, 3]
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/", cS2,
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/", cS2,
                             LevelCFL, Integrator_Mesh_Level_Dict)
 
-#ode_algorithm = PERK3(11, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p3/")
-#=
+#ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
-=#
+
 
 #=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
