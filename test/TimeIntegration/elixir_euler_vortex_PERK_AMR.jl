@@ -122,7 +122,7 @@ solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 coordinates_min = (-EdgeLength, -EdgeLength)
 coordinates_max = ( EdgeLength,  EdgeLength)
 
-Refinement = 6
+Refinement = 4
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
                 n_cells_max=100_000)
@@ -145,13 +145,19 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-
+# Convergence tests etc.
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+2, max_threshold=-2.0)
 
-CFL_Convergence = 0.25
+# Runtime tests "fixed AMR"                                      
+amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
+                                      base_level=Refinement,
+                                      med_level=Refinement+3, med_threshold=-3.0,
+                                      max_level=Refinement+4, max_threshold=-2.0)
+
+CFL_Convergence = 1.0
 amr_callback = AMRCallback(semi, amr_controller,
                            # For convergence study
                            interval=Int(20/CFL_Convergence), 
@@ -217,7 +223,7 @@ ode_algorithm = PERK3_Multi(NumBaseStages, NumMethods,
 =#
 # For error comparison tests                           
 
-ode_algorithm = PERK(Int(12*CFL_Convergence), "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg2/", bS, cEnd)
+#ode_algorithm = PERK(Int(12*CFL_Convergence), "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg2/", bS, cEnd)
 
 #ode_algorithm = PERK3(Int(16*CFL_Convergence), "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg3/")
 
