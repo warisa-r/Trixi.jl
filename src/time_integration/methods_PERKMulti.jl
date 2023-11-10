@@ -21,7 +21,7 @@ function ComputeACoeffs(NumStageEvals::Int,
 end
 
 
-function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
+function ComputePERK_Multi_ButcherTableau(NumMethods::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
                                           bS::Float64, cEnd::Float64)
                                      
   # c Vector form Butcher Tableau (defines timestep per stage)
@@ -45,15 +45,15 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
   CoeffsMax = NumStages - 2
 
-  AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
-  for i = 1:NumDoublings+1
+  AMatrices = zeros(NumMethods, CoeffsMax, 2)
+  for i = 1:NumMethods
     AMatrices[i, :, 1] = c[3:end]
   end
 
   # Datastructure indicating at which stage which level is evaluated
   ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
   # k1 is evaluated at all levels
-  ActiveLevels[1] = 1:NumDoublings+1
+  ActiveLevels[1] = 1:NumMethods
 
   # Datastructure indicating at which stage which level contributes to state
   EvalLevels = [Vector{Int64}() for _ in 1:NumStages]
@@ -62,7 +62,7 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   # Second stage: Only finest method
   EvalLevels[2] = [1]
 
-  for level = 1:NumDoublings + 1
+  for level = 1:NumMethods
     
     PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
     NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
@@ -71,18 +71,6 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
 
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    
-
-    #=
-    # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
-    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
-    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages - 2*level
-    A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
-
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    =#
 
     # Add active levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -97,13 +85,13 @@ function ComputePERK_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, Bas
   HighestActiveLevels = maximum.(ActiveLevels)
   HighestEvalLevels   = maximum.(EvalLevels)
 
-  for i = 1:NumDoublings+1
+  for i = 1:NumMethods
     println("A-Matrix of Butcher tableau of level " * string(i))
     display(AMatrices[i, :, :]); println()
   end
 
   println("Check violation of internal consistency")
-  for i = 1:NumDoublings+1
+  for i = 1:NumMethods
     for j = 1:i
       display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
     end
@@ -168,18 +156,6 @@ function ComputePERK_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int,
 
     AMatrices[level, CoeffsMax - (NumStageEvals - 3):end, 1] -= A
     AMatrices[level, CoeffsMax - (NumStageEvals - 3):end, 2]  = A
-    
-
-    #=
-    # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
-    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
-    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages - 2*level
-    A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
-
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    =#
 
     # Add active levels to stages
     for stage = NumStages:-1:NumStages-NumMonCoeffs
@@ -226,7 +202,7 @@ CarpenterKennedy2N{54, 43} methods.
 
 mutable struct PERK_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
-  const NumDoublings::Int64
+  const NumMethods::Int64
   const NumStages::Int64
   const b1::Float64
   const bS::Float64
@@ -239,22 +215,20 @@ mutable struct PERK_Multi{StageCallbacks}
   HighestEvalLevels::Vector{Int64}
 
   # TODO: Add default values for bS, cEnd
-  function PERK_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
+  function PERK_Multi(NumStageEvalsMin_::Int, NumMethods_::Int,
                       BasePathMonCoeffs_::AbstractString, bS_::Float64, cEnd_::Float64;
                       stage_callbacks=())
 
-    newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
+    newPERK_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumMethods_,
                         # Current convention: NumStages = MaxStages = S;
                         # TODO: Allow for different S >= Max {Stage Evals}
-                        NumStageEvalsMin_ * 2^NumDoublings_,
-                        # For "linear" PERK
-                        #NumStageEvalsMin_ + 2 * NumDoublings_,
+                        NumStageEvalsMin_ * 2^(NumMethods_ - 1),
                         1.0-bS_, bS_,
                         stage_callbacks)
 
     newPERK_Multi.AMatrices, newPERK_Multi.c, newPERK_Multi.ActiveLevels, 
     newPERK_Multi.HighestActiveLevels, newPERK_Multi.HighestEvalLevels = 
-      ComputePERK_Multi_ButcherTableau(NumDoublings_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
+      ComputePERK_Multi_ButcherTableau(NumMethods_, newPERK_Multi.NumStages, BasePathMonCoeffs_, bS_, cEnd_)
 
     return newPERK_Multi
   end
@@ -264,7 +238,7 @@ mutable struct PERK_Multi{StageCallbacks}
                       stage_callbacks=())
 
     newPERK_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
-                          length(Stages_) - 1,
+                          length(Stages_),
                           maximum(Stages_),
                           1.0-bS_, bS_,
                           stage_callbacks)
@@ -311,7 +285,6 @@ mutable struct PERK_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, PE
   coarsest_lvl::Int64
   n_levels::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
-  dtRef::RealT
   AddRHSCalls::Float64
 end
 
@@ -822,8 +795,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                # CARE: Highest level = 9 
-                t0, -1, n_levels, du_ode_hyp, dt, 0.0)
+                t0, -1, n_levels, du_ode_hyp, 0.0)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -912,7 +884,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
 
         # Loop over different methods with own associated level
-        for level = 1:min(alg.NumDoublings-1, integrator.n_levels)
+        for level = 1:min(alg.NumMethods-1, integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
           end
@@ -924,15 +896,15 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
 
         # "Remainder": Non-efficiently integrated
-        for level = alg.NumDoublings:integrator.n_levels
+        for level = alg.NumMethods:integrator.n_levels
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumDoublings, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 1] * integrator.k1[u_ind]
           end
         end
-        if alg.HighestEvalLevels[stage] == alg.NumDoublings
+        if alg.HighestEvalLevels[stage] == alg.NumMethods
           for level = alg.HighestEvalLevels[stage]+1:integrator.n_levels
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumDoublings, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -942,7 +914,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
-        if integrator.coarsest_lvl == alg.NumDoublings
+        if integrator.coarsest_lvl == alg.NumMethods
           integrator.coarsest_lvl = integrator.n_levels
         end
 
