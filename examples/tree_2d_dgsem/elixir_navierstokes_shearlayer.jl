@@ -70,6 +70,7 @@ alive_callback = AliveCallback(analysis_interval=analysis_interval,)
 
 amr_indicator = IndicatorLöhner(semi, variable=v1)
 
+# TODO: Adjust slightly for slightly increased viscosity (and longer runtime of DGLDDRK73_C)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = InitialRefinement,
                                       med_level  = InitialRefinement+4, med_threshold=0.15,

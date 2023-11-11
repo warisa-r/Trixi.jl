@@ -183,8 +183,6 @@ dt = 0.00142227114120032641
 # S = 10 p = 2
 dt = 0.00656249996216502054
 
-LevelCFL = Dict([(42, 42.0)])
-Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
@@ -206,8 +204,7 @@ dt = 0.007080
 Stages = [6, 4, 3]
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/", cS2,
-                            LevelCFL, Integrator_Mesh_Level_Dict)
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 

@@ -98,7 +98,8 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 
 cfl = 1.9 # p = 2, S = 12
-cfl = 1.9 # p = 3, S = 11
+cfl = 1.9 # p = 3, S = 10
+cfl = 1.9 # p = 3, S = 6
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -119,8 +120,6 @@ dt = 0.0161709425439767083
 # S = 4, p = 2 Ref = 4
 #dt = 0.0274786205467535198
 
-LevelCFL = Dict([(42, 42.0)])
-Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
@@ -144,14 +143,14 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
 
 Stages = [11, 6, 4]
 Stages = [10, 6, 4]
+Stages = [6, 4, 3]
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2,
-                            LevelCFL, Integrator_Mesh_Level_Dict)
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2)
 
-ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
+#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 
-for i = 1:10
+for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -179,13 +178,7 @@ callbacks = CallbackSet(summary_callback,
                         stepsize_callback,
                         glm_speed_callback)
 
-#=
-sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
-            dt = 1.0,
-            ode_default_options()..., callback=callbacks);
-=#
-
-for i = 1:10
+for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -203,7 +196,13 @@ for i = 1:10
   sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)                
-  =#                
+  =#
+  
+  #=
+  sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks);
+  =#
 end
 
 
