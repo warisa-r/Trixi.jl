@@ -75,10 +75,11 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=9,
+                           interval=9, # PERK 4, 7, 11
+                           #interval = 6, # PERK S = 11
                            #interval=18, #RDPK3SpFSAL35
-                           interval=20, #ParsaniKetchesonDeconinck3S53
-                           #interval=12, #DGLDDRK73_C
+                           #interval=20, #ParsaniKetchesonDeconinck3S53
+                           #interval=11, #DGLDDRK73_C
                            #interval=32, #SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
@@ -104,26 +105,36 @@ dt = 0.0078961056005209686 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 ###############################################################################
 # run the simulation
 
-
-Integrator_Mesh_Level_Dict = Dict([(42, 42)])
-
-# Two level
-LevelCFL = Dict([(4, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 1/8), (8, 1/16), (9, 1/32 * 1.1)])
-
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(3, 2, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/",
+
+#Stages = [12, 6, 3]
+#Stages = [12, 6, 4]
+
+#Stages = [11, 6, 4, 3]
+Stages = [11, 6, 4]
+
+#Stages = [6, 4, 3]
+
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/",
                            cS2,
-                           LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
-stepsize_callback = StepsizeCallback(cfl=3.805) # S = 12
+#stepsize_callback = StepsizeCallback(cfl=3.5) # p = 3, E = 3, 6, 12
+stepsize_callback = StepsizeCallback(cfl=3.7) # p = 3, E = 4, 6, 12
+
+stepsize_callback = StepsizeCallback(cfl=3.4) # p = 3, E = 3, 4, 6, 11
+stepsize_callback = StepsizeCallback(cfl=3.8) # p = 3, E = 4, 6, 11
+
+#stepsize_callback = StepsizeCallback(cfl=2.7) # p = 3, E = 3, 4, 6
+
+#stepsize_callback = StepsizeCallback(cfl=5.4) # p = 3, S = 11
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
                         amr_callback)
 
-#ode_algorithm = PERK3(12, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
+#ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 
 for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
@@ -133,11 +144,11 @@ for i = 1:1
 
   ode = semidiscretize(semi, tspan)
 
-  #=
+  
   sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-  =#
+  
 
   #=
   callbacksDE = CallbackSet(summary_callback,
@@ -151,7 +162,7 @@ for i = 1:1
   =#
 
   #=
-  stepsize_callback = StepsizeCallback(cfl=3.0) # DGLDDRK73_C
+  stepsize_callback = StepsizeCallback(cfl=3.1) # DGLDDRK73_C
 
   callbacks = CallbackSet(summary_callback,
                           analysis_callback,
@@ -176,7 +187,8 @@ for i = 1:1
               ode_default_options()..., callback=callbacks)
   =#
 
-  stepsize_callback = StepsizeCallback(cfl=1.7) # ParsaniKetchesonDeconinck3S53
+  #=
+  stepsize_callback = StepsizeCallback(cfl=1.9) # ParsaniKetchesonDeconinck3S53
 
   callbacks = CallbackSet(summary_callback,
                           analysis_callback,
@@ -186,11 +198,11 @@ for i = 1:1
   sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
               ode_default_options()..., callback=callbacks)
-
-  summary_callback() # print the timer summary
+  =#            
 end
+  
+summary_callback() # print the timer summary
 
-#=
 plot(sol)
 
 pd = PlotData2D(sol)
@@ -200,4 +212,4 @@ plot(pd["rho"], title = "", colorbar_title = "     \$ρ\$", xlabel = "\$x\$", yl
 =#
 plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
-=#
+
