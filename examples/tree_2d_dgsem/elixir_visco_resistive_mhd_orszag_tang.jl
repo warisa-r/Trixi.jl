@@ -143,7 +143,7 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
 
 Stages = [11, 6, 4]
 Stages = [10, 6, 4]
-Stages = [6, 4, 3]
+#Stages = [6, 4, 3]
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2)
