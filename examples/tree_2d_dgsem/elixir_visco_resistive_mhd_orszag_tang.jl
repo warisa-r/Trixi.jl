@@ -90,7 +90,7 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =9, max_threshold=0.4)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           interval=10, # PERK, DGLDDRK73_C
                            #interval=31, # SSPRK33
                            #interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
@@ -100,6 +100,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 cfl = 1.9 # p = 2, S = 12
 cfl = 1.9 # p = 3, S = 10
 cfl = 1.9 # p = 3, S = 6
+cfl = 1.9 # p = 3, S = 8
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -143,12 +144,13 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
 
 Stages = [11, 6, 4]
 Stages = [10, 6, 4]
-#Stages = [6, 4, 3]
+Stages = [6, 4, 3]
+#Stages = [8, 5, 4]
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2)
 
-#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 
 for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
@@ -163,7 +165,8 @@ for i = 1:1
 
 end
 
-cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
+
+#cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
 
 #cfl = 1.2 # ParsaniKetchesonDeconinck3S53
@@ -178,7 +181,7 @@ callbacks = CallbackSet(summary_callback,
                         stepsize_callback,
                         glm_speed_callback)
 
-for i = 1:1
+for i = 1:11
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -187,11 +190,12 @@ for i = 1:1
   
   ode = semidiscretize(semi, tspan; split_form = false)
 
-  
+  #=
   sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
-  
+  =#
+
   #=
   sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
@@ -205,12 +209,13 @@ for i = 1:1
   =#
 end
 
-
 summary_callback() # print the timer summary
+
+
 plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"])
-plot(pd["p"])
+plot(pd["rho"], c = :jet)
+plot(pd["p"], c = :jet)
 plot(pd["B1"])
 plot!(getmesh(pd))
