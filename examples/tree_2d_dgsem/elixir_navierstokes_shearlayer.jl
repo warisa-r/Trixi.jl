@@ -56,7 +56,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.8)
-tspan = (0.0, 1.2)
+#tspan = (0.0, 1.2)
 
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
@@ -77,8 +77,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level  = InitialRefinement+6, max_threshold=0.3)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK
-                           interval=18, # PERK single
+                           interval=20, # PERK
+                           #interval=18, # PERK single
                            #interval = 31, # ParsaniKetchesonDeconinck3S53
                            #interval=17, # DGLDDRK73_C
                            #interval=40, # RDPK3SpFSAL35
@@ -126,9 +126,9 @@ Stages = [7, 4, 3]
 
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2)
 
-ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
+#ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
 
-for i = 1:1
+#for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
@@ -166,14 +166,12 @@ for i = 1:1
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
   =#          
-end
+#end
 
 summary_callback() # print the timer summary
 
 plot(sol)
 pd = PlotData2D(sol)
-plot(pd["v1"], title = "\$v_x, t_f=1.2\$")
+plot(pd["v1"], title = "\$v_x, t=0.8\$")
 plot(pd["v2"], title = "\$v_x, t=0\$")
-plot!(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 1.2\$")
-
-plot(pd["v2"])
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t = 0.8\$")
