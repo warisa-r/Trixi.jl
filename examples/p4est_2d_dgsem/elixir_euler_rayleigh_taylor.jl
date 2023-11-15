@@ -204,7 +204,7 @@ cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
@@ -222,10 +222,11 @@ sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
             ode_default_options()..., callback=callbacks)
 =#
 
+#=
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
-
+=#
 #=
 callbacksDE = CallbackSet(summary_callback,
             analysis_callback,
@@ -239,5 +240,5 @@ summary_callback() # print the timer summary
 plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"], title = "\$ ρ, t_f = 3.0 \$")
-plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
+plot(pd["rho"], title = "\$ ρ, t_f = 3.0 \$", c = :jet)
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$", xticks = [0.0, 0.25])
