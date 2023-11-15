@@ -75,7 +75,7 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=9, # PERK 4, 7, 11
+                           interval=9, # PERK 4, 6, 11
                            #interval = 6, # PERK S = 11
                            #interval=18, #RDPK3SpFSAL35
                            #interval=20, #ParsaniKetchesonDeconinck3S53
@@ -136,7 +136,7 @@ callbacks = CallbackSet(summary_callback,
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/Kelvin_Helmholtz_Euler/Own_SSPRK33_Style/")
 
-for i = 1:1
+#for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
                 n_cells_max=100_000)
@@ -199,7 +199,7 @@ for i = 1:1
               dt = 1.0,
               ode_default_options()..., callback=callbacks)
   =#            
-end
+#end
   
 summary_callback() # print the timer summary
 
@@ -210,6 +210,6 @@ pd = PlotData2D(sol)
 plot(pd["rho"], title = "", colorbar_title = "     \$ρ\$", xlabel = "\$x\$", ylabel = "\$y \$", 
      colorbar_titlefontrotation = 270, colorbar_titlefontsize = 12)
 =#
-plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
+plot(pd["rho"], title = "\$ρ, t_f = 3.0\$", xlabel = "\$x\$", ylabel = "\$y \$", c = :jet)
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$")
 

@@ -118,7 +118,7 @@ cfl = 0.65 # DGLDDRK73_C
 cfl = 0.85 # 3,4,6 PERK
 #cfl = 0.5 # ParsaniKetchesonDeconinck3S53, SSPRK33
 #cfl = 0.6
-cfl = 1.0
+#cfl = 1.0
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -162,10 +162,10 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
 
-ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
-for i = 1:1
+#for i = 1:1
     mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=10_000,
@@ -199,7 +199,7 @@ for i = 1:1
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
     =#
-end
+#end
 
 summary_callback() # print the timer summary
 
@@ -208,5 +208,5 @@ plot(sol)
 
 pd = PlotData2D(sol)
 plot(pd["rho"])
-plot(pd["p"], title = "\$ p, t_f = 0.15 \$", c = :rainbow)
+plot(pd["p"], title = "\$ p, t_f = 0.15 \$", c = :jet)
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.15\$")
