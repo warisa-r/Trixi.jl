@@ -240,5 +240,5 @@ summary_callback() # print the timer summary
 plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"], title = "\$ ρ, t_f = 3.0 \$", c = :jet)
+plot(pd["rho"], title = "\$ ρ, t_f = 3.0 \$", c = :jet, xticks = [0.0, 0.25])
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 3.0\$", xticks = [0.0, 0.25])
