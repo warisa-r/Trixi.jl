@@ -40,9 +40,6 @@ end
 initial_condition = initial_condition_orszag_tang
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
-#surface_flux = (flux_hll, flux_nonconservative_powell)
-
-#volume_flux  = (flux_central, flux_nonconservative_powell)
 volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
 basis = LobattoLegendreBasis(3)
 
@@ -152,7 +149,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Viscou
 
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 
-for i = 1:1
+#for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -163,9 +160,9 @@ for i = 1:1
   sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                     save_everystep=false, callback=callbacks);
 
-end
+#end
 
-
+#=
 #cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
 
@@ -208,14 +205,99 @@ for i = 1:11
               ode_default_options()..., callback=callbacks);
   =#
 end
-
+=#
 summary_callback() # print the timer summary
 
 
-plot(sol)
+#plot(sol)
 
 pd = PlotData2D(sol)
-plot(pd["rho"], c = :jet)
-plot(pd["p"], c = :jet)
-plot(pd["B1"])
-plot!(getmesh(pd))
+
+using Printf
+
+mkpath("out")  # Create output directory automatically
+
+MacroVars_String = "out/MacroVars.vtk"
+MacroVars = open(MacroVars_String, "w")
+
+write(MacroVars, "# vtk DataFile Version 3.0\n")
+write(MacroVars, "vtk output\n")
+write(MacroVars, "ASCII\n")
+write(MacroVars, "DATASET STRUCTURED_GRID\n")
+
+Nx = length(pd.x)
+Ny = length(pd.y)
+NumPoints = Int(Nx * Ny)
+NumPointsString = string(Int(Nx * Ny))
+
+write(MacroVars, "DIMENSIONS ", string(Nx), " ", string(Ny), " 1\n")
+write(MacroVars, "POINTS ", NumPointsString, " float\n")
+for i in 1:Nx
+  for j in 1:Ny
+    write(MacroVars, "$(pd.x[i]) $(pd.y[j]) 0\n")
+  end
+end
+
+write(MacroVars, "\n")
+write(MacroVars, "POINT_DATA ", NumPointsString, "\n")
+
+#=
+write(MacroVars, "SCALARS rho float\n")
+rho = pd.data[1]
+write(MacroVars, "LOOKUP_TABLE default\n")
+for i in 1:Nx
+  for j in 1:Ny
+      write(MacroVars, string(rho[i,j]), "\n")
+  end
+end
+
+write(MacroVars, "\n")
+write(MacroVars, "SCALARS p float\n")
+p = pd.data[5]
+write(MacroVars, "LOOKUP_TABLE default\n")
+for i in 1:Nx
+  for j in 1:Ny
+      write(MacroVars, string(p[i,j]), "\n")
+  end
+end
+=#
+
+write(MacroVars, "\n")
+write(MacroVars, "VECTORS U float\n")
+v1 = pd.data[2]
+v2 = pd.data[3]
+for i in 1:Nx
+  for j in 1:Ny
+    write(MacroVars, string(v1[i,j]), " ", string(v2[i,j]), " 0\n")
+  end
+end
+close(MacroVars)
+
+
+using CairoMakie
+
+x = pd.x
+y = pd.y
+
+f(xP, x, y, v1, v2) = Point2f(
+  v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]],
+  v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]]
+)
+
+f(xP) = f(xP, x, y, v1, v2)
+
+fig, ax, pl = streamplot(f, 0.0..2*pi, 0.0..2*pi; 
+                         stepsize = 1e-3, gridsize = (100, 100),
+                         arrow_size = 0)
+
+Plots.plot(pd["rho"], c = :jet, title = "\$ ρ, t_f = 3.0 \$", 
+           xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
+           yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))
+
+plot(pd["p"], c = :jet, title = "\$ p, t_f = 2.0 \$",
+     xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
+     yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))
+
+Plots.plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 2.0\$",
+           xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
+           yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))
