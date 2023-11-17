@@ -44,7 +44,7 @@ solver = DGSEM(polydeg=2, surface_flux=flux_hlle,
 
 coordinates_min = (-1.0, -1.0, -1.0) .* pi
 coordinates_max = ( 1.0,  1.0,  1.0) .* pi
-InitialRefinement = 3
+InitialRefinement = 5
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
@@ -55,7 +55,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 5.0)
+tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
@@ -68,9 +68,9 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
 amr_indicator = IndicatorLöhner(semi,
                                 variable=Trixi.v2)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level=InitialRefinement,
-                                      med_level =InitialRefinement+1, med_threshold=0.7, # med_level = current level
-                                      max_level =InitialRefinement+3, max_threshold=0.83)
+                                      base_level=5,
+                                      med_level =6, med_threshold=0.7, # med_level = current level
+                                      max_level =7, max_threshold=0.83)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=10,
                            adapt_initial_condition=false,
@@ -86,6 +86,7 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
+#=
 # S = 3, Ref. Level = 1
 S = 3
 CFL = 1.0
@@ -127,11 +128,18 @@ ode_algorithm = PERK_Multi(3, 3, "/home/daniel/git/MA/EigenspectraGeneration/Spe
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
 Plots.plot(sol)
-
-#=
-time_int_tol = 1e-8
-sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
-            ode_default_options()..., callback=callbacks)
 =#
 
+time_int_tol = 1e-5
+sol = solve(ode, RDPK3SpFSAL35(); abstol=time_int_tol, reltol=time_int_tol,
+            ode_default_options()..., callback=callbacks)
+
+
 summary_callback() # print the timer summary
+plot(sol)
+
+pd = PlotData2D(sol)
+plot(pd["p"])
+plot!(getmesh(pd))
+
+2pi/32
