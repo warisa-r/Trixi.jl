@@ -6,7 +6,7 @@ using Trixi
 
 # TODO: parabolic; unify names of these accessor functions
 prandtl_number() = 0.72
-mu() = 0.001
+mu() = 1e-4 # Re = 10000
 
 equations = CompressibleEulerEquations2D(1.4)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu=mu(),
@@ -60,27 +60,21 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span `tspan`
-tspan = (0.0, 25)
+tspan = (0.0, 1.0)
 ode = semidiscretize(semi, tspan, split_form = false);
 
 summary_callback = SummaryCallback()
-alive_callback = AliveCallback(alive_interval=100)
-analysis_interval = 10
+analysis_interval = 50
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 amr_indicator = IndicatorLöhner(semi, variable=Trixi.density)
 
-#=
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level = 2,
-                                      med_level  = 5, med_threshold=0.0001,
-                                      max_level  = 7, max_threshold=0.0005)
-=#
-amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level = 2,
-                                      med_level  = 5, med_threshold=0.001,
-                                      max_level  = 7, max_threshold=0.005)                                    
+                                      med_level  = 5, med_threshold=0.00003,
+                                      max_level  = 7, max_threshold=0.00008)
+                                
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=50,
+                           interval=5,
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -95,13 +89,14 @@ dt = 0.00739935292367590632 * CFL_Ref
 #dt *= 2 # S = 6
 #dt *= 4 # S = 12
 
-#=
+
 time_int_tol = 1e-8
-callbacks = CallbackSet(summary_callback, alive_callback, amr_callback, analysis_callback)
+callbacks = CallbackSet(summary_callback, amr_callback, analysis_callback)
 sol = solve(ode, RDPK3SpFSAL49(); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacks);
-=#
 
+
+#=
 callbacks = CallbackSet(summary_callback, amr_callback, analysis_callback)
 #callbacks = CallbackSet(summary_callback, analysis_callback)
 
@@ -114,19 +109,17 @@ ode_algorithm = PERK(12, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/Lid
                      bS, cEnd)
 =#
 
-LevelCFL = Dict([(2, 4.0), (3, 2.0), (4, 1.0), (5, 0.5), (6, 0.25), (7, 0.125)])
-LevelCFL = Dict([(2, 4.0), (3, 1.4), (4, 0.7), (5, 0.35), (6, 0.1), (7, 0.04)])
 Integrator_Mesh_Level_Dict = Dict([(42, 42)])
 ode_algorithm = PERK_Multi(3, 2, 
                            "/home/daniel/git/MA/EigenspectraGeneration/Spectra/LidDrivenCavity/",
                            bS, cEnd,
-                           LevelCFL, Integrator_Mesh_Level_Dict,
                            stage_callbacks = ())
 
 
 sol = Trixi.solve(ode, ode_algorithm, 
                   dt = dt,
                   save_everystep=false, callback=callbacks)
+=#
 
 summary_callback() # print the timer summary
 plot(sol)
