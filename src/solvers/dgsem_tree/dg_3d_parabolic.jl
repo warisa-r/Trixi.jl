@@ -689,10 +689,10 @@ function prolong2boundaries!(cache_parabolic, flux_viscous::Vector{Array{uEltype
     return nothing
 end
 
-function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}}, gradients, u_transformed,
+function calc_viscous_fluxes!(flux_viscous, gradients, u_transformed,
                               mesh::Union{TreeMesh{3}, P4estMesh{3}},
                               equations_parabolic::AbstractEquationsParabolic,
-                              dg::DG, cache, cache_parabolic) where {uEltype <: Real}
+                              dg::DG, cache, cache_parabolic)
     gradients_x, gradients_y, gradients_z = gradients
     flux_viscous_x, flux_viscous_y, flux_viscous_z = flux_viscous # output arrays
 
@@ -728,15 +728,16 @@ function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}}, gradients
     end
 end
 
-function calc_viscous_fluxes!(flux_viscous::Vector{Array{uEltype, 5}},
-                              gradients::Vector{Array{uEltype, 5}}, u_transformed,
+function calc_viscous_fluxes!(flux_viscous,
+                              gradients, u_transformed,
                               mesh::TreeMesh{3},
                               equations_parabolic::AbstractEquationsParabolic,
-                              dg::DG, cache, cache_parabolic) where {uEltype <: Real}
+                              dg::DG, cache, cache_parabolic,
+                              level_info_elements_acc::Vector{Int64}) where {uEltype <: Real}
     gradients_x, gradients_y, gradients_z = gradients
     flux_viscous_x, flux_viscous_y, flux_viscous_z = flux_viscous # output arrays
 
-    @threaded for element in eachelement(dg, cache)
+    @threaded for element in level_info_elements_acc
         for k in eachnode(dg), j in eachnode(dg), i in eachnode(dg)
             # Get solution and gradients
             u_node = get_node_vars(u_transformed, equations_parabolic, dg, i, j, k,
