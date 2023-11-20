@@ -733,7 +733,7 @@ function calc_viscous_fluxes!(flux_viscous,
                               mesh::TreeMesh{3},
                               equations_parabolic::AbstractEquationsParabolic,
                               dg::DG, cache, cache_parabolic,
-                              level_info_elements_acc::Vector{Int64}) where {uEltype <: Real}
+                              level_info_elements_acc::Vector{Int64})
     gradients_x, gradients_y, gradients_z = gradients
     flux_viscous_x, flux_viscous_y, flux_viscous_z = flux_viscous # output arrays
 
