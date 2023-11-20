@@ -48,29 +48,26 @@ InitialRefinement = 5 # For real run
 #InitialRefinement = 2 # For tests
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
-                n_cells_max=100_000)
+                n_cells_max=2500000)
 
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                              initial_condition, solver)
-
-#=
-semi = SemidiscretizationHyperbolic(mesh, equations,
-                                    initial_condition, solver)
-=#
+                                             
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 20.0)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan; split_form = false)
-#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 10
+analysis_interval = 100
 
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true)
-                                     #extra_analysis_integrals=(enstrophy, ))
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
+                                     extra_analysis_integrals=(energy_kinetic,
+                                     energy_internal,
+                                     enstrophy))
 
 amr_indicator = IndicatorLöhner(semi,
                                 variable=Trixi.v2)
@@ -79,16 +76,16 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =InitialRefinement+1, med_threshold=0.7, # med_level = current level
                                       max_level =InitialRefinement+2, max_threshold=0.83)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10,
+                           interval=20,
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=1.5)
+stepsize_callback = StepsizeCallback(cfl=4.0)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        stepsize_callback)
-                        #amr_callback)
+                        stepsize_callback,
+                        amr_callback)
 
 ###############################################################################
 # run the simulation
@@ -103,7 +100,7 @@ cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-ode_algorithm = PERK3(3, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
+#ode_algorithm = PERK3(3, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
