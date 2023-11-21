@@ -14,7 +14,7 @@ eta() = 1e-3
 
 gamma = 5/3
 equations = IdealGlmMhdEquations2D(gamma)
-equations_parabolic = ViscoResistiveMhd2D(equations, mu = mu(),
+equations_parabolic = ViscoResistiveMhdDiffusion2D(equations, mu = mu(),
                                           Prandtl = prandtl_number(),
                                           eta = eta(),
                                           gradient_variables = GradientVariablesPrimitive())
