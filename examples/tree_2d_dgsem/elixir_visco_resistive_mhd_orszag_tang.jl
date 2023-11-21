@@ -60,14 +60,13 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=100000)
 
-
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver)
 
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
@@ -103,10 +102,14 @@ stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
+save_restart = SaveRestartCallback(interval=100,
+                                   save_final_restart=true)
+
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         amr_callback,
                         stepsize_callback,
+                        save_restart,
                         glm_speed_callback)
 
 ###############################################################################

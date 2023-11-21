@@ -300,6 +300,33 @@ function semidiscretize(semi::SemidiscretizationHyperbolicParabolic, tspan;
     end
 end
 
+function semidiscretize(semi::SemidiscretizationHyperbolicParabolic, tspan,
+                        restart_file::AbstractString;
+                        reset_threads = true, split_form::Bool=true)
+
+    # Optionally reset Polyester.jl threads. See
+    # https://github.com/trixi-framework/Trixi.jl/issues/1583
+    # https://github.com/JuliaSIMD/Polyester.jl/issues/30
+    if reset_threads
+        Polyester.reset_threads!()
+    end
+
+    u0_ode = load_restart_file(semi, restart_file)
+    # TODO: MPI, do we want to synchronize loading and print debug statements, e.g. using
+    #       mpi_isparallel() && MPI.Barrier(mpi_comm())
+    #       See https://github.com/trixi-framework/Trixi.jl/issues/328
+    iip = true # is-inplace, i.e., we modify a vector when calling rhs_parabolic!, rhs!
+    # Note that the IMEX time integration methods of OrdinaryDiffEq.jl treat the
+    # first function implicitly and the second one explicitly. Thus, we pass the
+    # stiffer parabolic function first.
+    if split_form
+        return SplitODEProblem{iip}(rhs_parabolic!, rhs!, u0_ode, tspan, semi)
+    else
+        specialize = SciMLBase.FullSpecialize # specialize on rhs! and parameters (semi)
+        return ODEProblem{iip, specialize}(rhs_hyperbolic_parabolic!, u0_ode, tspan, semi)
+    end
+end
+
 function rhs!(du_ode, u_ode, semi::SemidiscretizationHyperbolicParabolic, t)
     @unpack mesh, equations, initial_condition, boundary_conditions, source_terms, solver, cache = semi
 
