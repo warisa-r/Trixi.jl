@@ -80,7 +80,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=4.3)
+stepsize_callback = StepsizeCallback(cfl=4.5)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
