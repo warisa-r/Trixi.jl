@@ -70,17 +70,17 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
                                      enstrophy))
 
 amr_indicator = IndicatorLöhner(semi,
-                                variable=Trixi.v2)
+                                variable=Trixi.v2) # Base on v3?
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRefinement,
-                                      med_level =InitialRefinement+1, med_threshold=0.7, # med_level = current level
-                                      max_level =InitialRefinement+2, max_threshold=0.83)
+                                      med_level =InitialRefinement+1, med_threshold=0.7,
+                                      max_level =InitialRefinement+2, max_threshold=0.8)
 amr_callback = AMRCallback(semi, amr_controller,
                            interval=20,
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=4.0)
+stepsize_callback = StepsizeCallback(cfl=4.3)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
