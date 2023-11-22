@@ -840,7 +840,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
 
                 # TODO: HLL or HLLC version of psi?          
                 # This is the HLLC version
-                #psiStar = psi_ll + equations.c_h * (B1Star - B1_ll) / SsL
+                #psiStar = psi_ll
 
                 # TODO: Adaptation for GLM: Take psi into account
                 enerStar = u_ll[5] * sMu_L / SdiffStar +
@@ -861,7 +861,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
 
                 # TODO: HLL or HLLC version of psi?
                 # This is the HLLC version
-                #psiStar = psi_ll + equations.c_h * (B2Star - B2_ll) / SsL
+                #psiStar = psi_ll
 
                 # TODO: Adaptation for GLM: Take psi into account!
                 enerStar = u_ll[5] * sMu_L / SdiffStar +
@@ -899,7 +899,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
 
                 # TODO: HLL or HLLC version of psi?
                 # This is the HLLC version
-                #psiStar = psi_ll + equations.c_h * (B1Star - B1_rr) / SsR
+                #psiStar = psi_rr
 
                 # TODO: Adaptation for GLM: Take psi into account!
                 enerStar = u_rr[5] * sMu_R / SdiffStar +
@@ -920,7 +920,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
 
                 # TODO: HLL or HLLC version of psi?
                 # This is the HLLC version
-                #psiStar = psi_ll + equations.c_h * (B2Star - B2_rr) / SsR
+                #psiStar = psi_rr
 
                 # TODO: Adaptation for GLM: Take psi into account!
                 enerStar = u_rr[5] * sMu_R / SdiffStar +
