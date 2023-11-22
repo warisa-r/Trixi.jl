@@ -1035,6 +1035,7 @@ end
 
     for u in u_values, orientation in orientations
         @test flux_hlle(u, u, orientation, equations) ≈ flux(u, orientation, equations)
+        @test flux_hllc(u, u, orientation, equations) ≈ flux(u, orientation, equations)
     end
 
     for u in u_values, normal_direction in normal_directions

@@ -739,8 +739,12 @@ An HLLC Riemann solver for magneto-hydrodynamics
 function flux_hllc(u_ll, u_rr, orientation::Integer,
                    equations::IdealGlmMhdEquations2D)
     # Unpack left and right states
-    rho_ll, v1_ll, v2_ll, v3_ll, p_ll, B1_ll, B2_ll, B3_ll = cons2prim(u_ll, equations)
-    rho_rr, v1_rr, v2_rr, v3_rr, p_rr, B1_rr, B2_rr, B3_rr = cons2prim(u_rr, equations)
+    rho_ll, v1_ll, v2_ll, v3_ll, p_ll, B1_ll, B2_ll, B3_ll, psi_ll = cons2prim(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, v3_rr, p_rr, B1_rr, B2_rr, B3_rr, psi_rr = cons2prim(u_rr, equations)
+
+    # Total pressure (eq. (12))
+    p_tot_ll = p_ll + 0.5 * (B1_ll^2 + B2_ll^2 + B3_ll^2)
+    p_tot_rr = p_rr + 0.5 * (B1_rr^2 + B2_rr^2 + B3_rr^2)
 
     # Conserved variables
     rho_v1_ll = u_ll[2]
@@ -776,6 +780,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
         f6 = f_ll[6]
         f7 = f_ll[7]
         f8 = f_ll[8]
+        f9 = f_ll[9]
     elseif SsR <= 0
         f1 = f_rr[1]
         f2 = f_rr[2]
@@ -785,14 +790,15 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
         f6 = f_rr[6]
         f7 = f_rr[7]
         f8 = f_rr[8]
+        f9 = f_rr[9]
     else
         if orientation == 1 # x-direction
             # Compute the "HLLC-speed", eq. (14) from paper mentioned above
-            SStar = (rho_rr * v1_rr * sMu_R - rho_ll * v1_ll * sMu_L + p_ll - p_rr - B1_ll^2 + B1_rr^2 ) /
+            SStar = (rho_rr * v1_rr * sMu_R - rho_ll * v1_ll * sMu_L + p_tot_ll - p_tot_rr - B1_ll^2 + B1_rr^2 ) /
                     (rho_rr * sMu_R - rho_ll * sMu_L)
         elseif orientation == 2 # y-direction
             # Compute the "HLLC-speed", eq. (14) from paper mentioned above
-            SStar = (rho_rr * v2_rr * sMu_R - rho_ll * v2_ll * sMu_L + p_ll - p_rr - B2_ll^2 + B2_rr^2 ) /
+            SStar = (rho_rr * v2_rr * sMu_R - rho_ll * v2_ll * sMu_L + p_tot_ll - p_tot_rr - B2_ll^2 + B2_rr^2 ) /
                     (rho_rr * sMu_R - rho_ll * sMu_L)
         end
 
@@ -813,6 +819,10 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
         B1Star = (SsR * B1_rr - SsL * B1_ll - (f_rr[6] - f_ll[6])) / Sdiff
         B2Star = (SsR * B2_rr - SsL * B2_ll - (f_rr[7] - f_ll[7])) / Sdiff
         B3Star = (SsR * B3_rr - SsL * B3_ll - (f_rr[8] - f_ll[8])) / Sdiff
+
+        # TODO: HLL or HLLC version of psi?
+        # This is the HLL version
+        psiStar = (SsR * psi_rr - SsL * psi_ll - (f_rr[9] - f_ll[9])) / Sdiff
         if SsL <= SStar
             SdiffStar = SsL - SStar
 
@@ -824,22 +834,43 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
                             (B1Star * B2Star - B1_ll * B2_ll) / SdiffStar # (21)
                 mom_3_Star = densStar * v3_ll -
                             (B1Star * B3Star - B1_ll * B3_ll) / SdiffStar # (22)
+                  
+                # TODO: Adaptation for GLM: Take psi into account ?
+                p_tot_Star = rho_ll * sMu_L * (SStar - v1_ll) + p_tot_ll - B1_ll^2 + B1Star^2 # (17)
+
+                # TODO: HLL or HLLC version of psi?          
+                # This is the HLLC version
+                #psiStar = psi_ll + equations.c_h * (B1Star - B1_ll) / SsL
+
+                # TODO: Adaptation for GLM: Take psi into account
+                enerStar = u_ll[5] * sMu_L / SdiffStar +
+                        (p_tot_Star * SStar - p_tot_ll * v1_ll - (B1Star *
+                            (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
+                            B1_ll * (B1_ll * v1_ll + B2_ll * v2_ll + B3_ll * v3_ll)) + 
+                            equations.c_h * (psiStar * B1Star - psi_ll * B1_ll)) /
+                        SdiffStar # (23)
             elseif orientation == 2 # y-direction
                 mom_1_Star = densStar * v1_ll -
                             (B2Star * B1Star - B2_ll * B1_ll) / SdiffStar # (21)
                 mom_2_Star = densStar * SStar # (20)
                 mom_3_Star = densStar * v3_ll -
                             (B2Star * B3Star - B2_ll * B3_ll) / SdiffStar # (22)
+
+                # TODO: Adaptation for GLM: Take psi into account ?
+                p_tot_Star = rho_ll * sMu_L * (SStar - v2_ll) + p_tot_ll - B2_ll^2 + B2Star^2 # (17)
+
+                # TODO: HLL or HLLC version of psi?
+                # This is the HLLC version
+                #psiStar = psi_ll + equations.c_h * (B2Star - B2_ll) / SsL
+
+                # TODO: Adaptation for GLM: Take psi into account!
+                enerStar = u_ll[5] * sMu_L / SdiffStar +
+                        (p_tot_Star * SStar - p_tot_ll * v2_ll - (B2Star *
+                            (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
+                            B2_ll * (B1_ll * v1_ll + B2_ll * v2_ll + B3_ll * v3_ll)) + 
+                            equations.c_h * (psiStar * B2Star - psi_ll * B2_ll)) /
+                        SdiffStar # (23)                     
             end
-
-            # TODO: Adaptation for HLLC: Take psi into account
-            pstar = rho_ll * sMu_L * (SStar - v1_ll) + p_ll - B1_ll^2 + B1Star^2 # (17)
-
-            enerStar = u_ll[5] * sMu_L / SdiffStar +
-                       (pstar * SStar - p_ll * v1_ll - (B1Star *
-                         (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
-                         B1_ll * (B1_ll * v1_ll + B2_ll * v2_ll + B3_ll * v3_ll))) /
-                       SdiffStar # (23)
 
             # Classic HLLC update (32)
             f1 = f_ll[1] + SsL * (densStar - u_ll[1])
@@ -850,6 +881,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
             f6 = f_ll[6] + SsL * (B1Star - u_ll[6])
             f7 = f_ll[7] + SsL * (B2Star - u_ll[7])
             f8 = f_ll[8] + SsL * (B3Star - u_ll[8])
+            f9 = f_ll[9] + SsR * (psiStar - u_ll[9])
         else # SStar <= Ssr
             SdiffStar = SsR - SStar
 
@@ -861,24 +893,43 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
                             (B1Star * B2Star - B1_rr * B2_rr) / SdiffStar # (21)
                 mom_3_Star = densStar * v3_rr -
                             (B1Star * B3Star - B1_rr * B3_rr) / SdiffStar # (22)
+
+                # TODO: Adaptation for GLM: Take psi into account ?
+                p_tot_Star = rho_rr * sMu_R * (SStar - v1_rr) + p_tot_rr - B1_rr^2 + B1Star^2 # (17)
+
+                # TODO: HLL or HLLC version of psi?
+                # This is the HLLC version
+                #psiStar = psi_ll + equations.c_h * (B1Star - B1_rr) / SsR
+
+                # TODO: Adaptation for GLM: Take psi into account!
+                enerStar = u_rr[5] * sMu_R / SdiffStar +
+                        (p_tot_Star * SStar - p_tot_rr * v1_rr - (B1Star *
+                            (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
+                            B1_rr * (B1_rr * v1_rr + B2_rr * v2_rr + B3_rr * v3_rr)) + 
+                            equations.c_h * (psiStar * B1Star - psi_rr * B1_rr)) /
+                        SdiffStar # (23)                   
             elseif orientation == 2 # y-direction
                 mom_1_Star = densStar * v1_rr -
                             (B2Star * B1Star - B2_rr * B1_rr) / SdiffStar # (21)
                 mom_2_Star = densStar * SStar # (20)
                 mom_3_Star = densStar * v3_rr -
                             (B2Star * B3Star - B2_rr * B3_rr) / SdiffStar # (22)
+
+                # TODO: Adaptation for GLM: Take psi into account ?
+                p_tot_Star = rho_rr * sMu_R * (SStar - v2_rr) + p_tot_rr - B2_rr^2 + B2Star^2 # (17)
+
+                # TODO: HLL or HLLC version of psi?
+                # This is the HLLC version
+                #psiStar = psi_ll + equations.c_h * (B2Star - B2_rr) / SsR
+
+                # TODO: Adaptation for GLM: Take psi into account!
+                enerStar = u_rr[5] * sMu_R / SdiffStar +
+                        (p_tot_Star * SStar - p_tot_rr * v2_rr - (B2Star *
+                            (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
+                            B2_rr * (B1_rr * v1_rr + B2_rr * v2_rr + B3_rr * v3_rr)) + 
+                            equations.c_h * (psiStar * B2Star - psi_rr * B2_rr)) /
+                        SdiffStar # (23)
             end
-
-            # TODO: Adaptation for HLLC: Take psi into account
-            #pstar = rho_rr * sMu_R * (SStar - v1_rr) + p_rr - B1_rr^2 + B1Star^2 # (17)
-            # 1D B1 = constant => B1_ll = B1_rr = B1Star
-            pstar = rho_rr * sMu_R * (SStar - v1_rr) + p_rr # (17)
-
-            enerStar = u_rr[5] * sMu_R / SdiffStar +
-                       (pstar * SStar - p_rr * v1_rr - (B1Star *
-                         (B1Star * v1Star + B2Star * v2Star + B3Star * v3Star) -
-                         B1_rr * (B1_rr * v1_rr + B2_rr * v2_rr + B3_rr * v3_rr))) /
-                       SdiffStar # (23)
 
             # Classic HLLC update (32)           
             f1 = f_rr[1] + SsR * (densStar - u_rr[1])
@@ -889,9 +940,10 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
             f6 = f_rr[6] + SsR * (B1Star - u_rr[6])
             f7 = f_rr[7] + SsR * (B2Star - u_rr[7])
             f8 = f_rr[8] + SsR * (B3Star - u_rr[8])
+            f9 = f_rr[9] + SsR * (psiStar - u_rr[9])
         end
     end
-    return SVector(f1, f2, f3, f4, f5, f6, f7, f8)
+    return SVector(f1, f2, f3, f4, f5, f6, f7, f8, f9)
 end
 
 # Calculate maximum wave speed for local Lax-Friedrichs-type dissipation
