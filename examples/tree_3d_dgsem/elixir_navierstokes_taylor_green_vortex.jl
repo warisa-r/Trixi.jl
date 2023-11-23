@@ -57,7 +57,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.1)
+tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
@@ -65,6 +65,7 @@ summary_callback = SummaryCallback()
 analysis_interval = 100
 
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
+                                      analysis_errors = Symbol[],
                                      extra_analysis_integrals=(energy_kinetic,
                                      energy_internal,
                                      enstrophy))
@@ -80,7 +81,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=4.5)
+stepsize_callback = StepsizeCallback(cfl=4.3)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
