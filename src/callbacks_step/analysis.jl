@@ -382,11 +382,12 @@ function (analysis_callback::AnalysisCallback)(io, du, u, u_ode, t, semi)
 
     if :l2_error in analysis_errors || :linf_error in analysis_errors
         # Calculate L2/Linf errors, which are also returned
-        l2_error, linf_error = calc_error_norms(u_ode, t, analyzer, semi,
+        l2_error, linf_error, l1_error = calc_error_norms(u_ode, t, analyzer, semi,
                                                 cache_analysis)
     else # Need something to be returned
         l2_error = nothing
         linf_error = nothing
+        l1_error = nothing
     end
 
     if mpi_isroot()
