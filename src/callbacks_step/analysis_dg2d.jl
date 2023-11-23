@@ -1,3 +1,6 @@
+#using SyncBarriers
+using SharedArrays
+
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -60,6 +63,11 @@ function create_cache_analysis(analyzer,
     return (; u_local, u_tmp1, x_local, x_tmp1, jacobian_local, jacobian_tmp1)
 end
 
+function elwise_max(a, b)
+    @. a = max(a, b)
+    return a
+end
+
 function calc_error_norms(func, u, t, analyzer,
                           mesh::TreeMesh{2}, equations, initial_condition,
                           dg::DGSEM, cache, cache_analysis)
@@ -72,36 +80,83 @@ function calc_error_norms(func, u, t, analyzer,
     linf_error = copy(l2_error)
     l1_error = copy(l2_error)
 
+    #=
+    l2_barrier   = reduce_barrier(+, Vector{Float64}, nelements(dg, cache))
+    linf_barrier = reduce_barrier(elwise_max, Vector{Float64}, nelements(dg, cache))
+    l1_barrier   = reduce_barrier(+, Vector{Float64}, nelements(dg, cache))
+    =#
+
+    #=
+    l2_arr = Array{Float64}(undef, nelements(dg, cache), nvariables(equations))
+    linf_arr = Array{Float64}(undef, nelements(dg, cache), nvariables(equations))
+    l1_arr = Array{Float64}(undef, nelements(dg, cache), nvariables(equations))
+    =#
+
+    #=
+    l2_arr = SharedArray{Float64, 2}(nelements(dg, cache), nvariables(equations))
+    linf_arr = SharedArray{Float64, 2}(nelements(dg, cache), nvariables(equations))
+    l1_arr = SharedArray{Float64, 2}(nelements(dg, cache), nvariables(equations))
+    =#
+
     # Iterate over all elements for error calculations
     # Accumulate L2 error on the element first so that the order of summation is the
     # same as in the parallel case to ensure exact equality. This facilitates easier parallel
     # development and debugging (see
     # https://github.com/trixi-framework/Trixi.jl/pull/850#pullrequestreview-757463943 for details).
-    for element in eachelement(dg, cache)
-        # Set up data structures for local element L2 error
-        l2_error_local = zero(l2_error)
-        l1_error_local = zero(l1_error)
+    #@threaded for element in eachelement(dg, cache)
+    #@sync for element in eachelement(dg, cache)
+        #Threads.@spawn begin
+    for element in eachelement(dg, cache)            
+            # Set up data structures for local element L2 error
+            l2_error_local = zero(l2_error)
+            l1_error_local = zero(l1_error)
 
-        # Interpolate solution and node locations to analysis nodes
-        multiply_dimensionwise!(u_local, vandermonde, view(u, :, :, :, element), u_tmp1)
-        multiply_dimensionwise!(x_local, vandermonde,
-                                view(node_coordinates, :, :, :, element), x_tmp1)
+            # Interpolate solution and node locations to analysis nodes
+            multiply_dimensionwise!(u_local, vandermonde, view(u, :, :, :, element), u_tmp1)
+            multiply_dimensionwise!(x_local, vandermonde,
+                                    view(node_coordinates, :, :, :, element), x_tmp1)
 
-        # Calculate errors at each analysis node
-        volume_jacobian_ = volume_jacobian(element, mesh, cache)
+            # Calculate errors at each analysis node
+            volume_jacobian_ = volume_jacobian(element, mesh, cache)
 
-        for j in eachnode(analyzer), i in eachnode(analyzer)
-            u_exact = initial_condition(get_node_coords(x_local, equations, dg, i, j),
-                                        t, equations)
-            diff = func(u_exact, equations) -
-                   func(get_node_vars(u_local, equations, dg, i, j), equations)
-            l2_error_local += diff .^ 2 * (weights[i] * weights[j] * volume_jacobian_)
-            linf_error = @. max(linf_error, abs(diff))
-            l1_error_local += abs.(diff) * (weights[i] * weights[j] * volume_jacobian_)
-        end
-        l2_error += l2_error_local
-        l1_error += l1_error_local
+            for j in eachnode(analyzer), i in eachnode(analyzer)
+                u_exact = initial_condition(get_node_coords(x_local, equations, dg, i, j),
+                                            t, equations)
+                diff = func(u_exact, equations) -
+                    func(get_node_vars(u_local, equations, dg, i, j), equations)
+                l2_error_local += diff .^ 2 * (weights[i] * weights[j] * volume_jacobian_)
+                
+                linf_error = @. max(linf_error, abs(diff))
+                #linf_error = reduce!(linf_barrier[element], abs.(diff))
+
+                #=
+                #linf_arr[element, :] = @. max(linf_arr[element, :], abs(diff))
+                for u in 1:nvariables(equations)
+                    linf_arr[element, u] = max(linf_arr[element, u], abs(diff[u]))
+                end
+                =#
+
+                l1_error_local += abs.(diff) * (weights[i] * weights[j] * volume_jacobian_)
+            end
+
+            #=
+            l2_arr[element, :] = l2_error_local
+            l1_arr[element, :] = l1_error_local
+            =#
+
+            #l2_error = reduce!(l2_barrier[element], l2_error_local)
+            #l1_error = reduce!(l1_barrier[element], l1_error_local)
+
+            l2_error += l2_error_local
+            l1_error += l1_error_local
+        #end
     end
+
+    #=
+    l2_error = sum(l2_arr, dims=1)
+    linf_error = maximum(linf_arr, dims=1)
+    l1_error = sum(l1_arr, dims=1)
+    =#
 
     # For L2 error, divide by total volume
     total_volume_ = total_volume(mesh)
