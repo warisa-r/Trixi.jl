@@ -44,7 +44,7 @@ solver = DGSEM(polydeg=2, surface_flux=flux_hlle,
 
 coordinates_min = (-1.0, -1.0, -1.0) .* pi
 coordinates_max = ( 1.0,  1.0,  1.0) .* pi
-InitialRefinement = 5 # For real run
+InitialRefinement = 4 # For real run
 #InitialRefinement = 2 # For tests
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
@@ -65,7 +65,7 @@ summary_callback = SummaryCallback()
 analysis_interval = 100
 
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
-                                      analysis_errors = Symbol[],
+                                     analysis_errors = Symbol[],
                                      extra_analysis_integrals=(energy_kinetic,
                                      energy_internal,
                                      enstrophy))
