@@ -816,7 +816,11 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
         v3Star = (SsR * rho_v3_rr - SsL * rho_v3_ll - (f_rr[4] - f_ll[4])) /
                  (Sdiff * rho_HLL)
 
+        # Traditional HLL                 
         B1Star = (SsR * B1_rr - SsL * B1_ll - (f_rr[6] - f_ll[6])) / Sdiff
+        # Eq. (32), looks wrong in paper
+        #B1Star = (SsR * B1_rr - SsL * B1_ll) / Sdiff
+
         B2Star = (SsR * B2_rr - SsL * B2_ll - (f_rr[7] - f_ll[7])) / Sdiff
         B3Star = (SsR * B3_rr - SsL * B3_ll - (f_rr[8] - f_ll[8])) / Sdiff
 
@@ -835,7 +839,6 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
                 mom_3_Star = densStar * v3_ll -
                             (B1Star * B3Star - B1_ll * B3_ll) / SdiffStar # (22)
                   
-                # TODO: Adaptation for GLM: Take psi into account ?
                 p_tot_Star = rho_ll * sMu_L * (SStar - v1_ll) + p_tot_ll - B1_ll^2 + B1Star^2 # (17)
 
                 # TODO: HLL or HLLC version of psi?          
@@ -856,7 +859,6 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
                 mom_3_Star = densStar * v3_ll -
                             (B2Star * B3Star - B2_ll * B3_ll) / SdiffStar # (22)
 
-                # TODO: Adaptation for GLM: Take psi into account ?
                 p_tot_Star = rho_ll * sMu_L * (SStar - v2_ll) + p_tot_ll - B2_ll^2 + B2Star^2 # (17)
 
                 # TODO: HLL or HLLC version of psi?
@@ -881,7 +883,7 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
             f6 = f_ll[6] + SsL * (B1Star - u_ll[6])
             f7 = f_ll[7] + SsL * (B2Star - u_ll[7])
             f8 = f_ll[8] + SsL * (B3Star - u_ll[8])
-            f9 = f_ll[9] + SsR * (psiStar - u_ll[9])
+            f9 = f_ll[9] + SsL * (psiStar - u_ll[9])
         else # SStar <= Ssr
             SdiffStar = SsR - SStar
 
