@@ -790,4 +790,22 @@ function apply_jacobian!(du,
 
     return nothing
 end
+
+function apply_jacobian!(du,
+                         mesh::Union{StructuredMesh{3}, P4estMesh{3}},
+                         equations, dg::DG, cache,
+                         level_info_elements_acc::Vector{Int64})
+    @threaded for element in level_info_elements_acc
+        for k in eachnode(dg), j in eachnode(dg), i in eachnode(dg)
+            factor = -cache.elements.inverse_jacobian[i, j, k, element]
+
+            for v in eachvariable(equations)
+                du[v, i, j, k, element] *= factor
+            end
+        end
+    end
+
+    return nothing
+end
+
 end # @muladd
