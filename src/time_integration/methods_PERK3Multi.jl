@@ -458,7 +458,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
       @assert length(level_info_mortars_acc[end]) == 
         n_mortars "highest level should contain all mortars"
     end
-  elseif typeof(mesh) <:P4estMesh{2}
+  elseif typeof(mesh) <:P4estMesh
     @unpack interfaces, boundaries = cache
 
     nnodes = length(mesh.nodes)
@@ -468,28 +468,55 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
 
     h_min_per_element = zeros(n_elements)
 
-    for element_id in 1:n_elements
-      # pull the four corners numbered as right-handed
-      P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
-      P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-      #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-      #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
-      # compute the four side lengths and get the smallest
-      #L0 = sqrt( sum( (P1-P0).^2 ) )
-      L0 = abs(P1[1] - P0[1])
-      #=
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      =#
-      #h = min(L0, L1, L2, L3)
-      h = L0
-      h_min_per_element[element_id] = h
-      if h > h_max 
-        h_max = h
+    if typeof(mesh) <:P4estMesh{2}
+      for element_id in 1:n_elements
+        # pull the four corners numbered as right-handed
+        P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
+        P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
+        #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+        #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+        # compute the four side lengths and get the smallest
+        #L0 = sqrt( sum( (P1-P0).^2 ) )
+        L0 = abs(P1[1] - P0[1])
+        #=
+        L1 = sqrt( sum( (P2-P1).^2 ) )
+        L2 = sqrt( sum( (P3-P2).^2 ) )
+        L3 = sqrt( sum( (P0-P3).^2 ) )
+        =#
+        #h = min(L0, L1, L2, L3)
+        h = L0
+        h_min_per_element[element_id] = h
+        if h > h_max 
+          h_max = h
+        end
+        if h < h_min
+          h_min = h
+        end
       end
-      if h < h_min
-        h_min = h
+    else # typeof(mesh) <:P4estMesh{3}
+      for element_id in 1:n_elements
+        # pull the four corners numbered as right-handed
+        P0 = cache.elements.node_coordinates[:, 1     , 1     , 1, element_id]
+        P1 = cache.elements.node_coordinates[:, nnodes, 1     , 1, element_id]
+        #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+        #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+        # compute the four side lengths and get the smallest
+        #L0 = sqrt( sum( (P1-P0).^2 ) )
+        L0 = abs(P1[1] - P0[1])
+        #=
+        L1 = sqrt( sum( (P2-P1).^2 ) )
+        L2 = sqrt( sum( (P3-P2).^2 ) )
+        L3 = sqrt( sum( (P0-P3).^2 ) )
+        =#
+        #h = min(L0, L1, L2, L3)
+        h = L0
+        h_min_per_element[element_id] = h
+        if h > h_max 
+          h_max = h
+        end
+        if h < h_min
+          h_min = h
+        end
       end
     end
 
@@ -738,8 +765,8 @@ function solve!(integrator::PERK3_Multi_Integrator)
     #@trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
       
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
@@ -757,7 +784,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
       end
       =#
 
-      
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -766,15 +793,15 @@ function solve!(integrator::PERK3_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
+      =#
       
-      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      =#
+      
 
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
@@ -830,7 +857,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
         end
         =#
         
-        
+        #=
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
@@ -840,15 +867,15 @@ function solve!(integrator::PERK3_Multi_Integrator)
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                     integrator.level_u_indices_elements, integrator.coarsest_lvl,
                     integrator.du_ode_hyp)
+        =#
         
-        #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        =#
+        
 
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl

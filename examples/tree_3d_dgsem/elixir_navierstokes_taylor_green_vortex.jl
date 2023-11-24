@@ -50,15 +50,27 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=2500000)
 
+#=
+trees_per_dimension = (1, 1, 1)
+
+mesh = P4estMesh(trees_per_dimension, polydeg=2,
+                  coordinates_min=coordinates_min, coordinates_max=coordinates_max,
+                  periodicity=(true, true, true), initial_refinement_level=4)
+=#
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                              initial_condition, solver)
-                                             
+        
+#=
+semi = SemidiscretizationHyperbolic(mesh, equations,
+                                             initial_condition, solver)
+=#
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.0)
+tspan = (0.0, 20.0)
 ode = semidiscretize(semi, tspan; split_form = false)
+#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
@@ -70,8 +82,11 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
                                      energy_internal,
                                      enstrophy))
 
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
+                                     analysis_errors = Symbol[])
+
 amr_indicator = IndicatorLöhner(semi,
-                                variable=Trixi.v2) # Base on v3?
+                                variable=Trixi.v3)
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRefinement,
                                       med_level =InitialRefinement+1, med_threshold=0.7,
@@ -106,9 +121,12 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
 
+callbacksDE = CallbackSet(summary_callback,
+                  analysis_callback,
+                  amr_callback)                  
 time_int_tol = 1e-5
-sol = solve(ode, RDPK3SpFSAL35(); abstol=time_int_tol, reltol=time_int_tol,
-            ode_default_options()..., callback=callbacks)
+sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=time_int_tol, reltol=time_int_tol,
+            ode_default_options()..., callback=callbacksDE)
 
 
 summary_callback() # print the timer summary

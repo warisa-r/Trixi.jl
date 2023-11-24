@@ -180,7 +180,8 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
             @assert length(integrator.level_info_mortars_acc[end]) == 
               n_mortars "highest level should contain all mortars"
           end
-        elseif typeof(mesh) <:P4estMesh{2}
+        #elseif typeof(mesh) <:P4estMesh{2}
+        elseif typeof(mesh) <:P4estMesh
             nnodes = length(mesh.nodes)
             n_elements = nelements(solver, cache)
             h_min = 42;
@@ -188,36 +189,55 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
             h_min_per_element = zeros(n_elements)
 
-            for element_id in 1:n_elements
-              # pull the four corners numbered as right-handed
-              P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
-              P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-              #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-              #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
-              # compute the four side lengths and get the smallest
-              #L0 = sqrt( sum( (P1-P0).^2 ) )
-              L0 = abs(P1[1] - P0[1])
-              #=
-              L1 = sqrt( sum( (P2-P1).^2 ) )
-              L2 = sqrt( sum( (P3-P2).^2 ) )
-              L3 = sqrt( sum( (P0-P3).^2 ) )
-              h = min(L0, L1, L2, L3)
-              h_min_per_element[element_id] = h
-              =#
-              h_min_per_element[element_id] = L0
-              #=
-              if h > h_max 
-                h_max = h
+            if typeof(mesh) <:P4estMesh{2}
+              for element_id in 1:n_elements
+                # pull the four corners numbered as right-handed
+                P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
+                P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
+                #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+                #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+                # compute the four side lengths and get the smallest
+                #L0 = sqrt( sum( (P1-P0).^2 ) )
+                L0 = abs(P1[1] - P0[1])
+                #=
+                L1 = sqrt( sum( (P2-P1).^2 ) )
+                L2 = sqrt( sum( (P3-P2).^2 ) )
+                L3 = sqrt( sum( (P0-P3).^2 ) )
+                =#
+                #h = min(L0, L1, L2, L3)
+                h = L0
+                h_min_per_element[element_id] = h
+                if h > h_max 
+                  h_max = h
+                end
+                if h < h_min
+                  h_min = h
+                end
               end
-              if h < h_min
-                h_min = h
-              end
-              =#
-              if L0 > h_max 
-                h_max = L0
-              end
-              if L0 < h_min
-                h_min = L0
+            else # typeof(mesh) <:P4estMesh{3}
+              for element_id in 1:n_elements
+                # pull the four corners numbered as right-handed
+                P0 = cache.elements.node_coordinates[:, 1     , 1     , 1, element_id]
+                P1 = cache.elements.node_coordinates[:, nnodes, 1     , 1, element_id]
+                #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+                #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+                # compute the four side lengths and get the smallest
+                #L0 = sqrt( sum( (P1-P0).^2 ) )
+                L0 = abs(P1[1] - P0[1])
+                #=
+                L1 = sqrt( sum( (P2-P1).^2 ) )
+                L2 = sqrt( sum( (P3-P2).^2 ) )
+                L3 = sqrt( sum( (P0-P3).^2 ) )
+                =#
+                #h = min(L0, L1, L2, L3)
+                h = L0
+                h_min_per_element[element_id] = h
+                if h > h_max 
+                  h_max = h
+                end
+                if h < h_min
+                  h_min = h
+                end
               end
             end
 
