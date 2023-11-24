@@ -92,11 +92,18 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =InitialRefinement+1, med_threshold=0.7,
                                       max_level =InitialRefinement+2, max_threshold=0.8)
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20,
+                           #interval=20, # PERK, DGLDDRK73_C
+                           #interval=34, # RDPK3SpFSAL35
+                           #interval = 33, # ParsaniKetchesonDeconinck3S53
+                           interval = 57, # SSPRK33
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=4.3)
+stepsize_callback = StepsizeCallback(cfl=4.3) # PERK 3, 4, 6
+#stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
+#stepsize_callback = StepsizeCallback(cfl=4.4) # DGLDDRK73_C
+stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
+stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
@@ -115,16 +122,32 @@ Stages = [6, 4, 3] # Have three levels anyway
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
-#ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-#ode_algorithm = PERK3(3, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
+#=
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks)
+=#
+#=
+sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks)
+=#
+
+#=
+sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks)
+=#
+
+sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+            dt = 1.0,
+            ode_default_options()..., callback=callbacks)
 
 callbacksDE = CallbackSet(summary_callback,
                   analysis_callback,
                   amr_callback)                  
-time_int_tol = 1e-5
+time_int_tol = 1e-4
 sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=time_int_tol, reltol=time_int_tol,
             ode_default_options()..., callback=callbacksDE)
 
