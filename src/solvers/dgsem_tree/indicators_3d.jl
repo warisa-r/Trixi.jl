@@ -306,6 +306,7 @@ function (indicator_max::IndicatorMax)(u::AbstractArray{<:Any, 5},
     return alpha
 end
 
+# NOTE: Quick & Dirty enabler for enstrophy-based AMR
 function (indicator_max::IndicatorMax)(u::AbstractArray{<:Any, 5},
                                        mesh, equations, equations_parabolic, dg::DGSEM, cache, cache_parabolic;
                                        kwargs...)

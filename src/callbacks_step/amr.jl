@@ -366,14 +366,15 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
 
     u = wrap_array(u_ode, mesh, equations, dg, cache)
     # Indicator kept based on hyperbolic variables
-    #=
+    
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, dg, cache,
                                                           t = t, iter = iter)
-    =#
+    
+    #=
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, semi.equations_parabolic, 
                                                           dg, cache, cache_parabolic,
                                                           t = t, iter = iter)
-
+    =#
     if mpi_isparallel()
         error("MPI has not been verified yet for parabolic AMR")
 
