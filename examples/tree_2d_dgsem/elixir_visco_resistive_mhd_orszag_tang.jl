@@ -66,8 +66,9 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.1)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan; split_form = false)
+#ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
 summary_callback = SummaryCallback()
 
@@ -86,9 +87,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =9, max_threshold=0.4)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10, # PERK, DGLDDRK73_C
+                           #interval=10, # PERK, DGLDDRK73_C
                            #interval=31, # SSPRK33
-                           #interval = 15, # ParsaniKetchesonDeconinck3S53
+                           interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -102,14 +103,10 @@ stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
-save_restart = SaveRestartCallback(interval=100,
-                                   save_final_restart=true)
-
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         amr_callback,
                         stepsize_callback,
-                        save_restart,
                         glm_speed_callback)
 
 ###############################################################################
@@ -141,7 +138,7 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
                      bS, cEnd)
 =#
 
-
+#=
 Stages = [11, 6, 4]
 Stages = [10, 6, 4]
 Stages = [6, 4, 3]
@@ -152,7 +149,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Viscou
 
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 
-#for i = 1:1
+for i = 1:10
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -163,13 +160,13 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Viscou
   sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                     save_everystep=false, callback=callbacks);
 
-#end
+end
+=#
 
-#=
 #cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
 
-#cfl = 1.2 # ParsaniKetchesonDeconinck3S53
+cfl = 1.2 # ParsaniKetchesonDeconinck3S53
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -181,14 +178,14 @@ callbacks = CallbackSet(summary_callback,
                         stepsize_callback,
                         glm_speed_callback)
 
-for i = 1:11
+for i = 1:10
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
   
   semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver) 
   
-  ode = semidiscretize(semi, tspan; split_form = false)
+  ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
   #=
   sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
@@ -196,11 +193,11 @@ for i = 1:11
                 ode_default_options()..., callback=callbacks)
   =#
 
-  #=
+  
   sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)                
-  =#
+  
   
   #=
   sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -208,7 +205,7 @@ for i = 1:11
               ode_default_options()..., callback=callbacks);
   =#
 end
-=#
+
 summary_callback() # print the timer summary
 
 
