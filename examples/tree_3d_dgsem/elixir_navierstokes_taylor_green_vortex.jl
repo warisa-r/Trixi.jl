@@ -69,45 +69,67 @@ semi = SemidiscretizationHyperbolic(mesh, equations,
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 20.0)
-ode = semidiscretize(semi, tspan; split_form = false)
-#ode = semidiscretize(semi, tspan)
+ode = semidiscretize(semi, tspan; split_form = false) # PERK
+#ode = semidiscretize(semi, tspan) # For ODE integrators
+
+#=
+restart_file = "restart_000600.h5"
+restart_filename = joinpath("out", restart_file)
+mesh = load_mesh(restart_filename)
+
+semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
+                                             initial_condition, solver)
+
+tspan = (load_time(restart_filename), 2.0)
+dt = load_dt(restart_filename)
+ode = semidiscretize(semi, tspan, restart_filename; split_form = false);
+=#
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 20
 
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
                                      analysis_errors = Symbol[],
-                                     extra_analysis_integrals=(energy_kinetic,
-                                     energy_internal,
+                                     analysis_integrals=(energy_kinetic,
+                                     #energy_internal,
                                      enstrophy))
-
+#=
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      analysis_errors = Symbol[])
+=#
+
+save_restart = SaveRestartCallback(interval=600,
+                                   save_final_restart=true)
 
 amr_indicator = IndicatorLöhner(semi,
-                                variable=Trixi.v3)
+                                variable=Trixi.enstrophy)
+amr_indicator = IndicatorMax(semi, variable = Trixi.enstrophy)
+
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRefinement,
-                                      med_level =InitialRefinement+1, med_threshold=0.7,
-                                      max_level =InitialRefinement+2, max_threshold=0.8)
+                                      med_level =InitialRefinement+1, med_threshold=5.0, # 10 for this gives good results
+                                      max_level =InitialRefinement+2, max_threshold=30.0)
+
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK, DGLDDRK73_C
+                           #interval=20, # PERK
+                           interval = 18, #DGLDDRK73_C, PERK single
                            #interval=34, # RDPK3SpFSAL35
-                           #interval = 33, # ParsaniKetchesonDeconinck3S53
-                           interval = 57, # SSPRK33
+                           #interval = 30, # ParsaniKetchesonDeconinck3S53
+                           #interval = 53, # SSPRK33
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-stepsize_callback = StepsizeCallback(cfl=4.3) # PERK 3, 4, 6
-#stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
+#stepsize_callback = StepsizeCallback(cfl=4.1) # PERK 3, 4, 6
+stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
 #stepsize_callback = StepsizeCallback(cfl=4.4) # DGLDDRK73_C
-stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
-stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
+#stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
+#stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
+                        #save_restart,
                         amr_callback)
 
 ###############################################################################
@@ -121,13 +143,12 @@ Stages = [6, 4, 3] # Have three levels anyway
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
+ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
-#ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
-#=
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
-                  save_everystep=false, callback=callbacks)
-=#
+                  save_everystep=false, callback=callbacks);
+
 #=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
@@ -142,7 +163,7 @@ sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
 
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks)
+            ode_default_options()..., callback=callbacks);
 
 callbacksDE = CallbackSet(summary_callback,
                   analysis_callback,

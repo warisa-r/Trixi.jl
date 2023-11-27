@@ -366,7 +366,12 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
 
     u = wrap_array(u_ode, mesh, equations, dg, cache)
     # Indicator kept based on hyperbolic variables
+    #=
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, dg, cache,
+                                                          t = t, iter = iter)
+    =#
+    lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, semi.equations_parabolic, 
+                                                          dg, cache, cache_parabolic,
                                                           t = t, iter = iter)
 
     if mpi_isparallel()
@@ -870,6 +875,45 @@ function (controller::ControllerThreeLevel)(u::AbstractArray{<:Any},
     resize!(controller_value, nelements(dg, cache))
 
     alpha = controller.indicator(u, mesh, equations, dg, cache; kwargs...)
+    current_levels = current_element_levels(mesh, dg, cache)
+
+    @threaded for element in eachelement(dg, cache)
+        current_level = current_levels[element]
+
+        # set target level
+        target_level = current_level
+        if alpha[element] > controller.max_threshold
+            target_level = controller.max_level
+        elseif alpha[element] > controller.med_threshold
+            if controller.med_level > 0
+                target_level = controller.med_level
+                # otherwise, target_level = current_level
+                # set med_level = -1 to implicitly use med_level = current_level
+            end
+        else
+            target_level = controller.base_level
+        end
+
+        # compare target level with actual level to set controller
+        if current_level < target_level
+            controller_value[element] = 1 # refine!
+        elseif current_level > target_level
+            controller_value[element] = -1 # coarsen!
+        else
+            controller_value[element] = 0 # we're good
+        end
+    end
+
+    return controller_value
+end
+
+function (controller::ControllerThreeLevel)(u::AbstractArray{<:Any},
+                                            mesh, equations, equations_parabolic, dg::DG, cache, cache_parabolic;
+                                            kwargs...)
+    @unpack controller_value = controller.cache
+    resize!(controller_value, nelements(dg, cache))
+
+    alpha = controller.indicator(u, mesh, equations, equations_parabolic, dg, cache, cache_parabolic; kwargs...)
     current_levels = current_element_levels(mesh, dg, cache)
 
     @threaded for element in eachelement(dg, cache)
