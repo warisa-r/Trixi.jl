@@ -35,8 +35,9 @@ N_x = 192
 N_y = 128
 cells_per_dimension = (N_x, N_y)
 
-N_min = min(N_x, N_y)
-N_ref = 12
+N_max = max(N_x, N_y)
+N_ref = 12 # Configuration used for optimization
+CFL_Discretization = N_ref/N_max # Reduction required due to discretization
 
 mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4), periodicity=false)
 
@@ -66,23 +67,12 @@ S_min = 4
 
 Add_Levels = 0 # S_max = 4
 
-Add_Levels = 1 # S_max = 6
-Add_Levels = 2 # S_max = 8
-Add_Levels = 3 # S_max = 10
-Add_Levels = 4 # S_max = 12
-Add_Levels = 5 # S_max = 14
-Add_Levels = 6 # S_max = 16
-
-#=
-Add_Levels = 7 # S_max = 18
-Add_Levels = 8 # S_max = 20
-Add_Levels = 9 # S_max = 22
-Add_Levels = 10 # S_max = 24
-Add_Levels = 11 # S_max = 26
-Add_Levels = 12 # S_max = 28
-Add_Levels = 13 # S_max = 30
-Add_Levels = 14 # S_max = 32
-=#
+#Add_Levels = 1 # S_max = 6
+#Add_Levels = 2 # S_max = 8
+#Add_Levels = 3 # S_max = 10
+#Add_Levels = 4 # S_max = 12
+#Add_Levels = 5 # S_max = 14
+#Add_Levels = 6 # S_max = 16
 
 Stages = [4]
 
@@ -96,44 +86,23 @@ bS = 1 - b1
 cEnd = 0.5/bS
 ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                            bS, cEnd)
+        
+CFL_PERK = ((4 + 2*Add_Levels)/4)
 
-CFL_PERK = ((4 + 2*Add_Levels)/4) * N_ref/N_min
-
-CFL_Stab = 0.63 # S_max = 4
-CFL_Stab = 0.64 # S_max = 6
-CFL_Stab = 0.64 # S_max = 8
-CFL_Stab = 0.63 # S_max = 10
-CFL_Stab = 0.62 # S_max = 12
-CFL_Stab = 0.63 # S_max = 14
-CFL_Stab = 0.62 # S_max = 16
-
-#=
-CFL_Stab = 0.37 # S_max = 18
-CFL_Stab = 0.36 # S_max = 20
-CFL_Stab = 0.33 # S_max = 22
-CFL_Stab = 0.31 # S_max = 24
-CFL_Stab = 0.28 # S_max = 26
-CFL_Stab = 0.27 # S_max = 28
-CFL_Stab = 0.25 # S_max = 30
-CFL_Stab = 0.24 # S_max = 32
-=#
+CFL_Stab = 0.95 # S_max = 4
+#CFL_Stab = 0.97 # S_max = 6
+#CFL_Stab = 0.97 # S_max = 8
+#CFL_Stab = 0.94 # S_max = 10
+#CFL_Stab = 0.94 # S_max = 12
+#CFL_Stab = 0.94 # S_max = 14
+#CFL_Stab = 0.93 # S_max = 16
 
 #=
-# Standalone checks (many-stage methods)
-CFL_Stab = 0.37 # S_max = 18
-CFL_Stab = 0.35 # S_max = 20
-CFL_Stab = 0.33 # S_max = 22
-CFL_Stab = 0.30 # S_max = 24
-CFL_Stab = 0.28 # S_max = 26
-CFL_Stab = 0.28 # S_max = 28
-CFL_Stab = 0.26 # S_max = 30
-CFL_Stab = 0.24 # S_max = 32
-
 ode_algorithm = PERK(S_min+2*Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                      bS, cEnd)
 =#
 
-CFL = CFL_Stab * CFL_PERK
+CFL = CFL_Stab * CFL_PERK * CFL_Discretization
 
 # S = 4, p = 2, NumCells = 12
 dt = 0.0830890595862001646 * CFL
