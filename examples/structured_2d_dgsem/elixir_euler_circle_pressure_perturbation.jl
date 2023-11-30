@@ -31,13 +31,19 @@ f2(xi)  = SVector(-r0 - 0.5 * (r1 - r0) * (xi + 1), 0.0) # left line
 f3(eta) = SVector(r0 * cos(0.5 * pi * (eta + 1)), r0 * sin(0.5 * pi * (eta + 1))) # inner circle (Bottom line)
 f4(eta) = SVector(r1 * cos(0.5 * pi * (eta + 1)), r1 * sin(0.5 * pi * (eta + 1))) # outer circle (Top line)
 
-cells_per_dimension = (192, 128)
-#cells_per_dimension = (48, 32)
+N_x = 192
+N_y = 128
+cells_per_dimension = (N_x, N_y)
+
+N_min = min(N_x, N_y)
+N_ref = 12
+
 mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4), periodicity=false)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
+tspan = (0.0, 0.0)
 tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
@@ -59,14 +65,14 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 S_min = 4
 
 Add_Levels = 0 # S_max = 4
-#=
+
 Add_Levels = 1 # S_max = 6
 Add_Levels = 2 # S_max = 8
 Add_Levels = 3 # S_max = 10
 Add_Levels = 4 # S_max = 12
 Add_Levels = 5 # S_max = 14
 Add_Levels = 6 # S_max = 16
-=#
+
 #=
 Add_Levels = 7 # S_max = 18
 Add_Levels = 8 # S_max = 20
@@ -77,30 +83,29 @@ Add_Levels = 12 # S_max = 28
 Add_Levels = 13 # S_max = 30
 Add_Levels = 14 # S_max = 32
 =#
-Integrator_Mesh_Level_Dict = Dict([(1, 1)])
-for i = 2:Add_Levels+1
-  Integrator_Mesh_Level_Dict[i] = i
+
+Stages = [4]
+
+for i in 1:Add_Levels
+  push!(Stages, 4 + 2*i)
 end
-Integrator_Mesh_Level_Dict
-LevelCFL = ones(Add_Levels+1)
+reverse!(Stages) # Require descending order
 
 b1 = 0.0
 bS = 1 - b1
 cEnd = 0.5/bS
-ode_algorithm = PERK_Multi(S_min, Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
-                           bS, cEnd,
-                           LevelCFL, Integrator_Mesh_Level_Dict)
+ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
+                           bS, cEnd)
 
-CFL_PERK = ((4 + 2*Add_Levels)/4)/8
+CFL_PERK = ((4 + 2*Add_Levels)/4) * N_ref/N_min
 
-CFL_Stab = 0.47 # S_max = 4
-
-CFL_Stab = 0.48 # S_max = 6
-CFL_Stab = 0.48 # S_max = 8
-CFL_Stab = 0.47 # S_max = 10
-CFL_Stab = 0.47 # S_max = 12
-CFL_Stab = 0.47 # S_max = 14
-CFL_Stab = 0.46 # S_max = 16
+CFL_Stab = 0.63 # S_max = 4
+CFL_Stab = 0.64 # S_max = 6
+CFL_Stab = 0.64 # S_max = 8
+CFL_Stab = 0.63 # S_max = 10
+CFL_Stab = 0.62 # S_max = 12
+CFL_Stab = 0.63 # S_max = 14
+CFL_Stab = 0.62 # S_max = 16
 
 #=
 CFL_Stab = 0.37 # S_max = 18
@@ -134,14 +139,17 @@ CFL = CFL_Stab * CFL_PERK
 dt = 0.0830890595862001646 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-plot(sol)
+#plot(sol)
 
-#=
+#summary_callback() # print the timer summary
+
+
 # TODO: Compare runtime also to SSPRK33 (as Vermiere)
 sol = solve(ode, SSPRK33(),
-            dt=2e-3,
+            dt=2.6e-3,
             save_everystep=false, callback=callbacks);
-=#
+
+summary_callback() # print the timer summary
 
 pd = PlotData2D(sol)
 plot(pd["p"])

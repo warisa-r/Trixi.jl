@@ -718,6 +718,7 @@ function solve(ode::ODEProblem, alg::PERK_Multi;
       level_info_elements_count[i] = length(level_info_elements[i])
     end
 
+    # No interfaces, boundaries, mortars for structured meshes
     level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
     level_info_boundaries_acc = [Vector{Int64}() for _ in 1:n_levels]
     level_info_boundaries_orientation_acc = [[Vector{Int64}() for _ in 1:2*n_dims] for _ in 1:n_levels]
@@ -957,9 +958,9 @@ function solve!(integrator::PERK_Multi_Integrator)
       
       # u_{n+1} = u_n + b_S * k_S = u_n + 1 * k_S
       @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
+        #integrator.u[i] += alg.b1 * integrator.k1[i] + alg.bS * integrator.k_higher[i]
         # Slightly more performant, hard-coded version for b1 = 0
-        #integrator.u[i] += integrator.k_higher[i]
+        integrator.u[i] += integrator.k_higher[i]
       end
       
       #=
