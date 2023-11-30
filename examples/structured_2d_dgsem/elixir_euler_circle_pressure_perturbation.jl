@@ -16,7 +16,9 @@ function initial_condition_pressure_perturbation(x, t, equations::CompressibleEu
   #xs = 1.5 # location of the initial disturbance on the x axis
   xs = 0.6 * r1 # location of the initial disturbance on the x axis
   w = 1/8 * r1/2.5 # half width
-  p = exp(-log(2) * ((x[1]-xs)^2 + x[2]^2)/w^2) + 1.0
+  #p = exp(-log(2) * ((x[1]-xs)^2 + x[2]^2)/w^2) + 1.0
+  p = 2^(-((x[1]-xs)^2 + x[2]^2)/w^2) + 1.0
+  
   v1 = 0.0
   v2 = 0.0
   rho = 1.0
@@ -32,7 +34,8 @@ f3(eta) = SVector(r0 * cos(0.5 * pi * (eta + 1)), r0 * sin(0.5 * pi * (eta + 1))
 f4(eta) = SVector(r1 * cos(0.5 * pi * (eta + 1)), r1 * sin(0.5 * pi * (eta + 1))) # outer circle (Top line)
 
 N_x = 192
-N_y = 128
+#N_x = 48 # Better for plotting?
+N_y = Int(N_x/1.5)
 cells_per_dimension = (N_x, N_y)
 
 N_max = max(N_x, N_y)
@@ -45,7 +48,6 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
 tspan = (0.0, 0.0)
-tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
 analysis_interval = 10000
@@ -72,7 +74,7 @@ Add_Levels = 0 # S_max = 4
 #Add_Levels = 3 # S_max = 10
 #Add_Levels = 4 # S_max = 12
 #Add_Levels = 5 # S_max = 14
-#Add_Levels = 6 # S_max = 16
+Add_Levels = 6 # S_max = 16
 
 Stages = [4]
 
@@ -95,12 +97,12 @@ CFL_Stab = 0.95 # S_max = 4
 #CFL_Stab = 0.94 # S_max = 10
 #CFL_Stab = 0.94 # S_max = 12
 #CFL_Stab = 0.94 # S_max = 14
-#CFL_Stab = 0.93 # S_max = 16
+CFL_Stab = 0.93 # S_max = 16
 
-#=
+
 ode_algorithm = PERK(S_min+2*Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                      bS, cEnd)
-=#
+
 
 CFL = CFL_Stab * CFL_PERK * CFL_Discretization
 
@@ -112,19 +114,21 @@ sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=ca
 
 #summary_callback() # print the timer summary
 
-
+#=
 # TODO: Compare runtime also to SSPRK33 (as Vermiere)
 sol = solve(ode, SSPRK33(),
             dt=2.6e-3,
             save_everystep=false, callback=callbacks);
+=#
 
 summary_callback() # print the timer summary
 
 pd = PlotData2D(sol)
-plot(pd["p"])
-plot!(getmesh(pd))
+#plot(pd["p"], title = "\$p, t_f = 5.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
+plot(pd["p"], title = "\$p, t_0 = 0\$", xlabel = "\$x\$", ylabel = "\$y \$")
+plot!(getmesh(pd)
 
-plot(getmesh(pd))
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$")
 
 using Trixi2Vtk
 trixi2vtk("out/PERK/solution_000000.h5")
