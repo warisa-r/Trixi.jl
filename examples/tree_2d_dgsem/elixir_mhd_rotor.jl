@@ -91,10 +91,8 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100000
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
-
-alive_callback = AliveCallback(analysis_interval=analysis_interval)
+analysis_interval = 10000
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors = Symbol[])
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -107,22 +105,22 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0025,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=60, # PERK Single
-                           interval=40, # PERK, SSPRK33
-                           #interval = 30, # DGLDDRK73_C
-                           #interval = 40, # ParsaniKetchesonDeconinck3S53
+                           interval = 5, # PERK, DGLDDRK73_C
+                           #interval = 8, # SSPRK33, ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
-cfl = 0.65 # DGLDDRK73_C
+#cfl = 0.55 # DGLDDRK73_C
+
 cfl = 0.85 # 3,4,6 PERK
-#cfl = 0.5 # ParsaniKetchesonDeconinck3S53, SSPRK33
-#cfl = 0.6
-#cfl = 1.0
+#cfl = 0.55 # 3,4,6 PERK
+
+#cfl = 0.54 # ParsaniKetchesonDeconinck3S53
+#cfl = 0.42 # SSPRK33
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
-glm_speed_callback = GlmSpeedCallback(glm_scale=0.8, cfl=cfl)
+glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
@@ -165,7 +163,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
-#for i = 1:1
+for i = 1:10
     mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=10_000,
@@ -199,7 +197,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
     =#
-#end
+end
 
 summary_callback() # print the timer summary
 
