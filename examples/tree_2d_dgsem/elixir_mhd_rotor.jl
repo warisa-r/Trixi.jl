@@ -105,8 +105,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.0025,
                                       max_level =9, max_threshold=0.25)                                   
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval = 5, # PERK, DGLDDRK73_C
-                           #interval = 8, # SSPRK33, ParsaniKetchesonDeconinck3S53
+                           #interval = 5, # PERK, DGLDDRK73_C
+                           interval = 8, # SSPRK33, ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -115,7 +115,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 cfl = 0.85 # 3,4,6 PERK
 #cfl = 0.55 # 3,4,6 PERK
 
-#cfl = 0.54 # ParsaniKetchesonDeconinck3S53
+cfl = 0.54 # ParsaniKetchesonDeconinck3S53
 #cfl = 0.42 # SSPRK33
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
@@ -174,11 +174,11 @@ for i = 1:10
 
     ode = semidiscretize(semi, tspan)
 
-    
+    #=
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    
+    =#
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -186,11 +186,11 @@ for i = 1:10
                 save_everystep=false, callback=callbacks,
                 ode_default_options()...);
     =#
-    #=
+    
     sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
-    =#
+    
     
     #=
     sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());

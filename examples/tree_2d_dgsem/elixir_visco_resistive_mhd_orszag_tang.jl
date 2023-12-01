@@ -87,9 +87,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =9, max_threshold=0.4)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=10, # PERK, DGLDDRK73_C
+                           interval=10, # PERK, DGLDDRK73_C
                            #interval=31, # SSPRK33
-                           interval = 15, # ParsaniKetchesonDeconinck3S53
+                           #interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -138,7 +138,7 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
                      bS, cEnd)
 =#
 
-#=
+
 Stages = [11, 6, 4]
 Stages = [10, 6, 4]
 Stages = [6, 4, 3]
@@ -149,7 +149,7 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Viscou
 
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 
-for i = 1:10
+for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=100000)
@@ -161,7 +161,7 @@ for i = 1:10
                     save_everystep=false, callback=callbacks);
 
 end
-=#
+
 
 #cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
