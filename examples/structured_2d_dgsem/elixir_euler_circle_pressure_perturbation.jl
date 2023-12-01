@@ -47,7 +47,7 @@ mesh = StructuredMesh(cells_per_dimension, (f1, f2, f3, f4), periodicity=false)
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
-tspan = (0.0, 0.0)
+tspan = (0.0, 5.0)
 ode = semidiscretize(semi, tspan)
 
 analysis_interval = 10000
@@ -56,24 +56,17 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval,extra_anal
 summary_callback = SummaryCallback()
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
-save_solution = SaveSolutionCallback(interval=10,
-                                     save_initial_solution=true,
-                                     save_final_solution=true,
-                                     solution_variables=cons2prim)
-
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-#callbacks = CallbackSet(summary_callback, analysis_callback, save_solution)
 callbacks = CallbackSet(summary_callback, analysis_callback)
 
 S_min = 4
 
 Add_Levels = 0 # S_max = 4
-
-#Add_Levels = 1 # S_max = 6
-#Add_Levels = 2 # S_max = 8
-#Add_Levels = 3 # S_max = 10
-#Add_Levels = 4 # S_max = 12
-#Add_Levels = 5 # S_max = 14
+Add_Levels = 1 # S_max = 6
+Add_Levels = 2 # S_max = 8
+Add_Levels = 3 # S_max = 10
+Add_Levels = 4 # S_max = 12
+Add_Levels = 5 # S_max = 14
 Add_Levels = 6 # S_max = 16
 
 Stages = [4]
@@ -92,27 +85,35 @@ ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/S
 CFL_PERK = ((4 + 2*Add_Levels)/4)
 
 CFL_Stab = 0.95 # S_max = 4
-#CFL_Stab = 0.97 # S_max = 6
-#CFL_Stab = 0.97 # S_max = 8
-#CFL_Stab = 0.94 # S_max = 10
-#CFL_Stab = 0.94 # S_max = 12
-#CFL_Stab = 0.94 # S_max = 14
+CFL_Stab = 0.97 # S_max = 6
+CFL_Stab = 0.97 # S_max = 8
+CFL_Stab = 0.94 # S_max = 10
+CFL_Stab = 0.94 # S_max = 12
+CFL_Stab = 0.94 # S_max = 14
 CFL_Stab = 0.93 # S_max = 16
 
-
+#=
 ode_algorithm = PERK(S_min+2*Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
                      bS, cEnd)
-
+=#
 
 CFL = CFL_Stab * CFL_PERK * CFL_Discretization
 
 # S = 4, p = 2, NumCells = 12
 dt = 0.0830890595862001646 * CFL
 
-sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
-#plot(sol)
+for i = 1:10
+  sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+  #plot(sol)
 
-#summary_callback() # print the timer summary
+  #=
+  sol = solve(ode, SSPRK33(),
+              dt=2.6e-3,
+              save_everystep=false, callback=callbacks);
+  =#              
+end
+summary_callback() # print the timer summary
+
 
 #=
 # TODO: Compare runtime also to SSPRK33 (as Vermiere)
@@ -126,7 +127,7 @@ summary_callback() # print the timer summary
 pd = PlotData2D(sol)
 #plot(pd["p"], title = "\$p, t_f = 5.0\$", xlabel = "\$x\$", ylabel = "\$y \$")
 plot(pd["p"], title = "\$p, t_0 = 0\$", xlabel = "\$x\$", ylabel = "\$y \$")
-plot!(getmesh(pd)
+plot!(getmesh(pd))
 
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$")
 
