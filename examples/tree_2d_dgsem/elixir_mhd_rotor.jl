@@ -46,10 +46,11 @@ end
 initial_condition = initial_condition_rotor
 
 # Paper mentioned above uses outflow BCs
-function boundary_condition_outflow(u_inner, orientation, direction, x, t,
-                                    surface_flux_function,
-                                    equations::IdealGlmMhdEquations2D)
+@inline function boundary_condition_outflow(u_inner, orientation, direction, x, t,
+                                            surface_flux_function,
+                                            equations::IdealGlmMhdEquations2D)
 
+  # TODO: Not sure if correct!
   return surface_flux_function(u_inner, u_inner, orientation, equations)
 end
 
@@ -86,7 +87,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.15)
+tspan = (0.0, 0.1)
+#tspan = (0.0, 0.15)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -163,11 +165,12 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 
-for i = 1:10
-    mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
-                n_cells_max=10_000,
-                periodicity=false)
+for i = 1:1
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                  initial_refinement_level=4,
+                  n_cells_max=10_000,
+                  #periodicity=false)
+                  periodicity=true)
 
     semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                         boundary_conditions=boundary_conditions)
