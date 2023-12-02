@@ -45,19 +45,20 @@ function initial_condition_rotor(x, t, equations::IdealGlmMhdEquations2D)
 end
 initial_condition = initial_condition_rotor
 
-# Paper mentioned above uses outflow BCs
-@inline function boundary_condition_outflow(u_inner, orientation, direction, x, t,
-                                            surface_flux_function,
-                                            equations::IdealGlmMhdEquations2D)
+function boundary_condition_outflow(u_inner, normal_direction::AbstractVector, x, t,
+  surface_flux_function, equations::IdealGlmMhdEquations2D)
 
-  # TODO: Not sure if correct!
-  return surface_flux_function(u_inner, u_inner, orientation, equations)
+  return surface_flux_function(u_inner, u_inner, normal_direction, equations)
 end
 
-boundary_conditions = (x_neg=boundary_condition_outflow,
-                       x_pos=boundary_condition_outflow,
-                       y_neg=boundary_condition_outflow,
-                       y_pos=boundary_condition_outflow)
+#boundary_condition = BoundaryConditionDirichlet(initial_condition)
+boundary_condition = boundary_condition_outflow
+boundary_conditions = Dict(
+  :x_neg => boundary_condition,
+  :x_pos => boundary_condition,
+  :y_neg => boundary_condition,
+  :y_pos => boundary_condition
+)
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
 volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
@@ -75,10 +76,11 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
-mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=4,
-                n_cells_max=10_000,
-                periodicity=true)
+trees_per_dimension = (1, 1)
+mesh = P4estMesh(trees_per_dimension,
+                 coordinates_min=coordinates_min, coordinates_max=coordinates_max,
+                 polydeg=4, initial_refinement_level=4,                 
+                 periodicity=false)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
@@ -100,24 +102,25 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_min=0.001,
                                           alpha_smooth=false,
                                           variable=density_pressure)
-# For density_pressure                                          
+# For density_pressure     
+                                 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.0025,
-                                      max_level =9, max_threshold=0.25)                                   
+                                      max_level =9, max_threshold=0.25)
+                                                               
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval = 5, # PERK, DGLDDRK73_C
-                           #interval = 8, # SSPRK33, ParsaniKetchesonDeconinck3S53
+                           #interval = 5, # PERK, DGLDDRK73_C
+                           interval = 8, # SSPRK33, ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
 #cfl = 0.55 # DGLDDRK73_C
 
 cfl = 0.85 # 3,4,6 PERK
-#cfl = 0.3
 #cfl = 0.55 # 3,4,6 PERK
 
-#cfl = 0.54 # ParsaniKetchesonDeconinck3S53
+cfl = 0.54 # ParsaniKetchesonDeconinck3S53
 #cfl = 0.42 # SSPRK33
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
@@ -164,24 +167,23 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 
 #ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
-#=
+
 for i = 1:1
-  mesh = TreeMesh(coordinates_min, coordinates_max,
-                  initial_refinement_level=4,
-                  n_cells_max=10_000,
-                  periodicity=false)
-                  #periodicity=true)
+  #=
+  mesh = P4estMesh(trees_per_dimension,
+                 polydeg=4, initial_refinement_level=4,                 
+                 periodicity=false)
 
     semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                         boundary_conditions=boundary_conditions)
 
     ode = semidiscretize(semi, tspan)
-=#
-    
+  =#
+    #=
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    
+    =#
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -189,18 +191,18 @@ for i = 1:1
                 save_everystep=false, callback=callbacks,
                 ode_default_options()...);
     =#
-    #=
+    
     sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
-    =#
+    
     
     #=
     sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks)
     =#
-#end
+end
 
 summary_callback() # print the timer summary
 
