@@ -50,7 +50,6 @@ initial_condition = initial_condition_rotor
                                             surface_flux_function,
                                             equations::IdealGlmMhdEquations2D)
 
-  # TODO: Not sure if correct!
   return surface_flux_function(u_inner, u_inner, orientation, equations)
 end
 
