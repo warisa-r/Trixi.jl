@@ -88,7 +88,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.1)
-#tspan = (0.0, 0.15)
+tspan = (0.0, 0.15)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -169,8 +169,8 @@ for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=10_000,
-                  #periodicity=false)
-                  periodicity=true)
+                  periodicity=false)
+                  #periodicity=true)
 
     semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                         boundary_conditions=boundary_conditions)

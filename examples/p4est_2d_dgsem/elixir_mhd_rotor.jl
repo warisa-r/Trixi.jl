@@ -78,7 +78,14 @@ mesh = P4estMesh{2}(mesh_file,
                     mapping=mapping_twist,
                     initial_refinement_level=1)
 
-boundary_condition = BoundaryConditionDirichlet(initial_condition)
+function boundary_condition_outflow(u_inner, normal_direction::AbstractVector, x, t,
+                                    surface_flux_function, equations::IdealGlmMhdEquations2D)
+
+  return surface_flux_function(u_inner, u_inner, normal_direction, equations)
+end
+
+#boundary_condition = BoundaryConditionDirichlet(initial_condition)
+boundary_condition = boundary_condition_outflow
 boundary_conditions = Dict( :all => boundary_condition )
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
@@ -93,7 +100,7 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
+analysis_interval = 1000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval=analysis_interval)
@@ -122,8 +129,8 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
-                        save_solution,
+                        #alive_callback,
+                        #save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
