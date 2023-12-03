@@ -113,7 +113,7 @@ amr_callback = AMRCallback(semi, amr_controller,
 #cfl = 0.55 # DGLDDRK73_C
 
 cfl = 0.85 # 3,4,6 PERK
-#cfl = 0.3
+#cfl = 0.1
 #cfl = 0.55 # 3,4,6 PERK
 
 #cfl = 0.54 # ParsaniKetchesonDeconinck3S53
