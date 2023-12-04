@@ -45,13 +45,12 @@ function initial_condition_rotor(x, t, equations::IdealGlmMhdEquations2D)
 end
 initial_condition = initial_condition_rotor
 
-# Paper mentioned above uses outflow BCs
+# Original publication [doi: 10.1365/s13291-018-0178-9](https://doi.org/10.1365/s13291-018-0178-9) uses outflow BCs
 @inline function boundary_condition_outflow(u_inner, orientation, direction, x, t,
                                             surface_flux_function,
                                             equations::IdealGlmMhdEquations2D)
-
-  # Use simple outflow, also for the divergence-clearing varaible psi
-  # This is motivated from 
+  # Use simple outflow, also for the divergence-clearing varaible psi.
+  # This follows from eq. (49) from [DOI: 10.1006/jcph.2001.6961](https://doi.org/10.1006/jcph.2001.6961)
   return surface_flux_function(u_inner, u_inner, orientation, equations)
 end
 
