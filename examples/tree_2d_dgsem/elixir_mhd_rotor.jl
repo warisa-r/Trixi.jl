@@ -114,9 +114,10 @@ amr_callback = AMRCallback(semi, amr_controller,
 
 
 cfl = 0.85 # 3,4,6 PERK, ParsaniKetchesonDeconinck3S53
+#cfl = 0.70 # 6 PERK Single
 
 #cfl = 0.65 # DGLDDRK73_C
-cfl = 0.55 # DGLDDRK73_C
+#cfl = 0.55 # DGLDDRK73_C
 
 #cfl = 0.42 # SSPRK33
 
@@ -143,10 +144,10 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
 
-#ode_algorithm = PERK3(10, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 #=
-for i = 1:1
+for i = 1:10
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=10_000,
@@ -158,11 +159,10 @@ for i = 1:1
 
     ode = semidiscretize(semi, tspan)
 =#
-    #=
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    =#
+    
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -177,11 +177,11 @@ for i = 1:1
                 ode_default_options()..., callback=callbacks);
     =#
     
-    
+    #=
     sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks);
-    
+    =#
 #end
 
 summary_callback() # print the timer summary
