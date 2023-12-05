@@ -33,8 +33,8 @@ f2(xi)  = SVector(-r0 - 0.5 * (r1 - r0) * (xi + 1), 0.0) # left line
 f3(eta) = SVector(r0 * cos(0.5 * pi * (eta + 1)), r0 * sin(0.5 * pi * (eta + 1))) # inner circle (Bottom line)
 f4(eta) = SVector(r1 * cos(0.5 * pi * (eta + 1)), r1 * sin(0.5 * pi * (eta + 1))) # outer circle (Top line)
 
-N_x = 192
-#N_x = 48 # Better for plotting?
+#N_x = 192
+N_x = 48 # Better for plotting?
 N_y = Int(N_x/1.5)
 cells_per_dimension = (N_x, N_y)
 
@@ -62,12 +62,12 @@ callbacks = CallbackSet(summary_callback, analysis_callback)
 S_min = 4
 
 Add_Levels = 0 # S_max = 4
-Add_Levels = 1 # S_max = 6
-Add_Levels = 2 # S_max = 8
-Add_Levels = 3 # S_max = 10
-Add_Levels = 4 # S_max = 12
-Add_Levels = 5 # S_max = 14
-Add_Levels = 6 # S_max = 16
+#Add_Levels = 1 # S_max = 6
+#Add_Levels = 2 # S_max = 8
+#Add_Levels = 3 # S_max = 10
+#Add_Levels = 4 # S_max = 12
+#Add_Levels = 5 # S_max = 14
+#Add_Levels = 6 # S_max = 16
 
 Stages = [4]
 
@@ -84,6 +84,17 @@ ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/S
         
 CFL_PERK = ((4 + 2*Add_Levels)/4)
 
+# 48 x 32
+CFL_Stab = 1.01 # S_max = 4
+#CFL_Stab = 1.03 # S_max = 6
+#CFL_Stab = 1.04 # S_max = 8
+#CFL_Stab = 1.04 # S_max = 10
+#CFL_Stab = 0.97 # S_max = 12
+#CFL_Stab = 0.98 # S_max = 14
+#CFL_Stab = 0.95 # S_max = 16
+
+#=
+# 192 x 128
 CFL_Stab = 0.95 # S_max = 4
 CFL_Stab = 0.97 # S_max = 6
 CFL_Stab = 0.97 # S_max = 8
@@ -91,6 +102,7 @@ CFL_Stab = 0.94 # S_max = 10
 CFL_Stab = 0.94 # S_max = 12
 CFL_Stab = 0.94 # S_max = 14
 CFL_Stab = 0.93 # S_max = 16
+=#
 
 #=
 ode_algorithm = PERK(S_min+2*Add_Levels, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/2D_CEE_Structured/",
@@ -102,7 +114,7 @@ CFL = CFL_Stab * CFL_PERK * CFL_Discretization
 # S = 4, p = 2, NumCells = 12
 dt = 0.0830890595862001646 * CFL
 
-for i = 1:10
+#for i = 1:10
   sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
   #plot(sol)
 
@@ -111,7 +123,7 @@ for i = 1:10
               dt=2.6e-3,
               save_everystep=false, callback=callbacks);
   =#              
-end
+#end
 summary_callback() # print the timer summary
 
 
