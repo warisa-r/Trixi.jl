@@ -77,11 +77,11 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level  = InitialRefinement+6, max_threshold=0.3)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK
+                           interval=20, # PERK
                            #interval=19, # PERK single
                            #interval=31, # ParsaniKetchesonDeconinck3S53
                            #interval=17, # DGLDDRK73_C
-                           interval=40, # RDPK3SpFSAL35
+                           #interval=40, # RDPK3SpFSAL35
                            #interval=60, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
@@ -91,9 +91,7 @@ cfl = 2.1 # p = 3, E = 3, 4, 7, 13
 cfl = 3.0 # p = 3, E = 3, 4, 7
 
 #cfl = 3.2 # DGLDDRK73_C
-
-cfl = 1.9 # ParsaniKetchesonDeconinck3S53
-
+#cfl = 1.9 # ParsaniKetchesonDeconinck3S53
 #cfl = 1.0 # SSPRK33
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
@@ -126,9 +124,9 @@ Stages = [13, 7, 4, 3]
 Stages = [7, 4, 3]
 
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2)
-ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
+#ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
 
-for i = 1:10
+for i = 1:3
   mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=100_000)
@@ -136,12 +134,12 @@ for i = 1:10
   semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                               initial_condition, solver)
 
-  #ode = semidiscretize(semi, tspan; split_form = false)
-  ode = semidiscretize(semi, tspan) #  For ODE.jl methods
+  ode = semidiscretize(semi, tspan; split_form = false)
+  #ode = semidiscretize(semi, tspan) #  For ODE.jl methods
 
-  #sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+  sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
-  
+  #=
   callbacksDE = CallbackSet(summary_callback,
                             analysis_callback,
                             amr_callback)
@@ -149,27 +147,28 @@ for i = 1:10
   tol = 1e-4 # maximum error tolerance
   sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
               ode_default_options()..., callback=callbacksDE);
-  
+  =#
   
   #=
   sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
               ode_default_options()..., callback=callbacks)
-  =#
+  =#          
 
   #=
   sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
               ode_default_options()..., callback=callbacks)
   =#
+  
   #=
   sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
   =#         
-end
 
-summary_callback() # print the timer summary
+  summary_callback() # print the timer summary    
+end
 
 plot(sol)
 pd = PlotData2D(sol)
