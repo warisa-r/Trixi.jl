@@ -124,15 +124,6 @@ dt = 0.0830890595862001646 * CFL
               save_everystep=false, callback=callbacks);
   =#              
 #end
-summary_callback() # print the timer summary
-
-
-#=
-# TODO: Compare runtime also to SSPRK33 (as Vermiere)
-sol = solve(ode, SSPRK33(),
-            dt=2.6e-3,
-            save_everystep=false, callback=callbacks);
-=#
 
 summary_callback() # print the timer summary
 
