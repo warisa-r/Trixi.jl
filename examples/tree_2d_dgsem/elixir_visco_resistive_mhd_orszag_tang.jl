@@ -70,10 +70,24 @@ tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
+
+restart_filename = joinpath("out", "restart_001000.h5")
+mesh = load_mesh(restart_filename)
+
+semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver)
+
+tspan = (load_time(restart_filename), 2.0)
+dt = load_dt(restart_filename)
+ode = semidiscretize(semi, tspan, restart_filename; split_form = false)
+
+
 summary_callback = SummaryCallback()
 
-analysis_interval = 200000
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
+analysis_interval = 1000
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors=Symbol[])
+
+save_restart = SaveRestartCallback(interval=1000,
+                                   save_final_restart=true)
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -86,8 +100,16 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       med_level =7, med_threshold=0.04,
                                       max_level =9, max_threshold=0.4)
 
+#For meaningful streamline plot at end                                      
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level=7,
+                                      med_level =8, med_threshold=0.04,
+                                      max_level =9, max_threshold=0.4)
+
+
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10, # PERK, DGLDDRK73_C
+                           #interval=10, # PERK, DGLDDRK73_C
+                           interval = 5, # base_level = changed
                            #interval=31, # SSPRK33
                            #interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
@@ -99,6 +121,8 @@ cfl = 1.9 # p = 3, S = 10
 cfl = 1.9 # p = 3, S = 6
 cfl = 1.9 # p = 3, S = 8
 
+#cfl = 0.7 # base_level = 6
+
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
@@ -106,6 +130,7 @@ glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         amr_callback,
+                        #save_restart,
                         stepsize_callback,
                         glm_speed_callback)
 
@@ -147,8 +172,8 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2)
 
-#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
-
+ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
+#=
 for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
@@ -157,10 +182,11 @@ for i = 1:1
   semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic), initial_condition, solver) 
   
   ode = semidiscretize(semi, tspan; split_form = false)
+  =#
   sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                     save_everystep=false, callback=callbacks);
 
-end
+#end
 
 
 #cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
@@ -208,8 +234,8 @@ end
 
 summary_callback() # print the timer summary
 
-
-#plot(sol)
+using Plots
+Plots.plot(sol)
 
 pd = PlotData2D(sol)
 
@@ -264,17 +290,17 @@ end
 
 write(MacroVars, "\n")
 write(MacroVars, "VECTORS U float\n")
-v1 = pd.data[2]
-v2 = pd.data[3]
+V1 = pd.data[2]
+V2 = pd.data[3]
 for i in 1:Nx
   for j in 1:Ny
-    write(MacroVars, string(v1[i,j]), " ", string(v2[i,j]), " 0\n")
+    write(MacroVars, string(V1[i,j]), " ", string(V2[i,j]), " 0\n")
   end
 end
 close(MacroVars)
 
 
-using CairoMakie
+using CairoMakie, IntervalSets
 
 x = pd.x
 y = pd.y
@@ -284,9 +310,16 @@ f(xP, x, y, v1, v2) = Point2f(
   v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]]
 )
 
-f(xP) = f(xP, x, y, v1, v2)
+f(xP) = f(xP, x, y, V1, V2)
 
-fig, ax, pl = streamplot(f, 0.0..2*pi, 0.0..2*pi; 
+#import CairoMakie: ..
+
+xInterval = 0.0..2pi
+#xInterval = interval(0.0, 2*pi)
+#xInterval = interval(Float32, 0.0, 2*pi)
+
+fig, ax, pl = streamplot(f, #0.0..2pi, 0.0..2pi;
+                          xInterval, xInterval;
                          stepsize = 1e-3, gridsize = (100, 100),
                          arrow_size = 0)
 
