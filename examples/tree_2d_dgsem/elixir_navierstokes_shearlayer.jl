@@ -56,7 +56,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.8) # For plot only
-tspan = (0.0, 1.2)
+#tspan = (0.0, 1.2)
 
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan) #  For ODE.jl methods
@@ -126,6 +126,7 @@ Stages = [7, 4, 3]
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/", cS2)
 #ode_algorithm = PERK3(7, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")                            
 
+#=
 for i = 1:3
   mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
@@ -136,7 +137,7 @@ for i = 1:3
 
   ode = semidiscretize(semi, tspan; split_form = false)
   #ode = semidiscretize(semi, tspan) #  For ODE.jl methods
-
+=#
   sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
   #=
@@ -168,10 +169,95 @@ for i = 1:3
   =#         
 
   summary_callback() # print the timer summary    
-end
+#end
 
-plot(sol)
+Plots.plot(sol)
+
 pd = PlotData2D(sol)
+
 plot(pd["v1"], title = "\$v_x, t=0.8\$")
 plot(pd["v2"], title = "\$v_x, t=0\$")
 plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t = 0.8\$")
+
+using Printf
+
+mkpath("out")  # Create output directory automatically
+
+MacroVars_String = "out/MacroVars.vtk"
+MacroVars = open(MacroVars_String, "w")
+
+write(MacroVars, "# vtk DataFile Version 3.0\n")
+write(MacroVars, "vtk output\n")
+write(MacroVars, "ASCII\n")
+write(MacroVars, "DATASET STRUCTURED_GRID\n")
+
+Nx = length(pd.x)
+Ny = length(pd.y)
+NumPoints = Int(Nx * Ny)
+NumPointsString = string(Int(Nx * Ny))
+
+write(MacroVars, "DIMENSIONS ", string(Nx), " ", string(Ny), " 1\n")
+write(MacroVars, "POINTS ", NumPointsString, " float\n")
+for i in 1:Nx
+  for j in 1:Ny
+    write(MacroVars, "$(pd.x[i]) $(pd.y[j]) 0\n")
+  end
+end
+
+write(MacroVars, "\n")
+write(MacroVars, "POINT_DATA ", NumPointsString, "\n")
+
+#=
+write(MacroVars, "SCALARS rho float\n")
+rho = pd.data[1]
+write(MacroVars, "LOOKUP_TABLE default\n")
+for i in 1:Nx
+  for j in 1:Ny
+      write(MacroVars, string(rho[i,j]), "\n")
+  end
+end
+
+write(MacroVars, "\n")
+write(MacroVars, "SCALARS p float\n")
+p = pd.data[5]
+write(MacroVars, "LOOKUP_TABLE default\n")
+for i in 1:Nx
+  for j in 1:Ny
+      write(MacroVars, string(p[i,j]), "\n")
+  end
+end
+=#
+
+# Need to transpose back, see l. 528 of src/visualization/utilities.jl
+V1 = transpose(pd.data[2])
+V2 = transpose(pd.data[3])
+
+write(MacroVars, "\n")
+write(MacroVars, "VECTORS U float\n")
+for i in 1:Nx
+  for j in 1:Ny
+    write(MacroVars, string(V1[i,j]), " ", string(V2[i,j]), " 0\n")
+  end
+end
+close(MacroVars)
+
+using CairoMakie
+using CairoMakie: (..)
+
+x = pd.x
+y = pd.y
+
+f(xP, x, y, v1, v2) = Point2f(
+  v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]],
+  v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]]
+)
+f(xP) = f(xP, x, y, V1, V2)
+
+xInterval = 0.0..1
+#xInterval = interval(0.0, 2*pi)
+#xInterval = interval(Float32, 0.0, 2*pi)
+
+fig, ax, pl = streamplot(f, #0.0..2pi, 0.0..2pi;
+                          xInterval, xInterval;
+                         stepsize = 1e-2, gridsize = (50, 50),
+                         arrow_size = 10)

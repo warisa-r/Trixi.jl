@@ -70,7 +70,7 @@ tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
-
+#=
 restart_filename = joinpath("out", "restart_001000.h5")
 mesh = load_mesh(restart_filename)
 
@@ -79,7 +79,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 tspan = (load_time(restart_filename), 2.0)
 dt = load_dt(restart_filename)
 ode = semidiscretize(semi, tspan, restart_filename; split_form = false)
-
+=#
 
 summary_callback = SummaryCallback()
 
@@ -99,17 +99,25 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.04,
                                       max_level =9, max_threshold=0.4)
-
+#=
 #For meaningful streamline plot at end                                      
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=7,
                                       med_level =8, med_threshold=0.04,
                                       max_level =9, max_threshold=0.4)
+=#
 
+# nu = mu = 1e-2                                      
+#=
+amr_controller = ControllerThreeLevel(semi, amr_indicator,
+                                      base_level=6,
+                                      med_level =7, med_threshold=0.04,
+                                      max_level =8, max_threshold=0.4)                                      
+=#
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=10, # PERK, DGLDDRK73_C
-                           interval = 5, # base_level = changed
+                           interval=10, # PERK, DGLDDRK73_C
+                           #interval = 5, # base_level = changed
                            #interval=31, # SSPRK33
                            #interval = 15, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
@@ -121,7 +129,7 @@ cfl = 1.9 # p = 3, S = 10
 cfl = 1.9 # p = 3, S = 6
 cfl = 1.9 # p = 3, S = 8
 
-#cfl = 0.7 # base_level = 6
+#cfl = 0.8 # nu = mu = 1e-2
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -172,7 +180,7 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/", cS2)
 
-ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/")
 #=
 for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
@@ -234,11 +242,11 @@ end
 
 summary_callback() # print the timer summary
 
-using Plots
 Plots.plot(sol)
 
 pd = PlotData2D(sol)
 
+#=
 using Printf
 
 mkpath("out")  # Create output directory automatically
@@ -267,7 +275,7 @@ end
 write(MacroVars, "\n")
 write(MacroVars, "POINT_DATA ", NumPointsString, "\n")
 
-#=
+
 write(MacroVars, "SCALARS rho float\n")
 rho = pd.data[1]
 write(MacroVars, "LOOKUP_TABLE default\n")
@@ -286,21 +294,22 @@ for i in 1:Nx
       write(MacroVars, string(p[i,j]), "\n")
   end
 end
-=#
+
 
 write(MacroVars, "\n")
 write(MacroVars, "VECTORS U float\n")
-V1 = pd.data[2]
-V2 = pd.data[3]
+V1 = transpose(pd.data[2])
+V2 = transpose(pd.data[3])
 for i in 1:Nx
   for j in 1:Ny
     write(MacroVars, string(V1[i,j]), " ", string(V2[i,j]), " 0\n")
   end
 end
 close(MacroVars)
+=#
 
-
-using CairoMakie, IntervalSets
+using CairoMakie
+using CairoMakie: (..)
 
 x = pd.x
 y = pd.y
@@ -310,18 +319,43 @@ f(xP, x, y, v1, v2) = Point2f(
   v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]]
 )
 
-f(xP) = f(xP, x, y, V1, V2)
+f_rot(xP, x, y, v1, v2) = Point2f(
+  v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * cos(pi/2) - v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * sin(pi/2),
+  v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * cos(pi/2) + v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * sin(pi/2)
+)
 
-#import CairoMakie: ..
+B1 = transpose(pd.data[6])
+B2 = transpose(pd.data[7])
+
+f(xP) = f(xP, x, y, V1, V2)
+f(xP) = f(xP, x, y, B1, B2)
+
+#=
+B1 = pd.data[6]
+B2 = pd.data[7]
+
+f_rot(xP) = f_rot(xP, x, y, B1, B2)
+=#
 
 xInterval = 0.0..2pi
 #xInterval = interval(0.0, 2*pi)
 #xInterval = interval(Float32, 0.0, 2*pi)
 
-fig, ax, pl = streamplot(f, #0.0..2pi, 0.0..2pi;
-                          xInterval, xInterval;
-                         stepsize = 1e-3, gridsize = (100, 100),
-                         arrow_size = 0)
+N_SL = 100
+fig, ax, pl = streamplot(f,
+                         xInterval, xInterval;
+                         stepsize = 1e-2, gridsize = (N_SL, N_SL),
+                         arrow_size = 0,
+                         linewidth = 1.0,
+                         color = (dx) -> :black)
+ax.aspect = DataAspect()
+display(fig)
+
+# Set the camera rotation angle
+rotation_angle = π/4  # You can adjust the angle as needed
+
+# Rotate the camera view
+Makie.rotate!(fig, Makie.Vec3f0(0, 0, 1), rotation_angle)
 
 Plots.plot(pd["rho"], c = :jet, title = "\$ ρ, t_f = 3.0 \$", 
            xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
