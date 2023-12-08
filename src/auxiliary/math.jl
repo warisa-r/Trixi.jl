@@ -73,12 +73,18 @@ This function may be used to increase performance where the inverse of the
 logarithmic mean is needed, by replacing a (slow) division by a (fast)
 multiplication.
 """
-@inline function inv_ln_mean(x, y)
+#@inline function inv_ln_mean(x, y)
+function inv_ln_mean(x, y)
     epsilon_f2 = 1.0e-4
     f2 = (x * (x - 2 * y) + y * y) / (x * (x + 2 * y) + y * y) # f2 = f^2
     if f2 < epsilon_f2
         return @evalpoly(f2, 2, 2/3, 2/5, 2/7) / (x + y)
     else
+        if y/x < 0
+            println("y/x = ", y/x)
+            println("log should crash, evaluating log:")
+            println("log(y/x) = ", log(y/x))
+        end
         return log(y / x) / (y - x)
     end
 end
