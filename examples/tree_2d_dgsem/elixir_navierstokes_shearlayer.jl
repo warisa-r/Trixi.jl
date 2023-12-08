@@ -55,8 +55,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.8) # For plot only
-#tspan = (0.0, 1.2)
+#tspan = (0.0, 0.8) # For plot only
+tspan = (0.0, 1.2)
 
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan) #  For ODE.jl methods
@@ -168,7 +168,7 @@ for i = 1:3
             ode_default_options()..., callback=callbacks)
   =#         
 
-  summary_callback() # print the timer summary    
+  summary_callback() # print the timer summary
 #end
 
 Plots.plot(sol)
