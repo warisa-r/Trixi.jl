@@ -84,23 +84,23 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
 
-tspan = (0.0, 0.15)
+tspan = (0.0, 0.0891)
 ode = semidiscretize(semi, tspan)                        
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-
-restart_filename = "out/restart_001600.h5"
+#=
+restart_filename = "out/restart_001639.h5"
 mesh = load_mesh(restart_filename)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions = boundary_conditions)     
 
-tspan = (load_time(restart_filename), 0.15)
+tspan = (load_time(restart_filename), 0.089)
 dt = load_dt(restart_filename)
 ode = semidiscretize(semi, tspan, restart_filename);       
-
+=#
 
 summary_callback = SummaryCallback()
 
@@ -123,12 +123,12 @@ amr_callback = AMRCallback(semi, amr_controller,
 cfl = 0.54 # ParsaniKetchesonDeconinck3S53
 cfl = 0.42 # SSPRK33
 
-save_restart = SaveRestartCallback(interval = 1600,
+save_restart = SaveRestartCallback(interval = 1639,
                                    save_final_restart = false)
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
-analysis_interval = 400
+analysis_interval = 1600
 analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
@@ -148,10 +148,9 @@ sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.False())
             ode_default_options()..., callback=callbacks)
 =#
 
-sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.False());
-            dt=42.0,
-            save_everystep=false, callback=callbacks,
-            ode_default_options()...);
+sol = Trixi.solve(ode, Trixi.SimpleSSPRK33(stage_callbacks=()),
+                  dt=42.0,
+                  save_everystep=false, callback=callbacks);
   
 
 summary_callback() # print the timer summary
