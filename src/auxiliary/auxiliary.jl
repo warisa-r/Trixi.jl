@@ -224,16 +224,18 @@ macro threaded(expr)
     # standard library with an additional check whether only a single thread is used
     # to reduce some overhead (and allocations) for serial execution.
     #
+    #=
     return esc(quote
                    let
                        if Threads.nthreads() == 1
                            $(expr)
                        else
-                           #Threads.@threads :static $(expr)
-                           Threads.@threads $(expr)
+                           Threads.@threads :static $(expr)
+                           #Threads.@threads $(expr) # Old version
                        end
                    end
                end)
+    =#               
     #
     # However, the code below using `@batch` from Polyester.jl is more efficient,
     # since this packages provides threads with less overhead. Since it is written
@@ -242,11 +244,11 @@ macro threaded(expr)
     # them) available in Julia.
     # !!! danger "Heisenbug"
     #     Look at the comments for `wrap_array` when considering to change this macro.
-    #=
+    
     return esc(quote
                    Trixi.@batch $(expr)
                end)
-    =#
+    
 end
 
 #     @trixi_timeit timer() "some label" expression
