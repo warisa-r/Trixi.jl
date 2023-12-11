@@ -142,7 +142,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
 
-#stepsize_callback = StepsizeCallback(cfl=1.1) # DGLDDRK73_C
+stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
 
 #stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
@@ -160,9 +160,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =6, max_threshold=0.0025)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
-                           #interval=17, #RDPK3SpFSAL35
-                           #interval=25, # DGLDDRK73_C
+                           #interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
+                           #interval=12, #RDPK3SpFSAL35
+                           interval=24, # DGLDDRK73_C
                            #interval = 33, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
@@ -175,25 +175,6 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-# S = 3, p = 2
-dt = 0.00142227114120032641
-# S = 10 p = 2
-dt = 0.00656249996216502054
-
-b1   = 0.0
-bS   = 1.0 - b1
-cEnd = 0.5/bS
-
-Stages = [10, 5, 3]
-#=
-ode_algorithm = PERK_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/p2/",
-                           bS, cEnd,
-                           LevelCFL, Integrator_Mesh_Level_Dict)
-
-ode_algorithm = PERK(10, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/RayleighTaylorInstability/",
-                     bS, cEnd)                        
-=#
-
 # S = 11, p = 3
 dt = 0.007080
 
@@ -205,16 +186,16 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Raylei
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-
-sol = Trixi.solve(ode, ode_algorithm, dt = dt,
-                  save_everystep=false, callback=callbacks)
-
-
 #=
+sol = Trixi.solve(ode, ode_algorithm, dt = dt,
+                  save_everystep=false, callback=callbacks);
+=#
+
+
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
-=#
+
 
 #=
 sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
@@ -229,13 +210,14 @@ sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
 =#
 #=
 callbacksDE = CallbackSet(summary_callback,
-            analysis_callback,
-            amr_callback)
+                          analysis_callback,
+                          amr_callback)
 
 tol = 1e-5 # maximum error tolerance
 sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
             ode_default_options()..., callback=callbacksDE);
 =#
+
 summary_callback() # print the timer summary
 plot(sol)
 
