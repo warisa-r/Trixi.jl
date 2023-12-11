@@ -87,7 +87,8 @@ ode = semidiscretize(semi, tspan, restart_filename; split_form = false);
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 20
+#analysis_interval = 20
+analysis_interval = 100000 # For test run if concludes
 
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_analysis=true,
                                      analysis_errors = Symbol[],
@@ -99,9 +100,6 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      analysis_errors = Symbol[])
 =#
 
-save_restart = SaveRestartCallback(interval=600,
-                                   save_final_restart=true)
-
 amr_indicator = IndicatorLöhner(semi,
                                 variable=Trixi.enstrophy)
 amr_indicator = IndicatorMax(semi, variable = Trixi.enstrophy)
@@ -112,16 +110,16 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =InitialRefinement+2, max_threshold=30.0)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK
-                           interval = 18, #DGLDDRK73_C, PERK single
+                           interval=20, # PERK
+                           #interval = 18, #DGLDDRK73_C, PERK single
                            #interval=34, # RDPK3SpFSAL35
                            #interval = 30, # ParsaniKetchesonDeconinck3S53
                            #interval = 53, # SSPRK33
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
-#stepsize_callback = StepsizeCallback(cfl=4.1) # PERK 3, 4, 6
-stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
+stepsize_callback = StepsizeCallback(cfl=4.1) # PERK 3, 4, 6
+#stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
 #stepsize_callback = StepsizeCallback(cfl=4.4) # DGLDDRK73_C
 #stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
 #stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
@@ -129,7 +127,6 @@ stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback,
-                        #save_restart,
                         amr_callback)
 
 ###############################################################################
@@ -143,7 +140,7 @@ Stages = [6, 4, 3] # Have three levels anyway
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
-ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,

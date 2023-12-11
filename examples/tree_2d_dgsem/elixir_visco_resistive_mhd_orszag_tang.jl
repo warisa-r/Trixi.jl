@@ -83,7 +83,7 @@ ode = semidiscretize(semi, tspan, restart_filename; split_form = false)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 1000
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors=Symbol[])
 
 save_restart = SaveRestartCallback(interval=1000,

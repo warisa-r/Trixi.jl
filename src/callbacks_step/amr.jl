@@ -370,11 +370,13 @@ function (amr_callback::AMRCallback)(u_ode::AbstractVector, mesh::TreeMesh,
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, dg, cache,
                                                           t = t, iter = iter)
     
+    # NOTE: For enstrophy-based AMR
     #=
     lambda = @trixi_timeit timer() "indicator" controller(u, mesh, equations, semi.equations_parabolic, 
                                                           dg, cache, cache_parabolic,
                                                           t = t, iter = iter)
     =#
+
     if mpi_isparallel()
         error("MPI has not been verified yet for parabolic AMR")
 
