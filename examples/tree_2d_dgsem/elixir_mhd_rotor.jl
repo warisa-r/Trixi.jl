@@ -60,7 +60,10 @@ boundary_conditions = (x_neg=boundary_condition_outflow,
                        y_pos=boundary_condition_outflow)
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
-volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
+
+#volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
+volume_flux  = (flux_central, flux_nonconservative_powell)
+
 polydeg = 4
 basis = LobattoLegendreBasis(polydeg)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -78,7 +81,7 @@ coordinates_max = (1.0, 1.0)
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=10_000,
-                periodicity=true)
+                periodicity=false) # Use outflow BC
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     boundary_conditions=boundary_conditions)
@@ -87,7 +90,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.15)
+tspan = (0.0, 0.15) # final time from paper
+
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -100,26 +104,30 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_min=0.001,
                                           alpha_smooth=false,
                                           variable=density_pressure)
-# For density_pressure                                          
+# For density_pressure
+
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.0025,
-                                      max_level =9, max_threshold=0.25)                                   
+                                      max_level =9, max_threshold=0.25)                                           
+                                      
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval = 5, # PERK, DGLDDRK73_C: cfl 0.55
-                           #interval = 8, # ParsaniKetchesonDeconinck3S53
-                           #interval = 10, # SSPRK33, DGLDDRK73_C: cfl 0.65
+                           #interval = 20, # SSPRK33
+                           interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           #interval = 10, # ParsaniKetchesonDeconinck3S53
+                           #interval = 10, # PERK [6, 4, 3], [10, 6, 3]
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
+cfl = 0.57 # SSPRK33
 
-cfl = 0.85 # 3,4,6 PERK, ParsaniKetchesonDeconinck3S53
-#cfl = 0.70 # 6 PERK Single
+# Finest level = 9
+cfl = 2.1 # PERK, [10, 6, 4]
+#cfl = 1.3 # PERK, [10, 6, 3]
+#cfl = 1.2 # PERK, [6, 4, 3]
 
-#cfl = 0.65 # DGLDDRK73_C
-#cfl = 0.55 # DGLDDRK73_C
-
-#cfl = 0.42 # SSPRK33
+#cfl = 1.9 # DGLDDRK73_C
+#cfl = 1.1 # ParsaniKetchesonDeconinck3S53
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -134,17 +142,16 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-# p = 3, BaseRef = 3
-# S = 3
-dt = 0.0080186414951458575 # Not used anyway (CFL)
+dt = 42.0
 
-#Stages = [10, 6, 4, 3]
-Stages = [6, 4, 3]
+Stages = [10, 6, 4] # Ref 2
+#Stages = [10, 6, 3] # Ref 2
+#Stages = [6, 4, 3] # Ref 2
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/Central/Ref2/", cS2)
 
-#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/Central/")
 
 #=
 for i = 1:10
@@ -159,10 +166,12 @@ for i = 1:10
 
     ode = semidiscretize(semi, tspan)
 =#
+  
+  
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    
+  
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
