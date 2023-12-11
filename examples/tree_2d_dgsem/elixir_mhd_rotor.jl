@@ -60,10 +60,7 @@ boundary_conditions = (x_neg=boundary_condition_outflow,
                        y_pos=boundary_condition_outflow)
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
-
-#volume_flux  = (flux_hindenlang_gassner, flux_nonconservative_powell)
 volume_flux  = (flux_central, flux_nonconservative_powell)
-
 polydeg = 4
 basis = LobattoLegendreBasis(polydeg)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -105,7 +102,6 @@ amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_smooth=false,
                                           variable=density_pressure)
 # For density_pressure
-
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=3,
                                       med_level =7, med_threshold=0.0025,
@@ -113,7 +109,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval = 20, # SSPRK33
-                           interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           #interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           interval = 7, # PERK 6 Single
                            #interval = 10, # ParsaniKetchesonDeconinck3S53
                            #interval = 10, # PERK [6, 4, 3], [10, 6, 3]
                            adapt_initial_condition=true,
@@ -126,7 +123,10 @@ cfl = 2.1 # PERK, [10, 6, 4]
 #cfl = 1.3 # PERK, [10, 6, 3]
 #cfl = 1.2 # PERK, [6, 4, 3]
 
-#cfl = 1.9 # DGLDDRK73_C
+cfl = 2.1 # PERK 10
+cfl = 1.6 # PERK 6
+
+#cfl = 1.7 # DGLDDRK73_C
 #cfl = 1.1 # ParsaniKetchesonDeconinck3S53
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
@@ -149,17 +149,16 @@ Stages = [10, 6, 4] # Ref 2
 #Stages = [6, 4, 3] # Ref 2
 
 cS2 = 1.0
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/Central/Ref2/", cS2)
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
 
-#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/Central/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
 #=
-for i = 1:10
+for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=10_000,
                   periodicity=false)
-                  #periodicity=true)
 
     semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                         boundary_conditions=boundary_conditions)
@@ -167,11 +166,11 @@ for i = 1:10
     ode = semidiscretize(semi, tspan)
 =#
   
-  
+    
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-  
+    
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -200,5 +199,10 @@ plot(sol)
 
 pd = PlotData2D(sol)
 plot(pd["rho"])
-plot(pd["p"], title = "\$ p, t_f = 0.15 \$", c = :jet)
-plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.15\$")
+
+#pgfplotsx() very slow
+
+# Margin does not seem wot do anything
+plot(pd["p"], title = "\$ p, t_f = 0.15 \$", c = :jet, left_margin = 0Plots.px, right_margin = 0Plots.px)
+MeshPlot = plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.15\$")
+savefig(MeshPlot, "/home/daniel/git/Paper_AMR_PERK/Plotscripts/MHD_Rotor/mesh.svg")
