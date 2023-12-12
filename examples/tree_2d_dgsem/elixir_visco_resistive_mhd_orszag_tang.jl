@@ -148,9 +148,6 @@ callbacks = CallbackSet(summary_callback,
 # S = 3, p = 2 Ref = 4
 dt = 0.0161709425439767083
 
-# S = 4, p = 2 Ref = 4
-#dt = 0.0274786205467535198
-
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
@@ -200,7 +197,7 @@ for i = 1:1
 #cfl = 1.9 # DGLDDRK73_C Max Level 9, base lvl = 3
 #cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
 
-cfl = 1.2 # ParsaniKetchesonDeconinck3S53
+#cfl = 1.2 # ParsaniKetchesonDeconinck3S53
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -309,26 +306,61 @@ close(MacroVars)
 =#
 
 using CairoMakie
-using CairoMakie: (..)
+using CairoMakie: (..) # Trixi re-exports this operator
 
 x = pd.x
 y = pd.y
 
 f(xP, x, y, v1, v2) = Point2f(
-  v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]],
-  v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]]
+  v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]],
+  v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]]
 )
 
 f_rot(xP, x, y, v1, v2) = Point2f(
-  v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * cos(pi/2) - v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * sin(pi/2),
-  v2[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * cos(pi/2) + v1[findmin(abs.(xP[1] .- x))[2], findmin(abs.(xP[2] .- y))[2]] * sin(pi/2)
+  v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * cos(pi/2) - v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * sin(pi/2),
+  v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * cos(pi/2) + v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * sin(pi/2)
 )
 
-B1 = transpose(pd.data[6])
-B2 = transpose(pd.data[7])
+V1 = pd.data[2]
+V2 = pd.data[3]
+
+B1 = pd.data[6]
+B2 = pd.data[7]
+
+using DelimitedFiles
+
+# Export vectors
+writedlm("x.csv", x, ',')
+writedlm("y.csv", y, ',')
+
+# Export matrices
+writedlm("B1.csv", B1, ',')
+writedlm("B2.csv", B2, ',')
+
+#=
+p1 = Plots.plot(pd["B1"])
+p2 = Plots.heatmap(B1, aspect_ratio = :equal)
+
+Plots.heatmap(B1[1:100, 1:1000], aspect_ratio = :equal)
+
+Plots.plot(p1, p2, layout=(2, 1))
+=#
+
+B1_rot = copy(B1)
+B2_rot = copy(B2)
+
+N = size(B1)[1]
+# Rotate matrix to the left
+for i = 1:N
+  B1_rot[:, i] = reverse(B1[N - i + 1, :])
+  B2_rot[:, i] = reverse(B2[N - i + 1, :])
+end
 
 f(xP) = f(xP, x, y, V1, V2)
 f(xP) = f(xP, x, y, B1, B2)
+f(xP) = f(xP, x, y, B1_rot, B2_rot)
+
+f(xP) = f_rot(xP, x, y, B1, B2) 
 
 #=
 B1 = pd.data[6]
@@ -348,6 +380,9 @@ fig, ax, pl = streamplot(f,
                          arrow_size = 0,
                          linewidth = 1.0,
                          color = (dx) -> :black)
+
+pl
+
 ax.aspect = DataAspect()
 display(fig)
 
