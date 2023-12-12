@@ -243,83 +243,8 @@ Plots.plot(sol)
 
 pd = PlotData2D(sol)
 
-#=
-using Printf
-
-mkpath("out")  # Create output directory automatically
-
-MacroVars_String = "out/MacroVars.vtk"
-MacroVars = open(MacroVars_String, "w")
-
-write(MacroVars, "# vtk DataFile Version 3.0\n")
-write(MacroVars, "vtk output\n")
-write(MacroVars, "ASCII\n")
-write(MacroVars, "DATASET STRUCTURED_GRID\n")
-
-Nx = length(pd.x)
-Ny = length(pd.y)
-NumPoints = Int(Nx * Ny)
-NumPointsString = string(Int(Nx * Ny))
-
-write(MacroVars, "DIMENSIONS ", string(Nx), " ", string(Ny), " 1\n")
-write(MacroVars, "POINTS ", NumPointsString, " float\n")
-for i in 1:Nx
-  for j in 1:Ny
-    write(MacroVars, "$(pd.x[i]) $(pd.y[j]) 0\n")
-  end
-end
-
-write(MacroVars, "\n")
-write(MacroVars, "POINT_DATA ", NumPointsString, "\n")
-
-
-write(MacroVars, "SCALARS rho float\n")
-rho = pd.data[1]
-write(MacroVars, "LOOKUP_TABLE default\n")
-for i in 1:Nx
-  for j in 1:Ny
-      write(MacroVars, string(rho[i,j]), "\n")
-  end
-end
-
-write(MacroVars, "\n")
-write(MacroVars, "SCALARS p float\n")
-p = pd.data[5]
-write(MacroVars, "LOOKUP_TABLE default\n")
-for i in 1:Nx
-  for j in 1:Ny
-      write(MacroVars, string(p[i,j]), "\n")
-  end
-end
-
-
-write(MacroVars, "\n")
-write(MacroVars, "VECTORS U float\n")
-V1 = transpose(pd.data[2])
-V2 = transpose(pd.data[3])
-for i in 1:Nx
-  for j in 1:Ny
-    write(MacroVars, string(V1[i,j]), " ", string(V2[i,j]), " 0\n")
-  end
-end
-close(MacroVars)
-=#
-
-using CairoMakie
-using CairoMakie: (..) # Trixi re-exports this operator
-
 x = pd.x
 y = pd.y
-
-f(xP, x, y, v1, v2) = Point2f(
-  v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]],
-  v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]]
-)
-
-f_rot(xP, x, y, v1, v2) = Point2f(
-  v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * cos(pi/2) - v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * sin(pi/2),
-  v2[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * cos(pi/2) + v1[findmin(abs.(xP[2] .- y))[2], findmin(abs.(xP[1] .- x))[2]] * sin(pi/2)
-)
 
 V1 = pd.data[2]
 V2 = pd.data[3]
@@ -345,52 +270,6 @@ Plots.heatmap(B1[1:100, 1:1000], aspect_ratio = :equal)
 
 Plots.plot(p1, p2, layout=(2, 1))
 =#
-
-B1_rot = copy(B1)
-B2_rot = copy(B2)
-
-N = size(B1)[1]
-# Rotate matrix to the left
-for i = 1:N
-  B1_rot[:, i] = reverse(B1[N - i + 1, :])
-  B2_rot[:, i] = reverse(B2[N - i + 1, :])
-end
-
-f(xP) = f(xP, x, y, V1, V2)
-f(xP) = f(xP, x, y, B1, B2)
-f(xP) = f(xP, x, y, B1_rot, B2_rot)
-
-f(xP) = f_rot(xP, x, y, B1, B2) 
-
-#=
-B1 = pd.data[6]
-B2 = pd.data[7]
-
-f_rot(xP) = f_rot(xP, x, y, B1, B2)
-=#
-
-xInterval = 0.0..2pi
-#xInterval = interval(0.0, 2*pi)
-#xInterval = interval(Float32, 0.0, 2*pi)
-
-N_SL = 100
-fig, ax, pl = streamplot(f,
-                         xInterval, xInterval;
-                         stepsize = 1e-2, gridsize = (N_SL, N_SL),
-                         arrow_size = 0,
-                         linewidth = 1.0,
-                         color = (dx) -> :black)
-
-pl
-
-ax.aspect = DataAspect()
-display(fig)
-
-# Set the camera rotation angle
-rotation_angle = π/4  # You can adjust the angle as needed
-
-# Rotate the camera view
-Makie.rotate!(fig, Makie.Vec3f0(0, 0, 1), rotation_angle)
 
 Plots.plot(pd["rho"], c = :jet, title = "\$ ρ, t_f = 3.0 \$", 
            xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),

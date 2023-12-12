@@ -142,11 +142,11 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
 
-stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
+#stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
 
 #stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
-#stepsize_callback = StepsizeCallback(cfl=0.8) # SSPRK33
+stepsize_callback = StepsizeCallback(cfl=0.8) # SSPRK33
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -162,8 +162,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
                            #interval=12, #RDPK3SpFSAL35
-                           interval=24, # DGLDDRK73_C
-                           #interval = 33, # SSPRK33
+                           #interval=24, # DGLDDRK73_C
+                           interval = 33, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -191,11 +191,11 @@ sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 =#
 
-
+#=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
-
+=#
 
 #=
 sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
@@ -203,11 +203,11 @@ sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
             ode_default_options()..., callback=callbacks)
 =#
 
-#=
+
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
-=#
+
 #=
 callbacksDE = CallbackSet(summary_callback,
                           analysis_callback,
