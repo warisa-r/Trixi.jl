@@ -81,10 +81,10 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
           
           # NOTE: Additional RHS Call computation
           # CARE: Hard-coded for each case 
-          #Stages = [6, 4, 3] # VRMHD O-T
+          Stages = [6, 4, 3] # VRMHD O-T
           #Stages = [7, 4, 3] # Shearlayer
           #Stages = [11, 6, 4] # Kelvin-Helmholtz
-          Stages = [10, 6, 4] # MHD Rotor
+          #Stages = [10, 6, 4] # MHD Rotor
           
           MaxStage = maximum(Stages)
           MinStage = minimum(Stages)
