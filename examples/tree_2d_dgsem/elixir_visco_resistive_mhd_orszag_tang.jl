@@ -243,9 +243,6 @@ Plots.plot(sol)
 
 pd = PlotData2D(sol)
 
-x = pd.x
-y = pd.y
-
 V1 = pd.data[2]
 V2 = pd.data[3]
 
@@ -254,11 +251,15 @@ B2 = pd.data[7]
 
 using DelimitedFiles
 
-# Export vectors
-writedlm("x.csv", x, ',')
-writedlm("y.csv", y, ',')
+# Export points
+writedlm("x.csv", pd.x, ',')
+writedlm("y.csv", pd.y, ',')
 
-# Export matrices
+# Export Velocity field
+writedlm("V1.csv", V1, ',')
+writedlm("V2.csv", V2, ',')
+
+# Export Magnetic field
 writedlm("B1.csv", B1, ',')
 writedlm("B2.csv", B2, ',')
 
