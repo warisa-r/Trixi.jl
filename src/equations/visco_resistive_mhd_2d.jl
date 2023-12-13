@@ -93,12 +93,12 @@ function flux(u, gradients, orientation::Integer, equations::ViscoResistiveMhdDi
 
     @unpack eta = equations
 
-    _, dv1dx, dv2dx, dv3dx, dTdx, dB1dx, dB2dx, dB3dx, _ = convert_derivative_to_primitive(u,
-                                                                                            gradients[1],
-                                                                                            equations)
-    _, dv1dy, dv2dy, dv3dy, dTdy, dB1dy, dB2dy, dB3dy, _ = convert_derivative_to_primitive(u,
-                                                                                            gradients[2],
-                                                                                            equations)
+    _, dv1dx, dv2dx, dv3dx, dTdx, _, dB2dx, dB3dx, _ = convert_derivative_to_primitive(u,
+                                                                                           gradients[1],
+                                                                                           equations)
+    _, dv1dy, dv2dy, dv3dy, dTdy, dB1dy, _, dB3dy, _ = convert_derivative_to_primitive(u,
+                                                                                           gradients[2],
+                                                                                           equations)
 
     # Components of viscous stress tensor
 
@@ -122,7 +122,6 @@ function flux(u, gradients, orientation::Integer, equations::ViscoResistiveMhdDi
     # in the implementation
     q1 = equations.kappa * dTdx
     q2 = equations.kappa * dTdy
-    q3 = 0.0
 
     # Constant dynamic viscosity is copied to a variable for readability.
     # Offers flexibility for dynamic viscosity via Sutherland's law where it depends
@@ -136,7 +135,7 @@ function flux(u, gradients, orientation::Integer, equations::ViscoResistiveMhdDi
         f3 = tau_12 * mu
         f4 = tau_13 * mu
         f5 = (v1 * tau_11 + v2 * tau_12 + v3 * tau_13 + q1) * mu +
-                (B2 * (dB2dx - dB1dy) + B3 * dB3dx) * eta
+             (B2 * (dB2dx - dB1dy) + B3 * dB3dx) * eta
         f6 = zero(rho)
         f7 = eta * (dB2dx - dB1dy)
         f8 = eta * dB3dx
@@ -151,7 +150,7 @@ function flux(u, gradients, orientation::Integer, equations::ViscoResistiveMhdDi
         g3 = tau_22 * mu
         g4 = tau_23 * mu
         g5 = (v1 * tau_12 + v2 * tau_22 + v3 * tau_23 + q2) * mu +
-                (B1 * (dB1dy - dB2dx) + B3 * dB3dy) * eta
+             (B1 * (dB1dy - dB2dx) + B3 * dB3dy) * eta
         g6 = eta * (dB1dy - dB2dx)
         g7 = zero(rho)
         g8 = eta * dB3dy
