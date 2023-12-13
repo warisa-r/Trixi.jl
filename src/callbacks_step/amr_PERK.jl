@@ -80,11 +80,27 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
 
           
           # NOTE: Additional RHS Call computation
-          integrator_levels = 3 # CARE: Hard-coded to three-level PERK
-          integrator_NumStages_lowest = 3 # CARE: Hard-coded to min Evals = 3
+          # CARE: Hard-coded for each case 
+          #Stages = [6, 4, 3] # VRMHD O-T
+          #Stages = [7, 4, 3] # Shearlayer
+          #Stages = [11, 6, 4] # Kelvin-Helmholtz
+          Stages = [10, 6, 4] # MHD Rotor
+          
+          MaxStage = maximum(Stages)
+          MinStage = minimum(Stages)
+          integrator_levels = length(Stages)
+
+          # Contribution from non-ideally scaling levels
+          for level = 2:min(integrator_levels, integrator.n_levels)
+            integrator.AddRHSCalls += amr_callback.interval * 
+                                      (Stages[level] - MaxStage / (2^(level - 1))) * 
+                                      length(integrator.level_info_elements[level])
+          end
+
+          # Contribution from non-represented levels
           for level = integrator_levels+1:integrator.n_levels
             integrator.AddRHSCalls += amr_callback.interval * 
-                                      (1 - 2.0^(integrator_levels - level)) * integrator_NumStages_lowest * 
+                                      (MinStage - MaxStage / (2^(level - 1))) * 
                                       length(integrator.level_info_elements[level])
           end
           
@@ -298,11 +314,23 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
             n_elements "highest level should contain all elements"
 
             # NOTE: Additional RHS Call computation
-            integrator_levels = 3 # CARE: Hard-coded to three-level PERK
-            integrator_NumStages_lowest = 3 # CARE: Hard-coded to min Evals = 3
+            # CARE: Hard-coded for each case 
+            Stages = [6, 4, 3] # Rayleigh-Taylor
+            MaxStage = maximum(Stages)
+            MinStage = minimum(Stages)
+            integrator_levels = length(Stages)
+
+            # Contribution from non-ideally scaling levels
+            for level = 2:min(integrator_levels, integrator.n_levels)
+              integrator.AddRHSCalls += amr_callback.interval * 
+                                        (Stages[level] - MaxStage / (2^(level - 1))) * 
+                                        length(integrator.level_info_elements[level])
+            end
+
+            # Contribution from non-represented levels
             for level = integrator_levels+1:integrator.n_levels
               integrator.AddRHSCalls += amr_callback.interval * 
-                                        (1 - 2.0^(integrator_levels - level)) * integrator_NumStages_lowest * 
+                                        (MinStage - MaxStage / (2^(level - 1))) * 
                                         length(integrator.level_info_elements[level])
             end
 
