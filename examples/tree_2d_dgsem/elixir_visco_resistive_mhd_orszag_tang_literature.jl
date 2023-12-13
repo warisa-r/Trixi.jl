@@ -3,17 +3,11 @@ using OrdinaryDiffEq
 using Trixi
 
 ###############################################################################
-# create a restart file
-
-###############################################################################
 # semidiscretization of the compressible ideal GLM-MHD equations
 prandtl_number() = 1.0
 
-# Make less diffusive to still have convection-dominated spectra
 mu() = 1e-2
-#mu() = 1e-3
 eta() = 1e-2
-#eta() = 1e-3
 
 gamma = 5/3
 equations = IdealGlmMhdEquations2D(gamma)
@@ -77,7 +71,7 @@ summary_callback = SummaryCallback()
 analysis_interval = 200
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors = Symbol[])
 
-cfl = 1.6
+cfl = 1.7
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)
@@ -92,10 +86,9 @@ sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True()), dt = 42.0,
 
 summary_callback() # print the timer summary
 
-pd = PlotData2D(sol)
+plot(sol)
 
-x = pd.x
-y = pd.y
+pd = PlotData2D(sol)
 
 V1 = pd.data[2]
 V2 = pd.data[3]
@@ -103,37 +96,16 @@ V2 = pd.data[3]
 B1 = pd.data[6]
 B2 = pd.data[7]
 
-V1_rot = copy(-V2)
-V2_rot = copy(V1)
-
-B1_rot = copy(-B2)
-B2_rot = copy(B1)
-N = size(B1_rot)[1]
-# TODO: Switch [i, :] <-> [:, N - i + 1]
-for i = 1:N
-  B1_rot[i, :] = -B2[:, N - i + 1]
-  B2_rot[i, :] =  B1[:, N - i + 1]
-
-  V1_rot[i, :] = V2[:, N - i + 1]
-  V2_rot[i, :] =  -V1[:, N - i + 1]
-end
-
 using DelimitedFiles
 
 # Export points
-writedlm("x.csv", x, ',')
-writedlm("y.csv", y, ',')
+writedlm("x.csv", pd.x, ',')
+writedlm("y.csv", pd.y, ',')
 
 # Export Velocity field
 writedlm("V1.csv", V1, ',')
 writedlm("V2.csv", V2, ',')
 
-writedlm("V1_rot.csv", V1_rot, ',')
-writedlm("V2_rot.csv", V2_rot, ',')
-
 # Export Magnetic field
 writedlm("B1.csv", B1, ',')
 writedlm("B2.csv", B2, ',')
-
-writedlm("B1_rot.csv", B1_rot, ',')
-writedlm("B2_rot.csv", B2_rot, ',')
