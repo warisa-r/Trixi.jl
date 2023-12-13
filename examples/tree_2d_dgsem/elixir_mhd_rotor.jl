@@ -109,8 +109,8 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval = 20, # SSPRK33
-                           #interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
-                           interval = 7, # PERK 6 Single
+                           interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           #interval = 7, # PERK 6 Single
                            #interval = 10, # ParsaniKetchesonDeconinck3S53
                            #interval = 10, # PERK [6, 4, 3], [10, 6, 3]
                            adapt_initial_condition=true,
@@ -123,8 +123,8 @@ cfl = 2.1 # PERK, [10, 6, 4]
 #cfl = 1.3 # PERK, [10, 6, 3]
 #cfl = 1.2 # PERK, [6, 4, 3]
 
-cfl = 2.1 # PERK 10
-cfl = 1.6 # PERK 6
+#cfl = 2.1 # PERK 10
+#cfl = 1.6 # PERK 6
 
 #cfl = 1.7 # DGLDDRK73_C
 #cfl = 1.1 # ParsaniKetchesonDeconinck3S53

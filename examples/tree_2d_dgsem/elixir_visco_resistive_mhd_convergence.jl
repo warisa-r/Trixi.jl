@@ -23,24 +23,25 @@ Manufactured solution due to Andrew Winters.
 """
 function initial_condition_convergence_test(x, t, equations::IdealGlmMhdEquations2D)
   alpha = 2.0 * pi * (x[1] + x[2]) - 4.0*t
+  phi = sin(alpha) + 4.0
 
-  rho = sin(alpha)+4.0
-  v1  = sin(alpha)+4.0
-  v2  = sin(alpha)+4.0
-  v3  = 0.0
-  p   = 2.0*(sin(alpha)+4.0)^2
-  B1  = sin(alpha)+4.0
-  B2  = -sin(alpha)-4.0
+  rho = phi
+  rho_v1  = phi
+  rho_v2  = phi
+  rho_v3  = 0.0
+  rho_e   = 2.0*phi^2
+  B1  = phi
+  B2  = -phi
   B3  = 0.0
   psi = 0.0
-  return prim2cons(SVector(rho, v1, v2, v3, p, B1, B2, B3, psi), equations)
+  return SVector(rho, rho_v1, rho_v2, rho_v3, rho_e, B1, B2, B3, psi)
 end
 initial_condition = initial_condition_convergence_test
 
 function source_terms(u, x, t, equations)
   alpha = 2.0*pi*(x[1] + x[2])-4.0*t
 
-  phi = sin(alpha)+4.0
+  phi = sin(alpha) + 4.0
   phi_t = -4.0*cos(alpha)
   phi_x = 2.0*pi*cos(alpha)
   phi_xx = -4.0*pi^2*sin(alpha)
@@ -75,7 +76,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.3)
+tspan = (0.0, 1.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -98,26 +99,4 @@ sol = solve(ode, SSPRK104(;thread = OrdinaryDiffEq.True()), dt = 42.0,
 
 summary_callback() # print the timer summary
 
-plot(sol)
-
-pd = PlotData2D(sol)
-
-V1 = pd.data[2]
-V2 = pd.data[3]
-
-B1 = pd.data[6]
-B2 = pd.data[7]
-
-using DelimitedFiles
-
-# Export points
-writedlm("x.csv", pd.x, ',')
-writedlm("y.csv", pd.y, ',')
-
-# Export Velocity field
-writedlm("V1.csv", V1, ',')
-writedlm("V2.csv", V2, ',')
-
-# Export Magnetic field
-writedlm("B1.csv", B1, ',')
-writedlm("B2.csv", B2, ',')
+#plot(sol)
