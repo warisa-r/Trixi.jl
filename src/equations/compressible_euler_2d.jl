@@ -62,7 +62,9 @@ A constant initial condition to test free-stream preservation.
 function initial_condition_constant(x, t, equations::CompressibleEulerEquations2D)
     rho = 1.0
     rho_v1 = 0.1
+    #rho_v1 = x[1]
     rho_v2 = -0.2
+    #rho_v2 = x[2]
     rho_e = 10.0
     return SVector(rho, rho_v1, rho_v2, rho_e)
 end
