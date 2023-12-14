@@ -77,12 +77,13 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level  = InitialRefinement+6, max_threshold=0.3)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=20, # PERK
+                           #interval=20, # PERK
                            #interval=19, # PERK single
                            #interval=31, # ParsaniKetchesonDeconinck3S53
                            #interval=17, # DGLDDRK73_C
                            #interval=40, # RDPK3SpFSAL35
                            #interval=60, # SSPRK33
+                           interval = 54, # CKLLSRK43_2
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -93,6 +94,7 @@ cfl = 3.0 # p = 3, E = 3, 4, 7
 #cfl = 3.2 # DGLDDRK73_C
 #cfl = 1.9 # ParsaniKetchesonDeconinck3S53
 #cfl = 1.0 # SSPRK33
+cfl = 1.1 # CKLLSRK43_2
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -138,7 +140,7 @@ for i = 1:3
   ode = semidiscretize(semi, tspan; split_form = false)
   #ode = semidiscretize(semi, tspan) #  For ODE.jl methods
 =#
-  sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
+  #sol = Trixi.solve(ode, ode_algorithm, dt = dt, save_everystep=false, callback=callbacks);
 
   #=
   callbacksDE = CallbackSet(summary_callback,
@@ -167,6 +169,11 @@ for i = 1:3
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
   =#         
+
+  sol = solve(ode, CKLLSRK43_2(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              adaptive = false,
+              ode_default_options()..., callback=callbacks);
 
   summary_callback() # print the timer summary
 #end

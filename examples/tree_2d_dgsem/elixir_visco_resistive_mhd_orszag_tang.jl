@@ -22,6 +22,9 @@ equations_parabolic = ViscoResistiveMhdDiffusion2D(equations, mu = mu(),
 
 The classical Orszag-Tang vortex test case. Here, the setup is taken from
 - https://onlinelibrary.wiley.com/doi/pdf/10.1002/fld.4681
+
+# Note: In their MHD equations some Lundquist scaling factors are included, see also 
+https://doi.org/10.1006/jcph.1999.6248
 """
 function initial_condition_orszag_tang(x, t, equations::IdealGlmMhdEquations2D)
   rho = 1.0
@@ -29,16 +32,24 @@ function initial_condition_orszag_tang(x, t, equations::IdealGlmMhdEquations2D)
   v2 =  2 * sqrt(pi) * sin(x[1])
   v3 = 0.0
   p = 15/4 + 0.25 * cos(4*x[1]) + 0.8 * cos(2*x[1])*cos(x[2]) - cos(x[1])*cos(x[2]) + 0.25 * cos(2*x[2])
+  
   B1 = -sin(x[2])
   B2 =  sin(2.0*x[1])
+  
+  # Due to missing Lundquist numbers in the governing PDEs
+  #B1 = -sin(x[2]) / sqrt(2 * pi)
+  #B2 =  sin(2.0*x[1]) / sqrt(2 * pi)
+
   B3 = 0.0
   psi = 0.0
   return prim2cons(SVector(rho, v1, v2, v3, p, B1, B2, B3, psi), equations)
 end
+
 initial_condition = initial_condition_orszag_tang
 
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
 volume_flux  = (flux_central, flux_nonconservative_powell)
+
 basis = LobattoLegendreBasis(3)
 
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -54,6 +65,7 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (2*pi, 2*pi)
+
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=4,
                 n_cells_max=100000)
@@ -65,6 +77,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 2.0)
+tspan = (0.0, 1.0) # For plotting
+
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
@@ -95,7 +109,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                            #interval = 16, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
-
+                      
 cfl = 2.0 # PERK 3, 4, 6
 #cfl = 1.9 # Perk Single
 
@@ -135,11 +149,7 @@ ode_algorithm = PERK(12, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang
                      bS, cEnd)
 =#
 
-
-Stages = [11, 6, 4]
-Stages = [10, 6, 4]
 Stages = [6, 4, 3]
-#Stages = [8, 5, 4]
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/Central/", cS2)
@@ -243,10 +253,10 @@ plot(pd["rho"], c = :jet, title = "\$ ρ, t_f = 3.0 \$",
            xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
            yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))
 
-plot(pd["p"], c = :jet, title = "\$ p, t_f = 2.0 \$",
+plot(pd["p"], c = :jet, title = "\$ p, t = 1.0 \$",
      xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
      yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))
 
-plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 2.0\$",
+plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t = 1.0\$",
            xticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]),
            yticks=([0, pi, 2pi], [0, "\$π\$", "\$2π\$"]))

@@ -30,6 +30,9 @@ function initial_condition_orszag_tang(x, t, equations::IdealGlmMhdEquations2D)
   p = 15/4 + 0.25 * cos(4*x[1]) + 0.8 * cos(2*x[1])*cos(x[2]) - cos(x[1])*cos(x[2]) + 0.25 * cos(2*x[2])
   B1 = -sin(x[2])
   B2 =  sin(2.0*x[1])
+  # Due to missing Lundquist numbers in the governing PDEs
+  #B1 = -sin(x[2]) / sqrt(2 * pi)
+  #B2 =  sin(2.0*x[1]) / sqrt(2 * pi)
   B3 = 0.0
   psi = 0.0
   return prim2cons(SVector(rho, v1, v2, v3, p, B1, B2, B3, psi), equations)
@@ -71,7 +74,7 @@ summary_callback = SummaryCallback()
 analysis_interval = 200
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors = Symbol[])
 
-cfl = 1.7
+cfl = 1.6
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale=0.5, cfl=cfl)

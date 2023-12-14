@@ -72,19 +72,6 @@ tspan = (0.0, 20.0)
 ode = semidiscretize(semi, tspan; split_form = false) # PERK
 #ode = semidiscretize(semi, tspan) # For ODE integrators
 
-#=
-restart_file = "restart_000600.h5"
-restart_filename = joinpath("out", restart_file)
-mesh = load_mesh(restart_filename)
-
-semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
-                                             initial_condition, solver)
-
-tspan = (load_time(restart_filename), 2.0)
-dt = load_dt(restart_filename)
-ode = semidiscretize(semi, tspan, restart_filename; split_form = false);
-=#
-
 summary_callback = SummaryCallback()
 
 #analysis_interval = 20
@@ -95,13 +82,7 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval, save_anal
                                      analysis_integrals=(energy_kinetic,
                                      #energy_internal,
                                      enstrophy))
-#=
-analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
-                                     analysis_errors = Symbol[])
-=#
 
-amr_indicator = IndicatorLöhner(semi,
-                                variable=Trixi.enstrophy)
 amr_indicator = IndicatorMax(semi, variable = Trixi.enstrophy)
 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
