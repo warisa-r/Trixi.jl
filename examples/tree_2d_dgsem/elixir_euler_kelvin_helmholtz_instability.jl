@@ -75,12 +75,12 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=9, # PERK 4, 6, 11
+                           #interval=9, # PERK 4, 6, 11
                            #interval = 6, # PERK S = 11
                            #interval=18, #RDPK3SpFSAL35
                            #interval=20, #ParsaniKetchesonDeconinck3S53
                            #interval=11, #DGLDDRK73_C
-                           #interval=32, #SSPRK33
+                           interval=32, #SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -144,11 +144,11 @@ callbacks = CallbackSet(summary_callback,
 
   ode = semidiscretize(semi, tspan)
 
-  
+  #=
   sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-  
+  =#
 
   #=
   callbacksDE = CallbackSet(summary_callback,
@@ -174,18 +174,30 @@ callbacks = CallbackSet(summary_callback,
               ode_default_options()..., callback=callbacks)
   =#
 
-  #=
+  
   stepsize_callback = StepsizeCallback(cfl=1.0) # SSPRK33
 
   callbacks = CallbackSet(summary_callback,
                           analysis_callback,
                           stepsize_callback,
                           amr_callback)
-
+  #=
   sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
               dt = 1.0,
               ode_default_options()..., callback=callbacks)
   =#
+
+  stepsize_callback = StepsizeCallback(cfl=1.1) # CKLLSRK43_2
+
+  callbacks = CallbackSet(summary_callback,
+                          analysis_callback,
+                          stepsize_callback,
+                          amr_callback)
+
+  sol = solve(ode, CKLLSRK43_2(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              adaptive = false,
+              ode_default_options()..., callback=callbacks);
 
   #=
   stepsize_callback = StepsizeCallback(cfl=1.9) # ParsaniKetchesonDeconinck3S53

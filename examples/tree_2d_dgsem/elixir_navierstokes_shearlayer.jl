@@ -58,8 +58,8 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 #tspan = (0.0, 0.8) # For plot only
 tspan = (0.0, 1.2)
 
-ode = semidiscretize(semi, tspan; split_form = false)
-#ode = semidiscretize(semi, tspan) #  For ODE.jl methods
+#ode = semidiscretize(semi, tspan; split_form = false)
+ode = semidiscretize(semi, tspan) #  For ODE.jl methods
 
 summary_callback = SummaryCallback()
 
