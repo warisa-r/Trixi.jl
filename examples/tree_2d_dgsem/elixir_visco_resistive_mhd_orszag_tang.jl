@@ -77,10 +77,10 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 2.0)
-tspan = (0.0, 1.0) # For plotting
+#tspan = (0.0, 1.0) # For plotting
 
 ode = semidiscretize(semi, tspan; split_form = false)
-#ode = semidiscretize(semi, tspan) # For ODE.jl integrators
+ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
 
 summary_callback = SummaryCallback()
@@ -102,11 +102,11 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval=10, # PERK
+                           #interval=10, # PERK
                            #interval = 11, # DGLDDRK73_C
                            #interval = 5, # base_level = changed
                            #interval=33, # SSPRK33
-                           #interval = 16, # ParsaniKetchesonDeconinck3S53
+                           interval = 16, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
                       
@@ -165,16 +165,17 @@ for i = 1:1
   
   ode = semidiscretize(semi, tspan; split_form = false)
   =#
-  
+  #=
   sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                     save_everystep=false, callback=callbacks);
-  
+  =#
 #end
 
 
 #cfl = 1.8 # DGLDDRK73_C Max Level 9, base lvl = 3
 cfl = 0.6 # SSPRK33 Max Level 9, base lvl = 3
-#cfl = 1.2 # ParsaniKetchesonDeconinck3S53
+cfl = 1.2 # ParsaniKetchesonDeconinck3S53
+cfl = 1.2 # RDPK3SpFSAL35
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -207,8 +208,14 @@ for i = 1:10
                 ode_default_options()..., callback=callbacks);
   =#
   
-  
+  #=
   sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+              dt = 1.0,
+              ode_default_options()..., callback=callbacks);
+  =#
+
+  sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True());
+              adaptive = false,
               dt = 1.0,
               ode_default_options()..., callback=callbacks);
   

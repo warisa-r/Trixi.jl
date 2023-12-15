@@ -109,9 +109,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval = 20, # SSPRK33
-                           interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           #interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
                            #interval = 7, # PERK 6 Single
-                           #interval = 10, # ParsaniKetchesonDeconinck3S53
+                           interval = 10, # ParsaniKetchesonDeconinck3S53
                            #interval = 10, # PERK [6, 4, 3], [10, 6, 3]
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
@@ -128,6 +128,7 @@ cfl = 2.1 # PERK, [10, 6, 4]
 
 #cfl = 1.7 # DGLDDRK73_C
 #cfl = 1.1 # ParsaniKetchesonDeconinck3S53
+cfl = 1.1 # RDPK3SpFSAL35
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -153,8 +154,8 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Ro
 
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
 
-#=
-for i = 1:1
+
+for i = 1:10
   mesh = TreeMesh(coordinates_min, coordinates_max,
                   initial_refinement_level=4,
                   n_cells_max=10_000,
@@ -164,13 +165,13 @@ for i = 1:1
                                         boundary_conditions=boundary_conditions)
 
     ode = semidiscretize(semi, tspan)
-=#
+
   
-    
+    #=
     sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-    
+    =#
     
     #=
     sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
@@ -190,7 +191,12 @@ for i = 1:1
                 dt = 1.0,
                 ode_default_options()..., callback=callbacks);
     =#
-#end
+
+    sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True());
+                adaptive = false,
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks);
+end
 
 summary_callback() # print the timer summary
 
