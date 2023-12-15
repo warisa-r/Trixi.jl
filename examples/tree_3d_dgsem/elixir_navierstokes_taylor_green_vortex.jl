@@ -50,21 +50,9 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=2500000)
 
-#=
-trees_per_dimension = (1, 1, 1)
-
-mesh = P4estMesh(trees_per_dimension, polydeg=2,
-                  coordinates_min=coordinates_min, coordinates_max=coordinates_max,
-                  periodicity=(true, true, true), initial_refinement_level=4)
-=#
-
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
                                              initial_condition, solver)
         
-#=
-semi = SemidiscretizationHyperbolic(mesh, equations,
-                                             initial_condition, solver)
-=#
 ###############################################################################
 # ODE solvers, callbacks etc.
 
