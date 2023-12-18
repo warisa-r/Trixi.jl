@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq, Plots
+using OrdinaryDiffEq
 using Trixi
 
 ###############################################################################
@@ -104,7 +104,6 @@ callbacks = CallbackSet(summary_callback,
 # S = 3, p = 3, Ref refinment: 2
 dt = 0.018749952315556585
 
-Stages = [11, 6, 4, 3]
 Stages = [6, 4, 3] # Have three levels anyway
 
 cS2 = 1.0
