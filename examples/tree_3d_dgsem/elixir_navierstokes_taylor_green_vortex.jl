@@ -75,7 +75,7 @@ amr_indicator = IndicatorMax(semi, variable = Trixi.enstrophy)
 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRefinement,
-                                      med_level =InitialRefinement+1, med_threshold=5.0, # 10 for this gives good results
+                                      med_level =InitialRefinement+1, med_threshold=10.0, # 5 for this gives good results
                                       max_level =InitialRefinement+2, max_threshold=30.0)
 
 amr_callback = AMRCallback(semi, amr_controller,
