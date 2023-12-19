@@ -80,7 +80,7 @@ tspan = (0.0, 2.0)
 #tspan = (0.0, 1.0) # For plotting
 
 ode = semidiscretize(semi, tspan; split_form = false)
-ode = semidiscretize(semi, tspan) # For ODE.jl integrators
+#ode = semidiscretize(semi, tspan) # For ODE.jl integrators
 
 
 summary_callback = SummaryCallback()
@@ -102,16 +102,16 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=10, # PERK
+                           interval=10, # PERK
                            #interval = 11, # DGLDDRK73_C
                            #interval = 5, # base_level = changed
                            #interval=33, # SSPRK33
-                           interval = 16, # ParsaniKetchesonDeconinck3S53
+                           #interval = 16, # ParsaniKetchesonDeconinck3S53
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
                       
 cfl = 2.0 # PERK 3, 4, 6
-#cfl = 1.9 # Perk Single
+cfl = 1.9 # Perk Single
 
 stepsize_callback = StepsizeCallback(cfl=cfl)
 
@@ -154,7 +154,7 @@ Stages = [6, 4, 3]
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/Central/", cS2)
 
-#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/Central/")
+ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/ViscousOrszagTang/p3/Central/")
 #=
 for i = 1:1
   mesh = TreeMesh(coordinates_min, coordinates_max,
@@ -165,10 +165,10 @@ for i = 1:1
   
   ode = semidiscretize(semi, tspan; split_form = false)
   =#
-  #=
+  
   sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                     save_everystep=false, callback=callbacks);
-  =#
+  
 #end
 
 

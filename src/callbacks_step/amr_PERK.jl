@@ -78,7 +78,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
           @assert length(integrator.level_info_elements_acc[end]) == 
             n_elements "highest level should contain all elements"
 
-          
+          #=
           # NOTE: Additional RHS Call computation
           # CARE: Hard-coded for each case 
           Stages = [6, 4, 3] # VRMHD O-T, Taylor-Green
@@ -103,7 +103,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
                                       (MinStage - MaxStage / (2^(level - 1))) * 
                                       length(integrator.level_info_elements[level])
           end
-          
+          =#
 
           # Determine level for each interface
           for interface_id in 1:n_interfaces
