@@ -45,7 +45,6 @@ solver = DGSEM(polydeg=2, surface_flux=flux_hlle,
 coordinates_min = (-1.0, -1.0, -1.0) .* pi
 coordinates_max = ( 1.0,  1.0,  1.0) .* pi
 InitialRefinement = 4 # For real run
-#InitialRefinement = 2 # For tests
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=InitialRefinement,
                 n_cells_max=2500000)
@@ -56,14 +55,19 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 20.0)
 ode = semidiscretize(semi, tspan; split_form = false) # PERK
 #ode = semidiscretize(semi, tspan) # For ODE integrators
 
 summary_callback = SummaryCallback()
 
 interval = 20 # PERK 6, 4, 3
-interval = 18 # PERK 6
+#=
+interval = 18 # PERK 6, DGLDDRK73_C
+interval = 30 # ParsaniKetchesonDeconinck3S53
+interval = 53 # SSPRK33
+interval = 34 # RDPK3SpFSAL35
+=#
 
 analysis_callback = AnalysisCallback(semi, interval=interval, save_analysis=true,
                                      analysis_errors = Symbol[],
@@ -75,25 +79,24 @@ amr_indicator = IndicatorMax(semi, variable = Trixi.enstrophy)
 
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       base_level=InitialRefinement,
-                                      med_level =InitialRefinement+1, med_threshold=10.0, # 5 for this gives good results
+                                      med_level =InitialRefinement+1, med_threshold=10.0,
                                       max_level =InitialRefinement+2, max_threshold=30.0)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval = interval, #DGLDDRK73_C, PERK single
-                           #interval=34, # RDPK3SpFSAL35
-                           #interval = 30, # ParsaniKetchesonDeconinck3S53
-                           #interval = 53, # SSPRK33
+                           interval = interval,
                            adapt_initial_condition=false,
                            adapt_initial_condition_only_refine=true)
 
 stepsize_callback = StepsizeCallback(cfl=4.1) # PERK 3, 4, 6
+#=
 stepsize_callback = StepsizeCallback(cfl=4.4) # PERK 6
-#stepsize_callback = StepsizeCallback(cfl=4.4) # DGLDDRK73_C
-#stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
-#stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
+stepsize_callback = StepsizeCallback(cfl=4.4) # DGLDDRK73_C
+stepsize_callback = StepsizeCallback(cfl=2.6) # ParsaniKetchesonDeconinck3S53
+stepsize_callback = StepsizeCallback(cfl=1.5) # SSPRK33
+=#
 
 callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
+                        #analysis_callback,
                         stepsize_callback,
                         amr_callback)
 
@@ -107,34 +110,35 @@ Stages = [6, 4, 3] # Have three levels anyway
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
-ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
+#ode_algorithm = PERK3(6, "/home/daniel/git/MA/EigenspectraGeneration/Spectra/3D_TGV/")
 
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
 
+
 #=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks)
+            ode_default_options()..., callback=callbacks);
 =#
 
 #=
 sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks)
+            ode_default_options()..., callback=callbacks);
 =#
-
+#=
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks);
-
+=#
 callbacksDE = CallbackSet(summary_callback,
                   analysis_callback,
                   amr_callback)                  
 time_int_tol = 1e-4
 sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=time_int_tol, reltol=time_int_tol,
-            ode_default_options()..., callback=callbacksDE)
+            ode_default_options()..., callback=callbacksDE);
 
 
 summary_callback() # print the timer summary
