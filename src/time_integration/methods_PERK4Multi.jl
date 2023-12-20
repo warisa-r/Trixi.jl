@@ -6,99 +6,18 @@
 
 #using Random # NOTE: Only for tests
 
-function ComputePERK4_Multi_ButcherTableau(NumDoublings::Int, NumStages::Int, BasePathMonCoeffs::AbstractString, 
-                                           cS2::Float64)
+function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString)
                                      
-  # c Vector form Butcher Tableau (defines timestep per stage)
+  #=
   c = zeros(NumStages)
   for k in 2:NumStages-4
     c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
   end
-  c[NumStages - 3] = 1.0
-  c[NumStages - 2] = 0.479274057836310
-  c[NumStages - 1] = sqrt(3)/6 + 0.5
-  c[NumStages]     = -sqrt(3)/6 + 0.5
-  
-  println("Timestep-split: "); display(c); println("\n")
+  =#
+  # Current approach: Use ones for simplicity
+  c = ones(NumStages)
+  c[1] = 0.0
 
-  # For the p = 4 method there are less free coefficients
-  CoeffsMax = NumStages - 5
-
-  # Different A-Matrices
-  AMatrices = zeros(NumDoublings+1, CoeffsMax, 2)
-  for i = 1:NumDoublings+1
-    AMatrices[i, :, 1] = c[3:end]
-  end
-  # TODO: Common A-Matrix for the last 3 stages
-
-  # Datastructure indicating at which stage which level is evaluated
-  ActiveLevels = [Vector{Int64}() for _ in 1:NumStages]
-  # k1 is evaluated at all levels
-  ActiveLevels[1] = 1:NumDoublings+1
-
-  for level = 1:NumDoublings + 1
-    
-    #=
-    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages / 2^(level - 1))) * ".txt"
-    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-    A = ComputeACoeffs(Int(NumStages / 2^(level - 1)), SE_Factors, MonCoeffs)
-
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-    =#
-
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(Int(NumStages / 2^(level - 1))) * "_" * string(NumStages) * ".txt"
-    NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages / 2^(level - 1) - 2
-
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages / 2^(level - 1) - 3):end, 2]  = A
-
-    #=
-    # NOTE: For linear PERK family: 4,6,8, and not 4, 8, 16, ...
-    PathMonCoeffs = BasePathMonCoeffs * "gamma_" * string(Int(NumStages - 2*level + 2)) * ".txt"
-    NumMonCoeffs, MonCoeffs = read_file(PathMonCoeffs, Float64)
-    @assert NumMonCoeffs == NumStages - 2*level
-    A = ComputeACoeffs(Int(NumStages - 2*level + 2), SE_Factors, MonCoeffs)
-
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 1] -= A
-    AMatrices[level, CoeffsMax - Int(NumStages - 2*level - 1):end, 2]  = A
-    =#
-
-    # Add active levels to stages
-    # TODO: Might be different for third order!
-    for stage = NumStages:-1:NumStages-NumMonCoeffs
-      push!(ActiveLevels[stage], level)
-    end
-  end
-  HighestActiveLevels = maximum.(ActiveLevels)
-
-  for i = 1:NumDoublings+1
-    println("A-Matrix of Butcher tableau of level " * string(i))
-    display(AMatrices[i, :, :]); println()
-  end
-
-  println("Check violation of internal consistency")
-  for i = 1:NumDoublings+1
-    for j = 1:i
-      display(norm(AMatrices[i, :, 1] + AMatrices[i, :, 2] - AMatrices[j, :, 1] - AMatrices[j, :, 2], 1))
-    end
-  end
-
-  println("\nActive Levels:"); display(ActiveLevels); println()
-
-  return AMatrices, c, ActiveLevels, HighestActiveLevels
-end
-
-function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString, 
-                                           cS2::Float64)
-                                     
-  # c Vector form Butcher Tableau (defines timestep per stage)
-  c = zeros(NumStages)
-  for k in 2:NumStages-4
-    c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
-  end
   c[NumStages - 3] = 1.0
   c[NumStages - 2] = 0.479274057836310
   c[NumStages - 1] = sqrt(3)/6 + 0.5
@@ -119,6 +38,13 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   # k1 is evaluated at all levels
   ActiveLevels[1] = 1:length(Stages)
 
+  # Datastructure indicating at which stage which level contributes to state
+  EvalLevels = [Vector{Int64}() for _ in 1:NumStages]
+  # k1 is evaluated at all levels
+  EvalLevels[1] = 1:length(Stages)
+  # Second stage: Only finest method
+  EvalLevels[2] = [1]
+
   for level in eachindex(Stages)
 
     NumStageEvals = Stages[level]
@@ -126,12 +52,17 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStageEvals - 5
 
-    AMatrices[level, 3 - NumMonCoeffs + 1:3, 1] -= A
-    AMatrices[level, 3 - NumMonCoeffs + 1:3, 2]  = A
+    AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 1] -= A
+    AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 2]  = A
 
     # Add active levels to stages
     for stage = NumStages:-1:NumStages-(3 + NumMonCoeffs)
       push!(ActiveLevels[stage], level)
+    end
+
+    # Add eval levels to stages
+    for stage = NumStages:-1:NumStages-(3 + NumMonCoeffs) - 1
+      push!(EvalLevels[stage], level)
     end
   end
   # Shared matrix
@@ -140,6 +71,7 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
              0.1830127018922191 0.028312163512968]
 
   HighestActiveLevels = maximum.(ActiveLevels)
+  HighestEvalLevels   = maximum.(EvalLevels)
 
   for i = 1:length(Stages)
     println("A-Matrix of Butcher tableau of level " * string(i))
@@ -147,17 +79,15 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   end
 
   println("\nActive Levels:"); display(ActiveLevels); println()
+  println("\nHighestEvalLevels:"); display(HighestEvalLevels); println()
 
-  return AMatrices, AMatrix, c, ActiveLevels, HighestActiveLevels
+  return AMatrices, AMatrix, c, ActiveLevels, HighestActiveLevels, HighestEvalLevels
 end
 
 mutable struct PERK4_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
-  const NumDoublings::Int64
+  const NumMethods::Int64
   const NumStages::Int64
-  #const LevelCFL::Vector{Float64}
-  const LevelCFL::Dict{Int64, Float64}
-  const Integrator_Mesh_Level_Dict::Dict{Int64, Int64}
   stage_callbacks::StageCallbacks
 
   AMatrices::Array{Float64, 3}
@@ -165,44 +95,20 @@ mutable struct PERK4_Multi{StageCallbacks}
   c::Vector{Float64}
   ActiveLevels::Vector{Vector{Int64}}
   HighestActiveLevels::Vector{Int64}
-
-  function PERK4_Multi(NumStageEvalsMin_::Int, NumDoublings_::Int,
-                       BasePathMonCoeffs_::AbstractString, cS2_::Float64,
-                       #LevelCFL_::Vector{Float64},
-                       LevelCFL_::Dict{Int64, Float64},
-                       Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
-                       stage_callbacks=())
-
-    newPERK4_Multi = new{typeof(stage_callbacks)}(NumStageEvalsMin_, NumDoublings_,
-                        # Current convention: NumStages = MaxStages = S;
-                        # TODO: Allow for different S >= Max {Stage Evals}
-                        NumStageEvalsMin_ * 2^NumDoublings_,
-                        # Note: This is for linear increasing PERK
-                        #NumStageEvalsMin_ + 2 * NumDoublings_,
-                        LevelCFL_, Integrator_Mesh_Level_Dict_,
-                        stage_callbacks)
-
-    newPERK4_Multi.AMatrices, newPERK4_Multi.AMatrix, newPERK4_Multi.c, newPERK4_Multi.ActiveLevels, newPERK4_Multi.HighestActiveLevels = 
-      ComputePERK4_Multi_ButcherTableau(NumDoublings_, newPERK4_Multi.NumStages, BasePathMonCoeffs_, cS2_)
-
-    return newPERK4_Multi
-  end
+  HighestEvalLevels::Vector{Int64}
 
   function PERK4_Multi(Stages_::Vector{Int64},
-                      BasePathMonCoeffs_::AbstractString, cS2_::Float64,
-                      #LevelCFL_::Vector{Float64},
-                      LevelCFL_::Dict{Int64, Float64},
-                      Integrator_Mesh_Level_Dict_::Dict{Int64, Int64};
-                      stage_callbacks=())
+                       BasePathMonCoeffs_::AbstractString,
+                       stage_callbacks=())
 
     newPERK4_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
-                          length(Stages_) - 1,
+                          length(Stages_),
                           maximum(Stages_),
-                          LevelCFL_, Integrator_Mesh_Level_Dict_,
                           stage_callbacks)
 
-    newPERK4_Multi.AMatrices, newPERK4_Multi.AMatrix, newPERK4_Multi.c, newPERK4_Multi.ActiveLevels, newPERK4_Multi.HighestActiveLevels = 
-      ComputePERK4_Multi_ButcherTableau(Stages_, newPERK4_Multi.NumStages, BasePathMonCoeffs_, cS2_)
+    newPERK4_Multi.AMatrices, newPERK4_Multi.AMatrix, newPERK4_Multi.c, 
+    newPERK4_Multi.ActiveLevels, newPERK4_Multi.HighestActiveLevels, newPERK4_Multi.HighestEvalLevels = 
+      ComputePERK4_Multi_ButcherTableau(Stages_, newPERK4_Multi.NumStages, BasePathMonCoeffs_)
 
     return newPERK4_Multi
   end
@@ -242,8 +148,6 @@ mutable struct PERK4_Multi_Integrator{RealT<:Real, uType, Params, Sol, F, Alg, P
   t_stage::RealT
   coarsest_lvl::Int64
   n_levels::Int64
-  min_lvl::Int64
-  max_lvl::Int64
   du_ode_hyp::uType # TODO: Not best solution since this is not needed for hyperbolic problems
 end
 
@@ -442,7 +346,9 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       @assert length(level_info_mortars_acc[end]) == 
         n_mortars "highest level should contain all mortars"
     end
-  elseif typeof(mesh) <:P4estMesh{2}
+  elseif typeof(mesh) <:P4estMesh
+    @unpack interfaces, boundaries = cache
+
     nnodes = length(mesh.nodes)
     n_elements = nelements(dg, cache)
     h_min = 42;
@@ -450,34 +356,70 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
 
     h_min_per_element = zeros(n_elements)
 
-    for element_id in 1:n_elements
-      # pull the four corners numbered as right-handed
-      P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
-      P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-      P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-      P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
-      # compute the four side lengths and get the smallest
-      L0 = sqrt( sum( (P1-P0).^2 ) )
-      L1 = sqrt( sum( (P2-P1).^2 ) )
-      L2 = sqrt( sum( (P3-P2).^2 ) )
-      L3 = sqrt( sum( (P0-P3).^2 ) )
-      h = min(L0, L1, L2, L3)
-      h_min_per_element[element_id] = h
-      if h > h_max 
-        h_max = h
+    if typeof(mesh) <:P4estMesh{2}
+      for element_id in 1:n_elements
+        # pull the four corners numbered as right-handed
+        P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
+        P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
+        #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+        #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+        # compute the four side lengths and get the smallest
+        #L0 = sqrt( sum( (P1-P0).^2 ) )
+        L0 = abs(P1[1] - P0[1])
+        #=
+        L1 = sqrt( sum( (P2-P1).^2 ) )
+        L2 = sqrt( sum( (P3-P2).^2 ) )
+        L3 = sqrt( sum( (P0-P3).^2 ) )
+        =#
+        #h = min(L0, L1, L2, L3)
+        h = L0
+        h_min_per_element[element_id] = h
+        if h > h_max 
+          h_max = h
+        end
+        if h < h_min
+          h_min = h
+        end
       end
-      if h < h_min
-        h_min = h
+    else # typeof(mesh) <:P4estMesh{3}
+      for element_id in 1:n_elements
+        # pull the four corners numbered as right-handed
+        P0 = cache.elements.node_coordinates[:, 1     , 1     , 1, element_id]
+        P1 = cache.elements.node_coordinates[:, nnodes, 1     , 1, element_id]
+        #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+        #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+        # compute the four side lengths and get the smallest
+        #L0 = sqrt( sum( (P1-P0).^2 ) )
+        L0 = abs(P1[1] - P0[1])
+        #=
+        L1 = sqrt( sum( (P2-P1).^2 ) )
+        L2 = sqrt( sum( (P3-P2).^2 ) )
+        L3 = sqrt( sum( (P0-P3).^2 ) )
+        =#
+        #h = min(L0, L1, L2, L3)
+        h = L0
+        h_min_per_element[element_id] = h
+        if h > h_max 
+          h_max = h
+        end
+        if h < h_min
+          h_min = h
+        end
       end
     end
 
+    #=
     S_min = alg.NumStageEvalsMin
     S_max = alg.NumStages
-    n_levels = Int((S_max - S_min)/2) + 1
+    n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
+    h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
+    =#
+    
+    n_levels = Int(log2(round(h_max / h_min))) + 1
     if n_levels == 1
       h_bins = [h_max]
     else
-      h_bins = LinRange(h_min, h_max, n_levels)
+      h_bins = [ceil(h_min, digits = 10) * 2^i for i = 0:n_levels-1]
     end
 
     println("h_min: ", h_min, " h_max: ", h_max)
@@ -492,6 +434,13 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       h = h_min_per_element[element_id]
 
       level = findfirst(x-> x >= h, h_bins)
+      #=
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
+      =#
       append!(level_info_elements[level], element_id)
 
       for l in level:n_levels
@@ -508,16 +457,18 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     level_info_interfaces_acc = [Vector{Int64}() for _ in 1:n_levels]
     # Determine level for each interface
     for interface_id in 1:n_interfaces
-      # Get element ids
-      element_id_left  = interfaces.neighbor_ids[1, interface_id]
-      h_left = h_min_per_element[element_id_left]
-
-      element_id_right = interfaces.neighbor_ids[2, interface_id]
-      h_right = h_min_per_element[element_id_right]
-
-      # Determine level
-      h = min(h_left, h_right)
+      # For interfaces: Elements of same size
+      element_id = interfaces.neighbor_ids[1, interface_id]
+      h = h_min_per_element[element_id]
+      
       level = findfirst(x-> x >= h, h_bins)
+      #=
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
+      =#
 
       for l in level:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
@@ -541,6 +492,13 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
 
       # Determine level
       level = findfirst(x-> x >= h, h_bins)
+      #=
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
+      =#
 
       # Add to accumulated container
       for l in level:n_levels
@@ -564,8 +522,14 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       h_higher = h_min_per_element[element_id_higher]
 
       # Determine level
-      h = min(h_lower, h_higher)
       level = findfirst(x-> x >= h, h_bins)
+      #=
+      level = findfirst(x-> x >= h, h_bins) - 1
+      # Catch case h = h_min
+      if level == 0
+        level = 1
+      end
+      =#
 
       # Add to accumulated container
       for l in level:n_levels
@@ -576,6 +540,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       n_mortars "highest level should contain all mortars"
   end
 
+  #=
   println("level_info_elements:")
   display(level_info_elements); println()
   println("level_info_elements_acc:")
@@ -588,11 +553,11 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
   display(level_info_boundaries_acc); println()
   println("level_info_boundaries_orientation_acc:")
   display(level_info_boundaries_orientation_acc); println()
-  
+
   println("level_info_mortars_acc:")
   display(level_info_mortars_acc); println()
+  =#
 
-  
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
   u = wrap_array(u0, mesh, equations, solver, cache)
@@ -646,7 +611,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
                 level_info_boundaries_acc, level_info_boundaries_orientation_acc,
                 level_info_mortars_acc, 
                 level_u_indices_elements,
-                t0, -1, n_levels, min_level, max_level, du_ode_hyp)
+                t0, -1, n_levels, du_ode_hyp)
             
   # initialize callbacks
   if callback isa CallbackSet
@@ -691,11 +656,11 @@ function solve!(integrator::PERK4_Multi_Integrator)
       # k1: Evaluated on entire domain / all levels
       #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
       integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
-      
+
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
       end
-      
+
       integrator.t_stage = integrator.t + alg.c[2] * integrator.dt
       # k2: Here always evaluated for finest scheme (Allow currently only max. stage evaluations)
       @threaded for i in eachindex(integrator.u)
@@ -708,7 +673,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
       end
       =#
 
-      #=
+#=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -719,7 +684,6 @@ function solve!(integrator::PERK4_Multi_Integrator)
                    integrator.du_ode_hyp)
       =#
       
-      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -727,89 +691,39 @@ function solve!(integrator::PERK4_Multi_Integrator)
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
       
+
       @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 
-      for stage = 3:alg.NumStages-3
+      for stage = 3:alg.NumStages - 3
         # Construct current state
         @threaded for i in eachindex(integrator.u)
           integrator.u_tmp[i] = integrator.u[i]
         end
 
-        #=
-        for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
-          Integrator_lvl = alg.Integrator_Mesh_Level_Dict[integrator.max_lvl - level + 1]
+        # Loop over different methods with own associated level
+        for level = 1:min(alg.NumMethods-1, integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 1] * integrator.k1[u_ind]
-          end
-
-          # TODO Try more efficient way
-          if alg.AMatrices[Integrator_lvl, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[level]
-              integrator.u_tmp[u_ind] += alg.AMatrices[Integrator_lvl, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
           end
         end
-        =#
-
-        
-        # Hard-coded "three integrators" approach: Fill lower with lowest
-        # level 1
-        @threaded for u_ind in integrator.level_u_indices_elements[1]
-          integrator.u_tmp[u_ind] += alg.AMatrices[1, stage - 2, 1] * integrator.k1[u_ind] + 
-                                     alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
-        end
-        
-
-        #=
-        # level 2
-        if integrator.n_levels > 1
-          @threaded for u_ind in integrator.level_u_indices_elements[2]
-            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
-          end
-          # TODO Try more efficient way
-          if alg.AMatrices[2, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[2]
-              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
-          end
-        end
-
-        if integrator.n_levels > 2
-          @threaded for u_ind in integrator.level_u_indices_elements[3]
-            integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
-          end
-          # TODO Try more efficient way
-          if alg.AMatrices[3, stage - 2, 2] > 0
-            @threaded for u_ind in integrator.level_u_indices_elements[3]
-              integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
-            end
-          end
-        end
-        =#
-
-        #for level in 4:integrator.n_levels # Ensures only relevant levels are evaluated
-        #for level in 3:integrator.n_levels # Ensures only relevant levels are evaluated
-        for level in 2:integrator.n_levels # Ensures only relevant levels are evaluated
-        #for level in 1:integrator.n_levels # Ensures only relevant levels are evaluated
+        for level = 1:min(alg.HighestEvalLevels[stage], integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 1] * integrator.k1[u_ind]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 1] * integrator.k1[u_ind]
-            integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 1] * integrator.k1[u_ind]
-            #integrator.u_tmp[u_ind] += alg.AMatrices[1, stage - 2, 1] * integrator.k1[u_ind]
+            integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 2] * integrator.k_higher[u_ind]
           end
+        end
 
-          # TODO Try more efficient way
-          #if alg.AMatrices[4, stage - 2, 2] > 0
-          #if alg.AMatrices[3, stage - 2, 2] > 0
-          if alg.AMatrices[2, stage - 2, 2] > 0
-          #if alg.AMatrices[1, stage - 2, 2] > 0 # Always the case
+        # "Remainder": Non-efficiently integrated
+        for level = alg.NumMethods:integrator.n_levels
+          @threaded for u_ind in integrator.level_u_indices_elements[level]
+            integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 1] * integrator.k1[u_ind]
+          end
+        end
+        if alg.HighestEvalLevels[stage] == alg.NumMethods
+          for level = alg.HighestEvalLevels[stage]+1:integrator.n_levels
             @threaded for u_ind in integrator.level_u_indices_elements[level]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[4, stage - 2, 2] * integrator.k_higher[u_ind]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[3, stage - 2, 2] * integrator.k_higher[u_ind]
-              integrator.u_tmp[u_ind] += alg.AMatrices[2, stage - 2, 2] * integrator.k_higher[u_ind]
-              #integrator.u_tmp[u_ind] += alg.AMatrices[1, stage - 2, 2] * integrator.k_higher[u_ind]
+              integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 2] * integrator.k_higher[u_ind]
             end
           end
         end
@@ -817,13 +731,9 @@ function solve!(integrator::PERK4_Multi_Integrator)
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
 
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
-        # TODO: Not sure if still valid with dict-based approach
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
-        # Note: For hard-coded three level approach
-        #if integrator.coarsest_lvl == 4
-        #if integrator.coarsest_lvl == 3
-        if integrator.coarsest_lvl == 2
+        if integrator.coarsest_lvl == alg.NumMethods
           integrator.coarsest_lvl = integrator.n_levels
         end
 
@@ -839,21 +749,21 @@ function solve!(integrator::PERK4_Multi_Integrator)
         #=
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
-                    integrator.level_info_elements_acc[integrator.coarsest_lvl],
-                    integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
-                    integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
-                    integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
-                    integrator.level_info_mortars_acc[integrator.coarsest_lvl],
-                    integrator.level_u_indices_elements, integrator.coarsest_lvl,
-                    integrator.du_ode_hyp)
+                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
+                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
+                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
+                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
+                     integrator.level_info_mortars_acc[integrator.coarsest_lvl],
+                     integrator.level_u_indices_elements, integrator.coarsest_lvl,
+                     integrator.du_ode_hyp)
         =#
         
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
-                    integrator.level_info_elements_acc[integrator.coarsest_lvl],
-                    integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
-                    integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
-                    integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
-                    integrator.level_info_mortars_acc[integrator.coarsest_lvl])
+                     integrator.level_info_elements_acc[integrator.coarsest_lvl],
+                     integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
+                     integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
+                     integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
+                     integrator.level_info_mortars_acc[integrator.coarsest_lvl])
         
 
         # Update k_higher of relevant levels
@@ -885,7 +795,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
           end
         end
       end
-      
+
       @threaded for i in eachindex(integrator.u)
         integrator.u[i] += 0.5 * (integrator.k_S1[i] + integrator.k_higher[i])
       end
