@@ -54,7 +54,7 @@ Stages = [10, 6]
 Stages = [10]
 Stages = [6]
 #Stages = [5]
-Stages = [6, 5]
+#Stages = [6, 5]
 
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/")
 
@@ -63,10 +63,10 @@ dt = 0.004367387960068
 
 CFL = 0.6 # [6, 5] With refinement
 
-CFL = 0.9 # [6, 5] Without refinement (random allocations)
+CFL = 0.9 # [6, 5] Without refinement (randomly allocated)
 
 # S = 5
-dt = 0.002268333469433 * CFL / 4
+dt = 0.002268333469433 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
