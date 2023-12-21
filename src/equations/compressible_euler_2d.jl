@@ -1271,7 +1271,9 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
     v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
     v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
-    norm_ = norm(normal_direction)
+    norm_       = norm(normal_direction)
+    norm_sq     = norm_ * norm_
+    inv_norm_sq = 1.0 / norm_sq
 
     c_ll = sqrt(equations.gamma * p_ll / rho_ll) * norm_
     c_rr = sqrt(equations.gamma * p_rr / rho_rr) * norm_
@@ -1315,16 +1317,14 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
         f3 = f_rr[3]
         f4 = f_rr[4]
     else
-        SStar = (p_rr - p_ll + rho_ll * v_dot_n_ll * sMu_L - rho_rr * v_dot_n_rr * sMu_R) /
-                (rho_ll * sMu_L - rho_rr * sMu_R)
+        SStar = (rho_ll * v_dot_n_ll * sMu_L - rho_rr * v_dot_n_rr * sMu_R
+                 + (p_rr - p_ll) * norm_sq ) / (rho_ll * sMu_L - rho_rr * sMu_R)
         if Ssl <= 0.0 <= SStar
             densStar = rho_ll * sMu_L / (Ssl - SStar)
-            enerStar = e_ll + (SStar - v_dot_n_ll) * (SStar + p_ll / (rho_ll * sMu_L))
+            enerStar = e_ll + (SStar - v_dot_n_ll) * (SStar * inv_norm_sq + p_ll / (rho_ll * sMu_L))
             UStar1 = densStar
-            # Absolute value inspired from 
-            #https://github.com/wme7/ApproximateRiemannSolvers/blob/2acb6355251b132adbb061a7b3732944582910fe/WENO/FV_WENO_EE2d.m#L434
-            UStar2 = densStar * (SStar * normal_direction[1] + v1_ll * abs(normal_direction[2]))
-            UStar3 = densStar * (SStar * normal_direction[2] + v2_ll * abs(normal_direction[1]))
+            UStar2 = densStar * (v1_ll + (SStar - v_dot_n_ll) * normal_direction[1] * inv_norm_sq)
+            UStar3 = densStar * (v2_ll + (SStar - v_dot_n_ll) * normal_direction[2] * inv_norm_sq)
             UStar4 = densStar * enerStar
             f1 = f_ll[1] + Ssl * (UStar1 - u_ll[1])
             f2 = f_ll[2] + Ssl * (UStar2 - u_ll[2])
@@ -1332,10 +1332,10 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
             f4 = f_ll[4] + Ssl * (UStar4 - u_ll[4])
         else
             densStar = rho_rr * sMu_R / (Ssr - SStar)
-            enerStar = e_rr + (SStar - v_dot_n_rr) * (SStar + p_rr / (rho_rr * sMu_R))
+            enerStar = e_rr + (SStar - v_dot_n_rr) * (SStar * inv_norm_sq + p_rr / (rho_rr * sMu_R))
             UStar1 = densStar
-            UStar2 = densStar * (SStar * normal_direction[1] + v1_rr * abs(normal_direction[2]))
-            UStar3 = densStar * (SStar * normal_direction[2] + v2_rr * abs(normal_direction[1]))
+            UStar2 = densStar * (v1_rr + (SStar - v_dot_n_rr) * normal_direction[1] * inv_norm_sq)
+            UStar3 = densStar * (v2_rr + (SStar - v_dot_n_rr) * normal_direction[2] * inv_norm_sq)
             UStar4 = densStar * enerStar
             f1 = f_rr[1] + Ssr * (UStar1 - u_rr[1])
             f2 = f_rr[2] + Ssr * (UStar2 - u_rr[2])
