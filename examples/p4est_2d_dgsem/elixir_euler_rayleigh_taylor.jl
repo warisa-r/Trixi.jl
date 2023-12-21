@@ -140,11 +140,11 @@ summary_callback = SummaryCallback()
 analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
+#stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
 
 #stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
 
-#stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
+stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
 #stepsize_callback = StepsizeCallback(cfl=0.8) # SSPRK33
 
@@ -186,10 +186,10 @@ ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/Raylei
 
 #ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 #ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-
+#=
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
-
+=#
 
 #=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
@@ -197,11 +197,11 @@ sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             ode_default_options()..., callback=callbacks)
 =#
 
-#=
+
 sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks)
-=#
+            ode_default_options()..., callback=callbacks);
+
 
 
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());

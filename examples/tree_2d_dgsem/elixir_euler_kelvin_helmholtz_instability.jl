@@ -58,7 +58,6 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 3.0)
-#tspan = (0.0, 25.0) # Endtime in paper above
 
 #ode = semidiscretize(semi, tspan)
 
@@ -75,12 +74,12 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level=Refinement+5, max_threshold=0.9)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=9, # PERK 4, 6, 11
+                           interval=9, # PERK 4, 6, 11
                            #interval = 6, # PERK S = 11
                            #interval=18, #RDPK3SpFSAL35
                            #interval=20, #ParsaniKetchesonDeconinck3S53
                            #interval=11, #DGLDDRK73_C
-                           interval=32, #SSPRK33
+                           #interval=32, #SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -95,12 +94,6 @@ CFL_Stability = 1.0
 BaseRefinement = 4
 # S = 4, p = 3, Ref = 4  
 dt = 0.0126464843742724049 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
-
-# S = 3, p = 3
-dt = 0.0078961056005209686 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
-
-# S = 16, p = 3, Ref = 4
-#dt = 0.0722396842546004376 * 2.0^(BaseRefinement - Refinement) * CFL_Stability
 
 ###############################################################################
 # run the simulation
@@ -144,11 +137,11 @@ callbacks = CallbackSet(summary_callback,
 
   ode = semidiscretize(semi, tspan)
 
-  #=
+  
   sol = Trixi.solve(ode, ode_algorithm,
                     dt = dt,
                     save_everystep=false, callback=callbacks);
-  =#
+  
 
   #=
   callbacksDE = CallbackSet(summary_callback,

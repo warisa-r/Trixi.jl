@@ -22,7 +22,7 @@ refinement_patches = (
 
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=6,
-                #refinement_patches=refinement_patches,
+                refinement_patches=refinement_patches,
                 n_cells_max=10_000)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
@@ -31,7 +31,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 10.0)
+tspan = (0.0, 0.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -67,6 +67,10 @@ CFL = 0.9 # [6, 5] Without refinement (randomly allocated)
 
 # S = 5
 dt = 0.002268333469433 * CFL
+
+Stages = [7, 4, 3]
+
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);

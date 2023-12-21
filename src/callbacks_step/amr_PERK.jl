@@ -418,6 +418,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
+            sort!(integrator.level_u_indices_elements[level])
           end
         elseif n_dims == 2
           for level in 1:integrator.n_levels
@@ -426,6 +427,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
+            sort!(integrator.level_u_indices_elements[level])
           end
         elseif n_dims == 3
           for level in 1:integrator.n_levels
@@ -434,6 +436,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
               indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, :, element_id]))
               append!(integrator.level_u_indices_elements[level], indices)
             end
+            sort!(integrator.level_u_indices_elements[level])
           end
         end
         

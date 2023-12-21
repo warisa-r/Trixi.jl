@@ -564,6 +564,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
@@ -574,6 +575,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
@@ -584,6 +586,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end

@@ -684,6 +684,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
         indices = vec(transpose(LinearIndices(u)[:, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
@@ -694,6 +695,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
@@ -704,6 +706,7 @@ function solve(ode::ODEProblem, alg::PERK3_Multi;
         indices = collect(Iterators.flatten(LinearIndices(u)[:, :, :, :, element_id]))
         append!(level_u_indices_elements[level], indices)
       end
+      sort!(level_u_indices_elements[level])
       @assert length(level_u_indices_elements[level]) == 
               nvariables(equations) * Trixi.nnodes(solver)^ndims(mesh) * length(level_info_elements[level])
     end
@@ -895,7 +898,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
         #integrator.u[i] += 0.75 * integrator.k_S1[i] + 0.25 * integrator.k_higher[i]
 
         # Own PERK based on SSPRK33
-        integrator.u[i] += (integrator.k1[u_ind] + integrator.k_S1[u_ind] + 4.0 * integrator.k_higher[u_ind])/6.0
+        integrator.u[u_ind] += (integrator.k1[u_ind] + integrator.k_S1[u_ind] + 4.0 * integrator.k_higher[u_ind])/6.0
       end
       
       #=
