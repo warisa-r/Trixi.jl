@@ -4,7 +4,7 @@
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 @muladd begin
 
-#using Random # NOTE: Only for tests
+using Random # NOTE: Only for tests
 
 function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString)
                                      
@@ -48,12 +48,15 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   for level in eachindex(Stages)
 
     NumStageEvals = Stages[level]
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * "_" * string(NumStages) * ".txt"
+    #PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * "_" * string(NumStages) * ".txt"
+    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * ".txt"
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStageEvals - 5
 
-    AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 1] -= A
-    AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 2]  = A
+    if NumMonCoeffs > 0
+      AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 1] -= A
+      AMatrices[level, CoeffsMax - NumMonCoeffs + 1:end, 2]  = A
+    end
 
     # Add active levels to stages
     for stage = NumStages:-1:NumStages-(3 + NumMonCoeffs)
@@ -165,13 +168,13 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
                dt, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0)
-  du    = similar(u0)
-  u_tmp = similar(u0)
+  du    = zero(u0) # previously: similar(u0)
+  u_tmp = zero(u0)
 
   # PERK4_Multi stages
-  k1       = similar(u0)
-  k_higher = similar(u0)
-  k_S1     = similar(u0)
+  k1       = zero(u0)
+  k_higher = zero(u0)
+  k_S1     = zero(u0)
 
   du_ode_hyp = similar(u0) # TODO: Not best solution since this is not needed for hyperbolic problems
 
@@ -196,7 +199,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     #=
     Random.seed!(42)
     min_level = 1 # Hard-coded to our convergence study testcase
-    max_level = 3 # Hard-coded to our convergence study testcase
+    max_level = 2 # Hard-coded to our convergence study testcase
     =#
     n_levels = max_level - min_level + 1
     
@@ -210,7 +213,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       # NOTE: For really different grid sizes
       level = mesh.tree.levels[elements.cell_ids[element_id]]
       # NOTE: For testcase with artificial assignment
-      #level = rand((1, 2, 3))
+      #level = rand(min_level:max_level)
 
       # Convert to level id
       level_id = max_level + 1 - level
@@ -229,7 +232,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     # Determine level for each interface
     for interface_id in 1:n_interfaces
       # Get element id: Interfaces only between elements of same size
-      element_id  = interfaces.neighbor_ids[1, interface_id]
+      element_id = interfaces.neighbor_ids[1, interface_id]
 
       # Determine level
       level = mesh.tree.levels[elements.cell_ids[element_id]]
@@ -240,22 +243,11 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
 
       # NOTE: For testcase with artificial assignment
       #=
-      if element_id_left in level_info_elements[1]
-        level_id_left = 1
-      elseif element_id_left in level_info_elements[2]
-        level_id_left = 2
-      elseif element_id_left in level_info_elements[3]
-        level_id_left = 3
+      if element_id in level_info_elements[1]
+        level_id = 1
+      elseif element_id in level_info_elements[2]
+        level_id = 2
       end
-
-      if element_id_right in level_info_elements[1]
-        level_id_right = 1
-      elseif element_id_right in level_info_elements[2]
-        level_id_right = 2
-      elseif element_id_right in level_info_elements[3]
-        level_id_right = 3
-      end
-      level_id = min(level_id_left, level_id_right)
       =#
 
       for l in level_id:n_levels
@@ -647,8 +639,6 @@ function solve!(integrator::PERK4_Multi_Integrator)
     if integrator.t + integrator.dt > t_end || isapprox(integrator.t + integrator.dt, t_end)
       integrator.dt = t_end - integrator.t
       terminate!(integrator)
-    #else
-    #  integrator.dt = integrator.dtRef * alg.LevelCFL[integrator.max_lvl]
     end
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
@@ -673,7 +663,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
       end
       =#
 
-#=
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -703,7 +693,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
         end
 
         # Loop over different methods with own associated level
-        for level = 1:min(alg.NumMethods-1, integrator.n_levels)
+        for level = 1:min(alg.NumMethods, integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
           end
@@ -715,7 +705,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
         end
 
         # "Remainder": Non-efficiently integrated
-        for level = alg.NumMethods:integrator.n_levels
+        for level = alg.NumMethods+1:integrator.n_levels
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 1] * integrator.k1[u_ind]
           end
@@ -767,7 +757,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
         
 
         # Update k_higher of relevant levels
-        for level in 1:integrator.coarsest_lvl
+        for level in 1:integrator.coarsest_lvl          
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
           end
@@ -776,9 +766,9 @@ function solve!(integrator::PERK4_Multi_Integrator)
 
       # Last three stages: Same Butcher Matrix
       for stage = 1:3
-        @threaded for i in eachindex(integrator.u)
-          integrator.u_tmp[i] = integrator.u[i] + alg.AMatrix[stage, 1] * integrator.k1[i] + 
-                                                  alg.AMatrix[stage, 2] * integrator.k_higher[i]
+        @threaded for u_ind in eachindex(integrator.u)
+          integrator.u_tmp[u_ind] = integrator.u[u_ind] + alg.AMatrix[stage, 1] * integrator.k1[u_ind] + 
+                                                          alg.AMatrix[stage, 2] * integrator.k_higher[u_ind]
         end
         integrator.t_stage = integrator.t + alg.c[alg.NumStages - 3 + stage] * integrator.dt
 
@@ -796,8 +786,8 @@ function solve!(integrator::PERK4_Multi_Integrator)
         end
       end
 
-      @threaded for i in eachindex(integrator.u)
-        integrator.u[i] += 0.5 * (integrator.k_S1[i] + integrator.k_higher[i])
+      @threaded for u_ind in eachindex(integrator.u)
+        integrator.u[u_ind] += 0.5 * (integrator.k_S1[u_ind] + integrator.k_higher[u_ind])
       end
       
       #=

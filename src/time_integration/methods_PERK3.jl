@@ -109,15 +109,15 @@ function solve(ode::ODEProblem, alg::PERK3;
                dt, callback=nothing, kwargs...)
 
   u0    = copy(ode.u0)
-  du    = similar(u0)
-  u_tmp = similar(u0)
+  du    = zero(u0) #previously: similar(u0) 
+  u_tmp = zero(u0)
 
   # PERK stages
-  k1       = similar(u0)
-  k_higher = similar(u0)
-  k_S1     = similar(u0)
+  k1       = zero(u0)
+  k_higher = zero(u0)
+  k_S1     = zero(u0)
 
-  du_ode_hyp = similar(u0) # TODO: Not best solution since this is not needed for hyperbolic problems
+  du_ode_hyp = zero(u0) # TODO: Not best solution since this is not needed for hyperbolic problems
 
   t0 = first(ode.tspan)
   iter = 0
