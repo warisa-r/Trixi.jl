@@ -195,12 +195,13 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     min_level = minimum_level(mesh.tree)
     max_level = maximum_level(mesh.tree)
     
-    # NOTE: For testcase with artificial assignment
+    # NOTE: For 1D, periodic BC testcase with artificial assignment
     #=
     Random.seed!(42)
     min_level = 1 # Hard-coded to our convergence study testcase
     max_level = 2 # Hard-coded to our convergence study testcase
     =#
+    
     n_levels = max_level - min_level + 1
     
     # Initialize storage for level-wise information
@@ -210,9 +211,11 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     # Determine level for each element
     for element_id in 1:n_elements
       # Determine level
+      
       # NOTE: For really different grid sizes
       level = mesh.tree.levels[elements.cell_ids[element_id]]
-      # NOTE: For testcase with artificial assignment
+      
+      # NOTE: For 1D, periodic BC testcase with artificial assignment
       #level = rand(min_level:max_level)
 
       # Convert to level id
@@ -241,7 +244,7 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       level_id = max_level + 1 - level
       
 
-      # NOTE: For testcase with artificial assignment
+      # NOTE: For 1D, periodic BC testcase with artificial assignment
       #=
       if element_id in level_info_elements[1]
         level_id = 1
