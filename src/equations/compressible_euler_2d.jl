@@ -1254,14 +1254,6 @@ function flux_hllc(u_ll, u_rr, orientation::Integer,
     return SVector(f1, f2, f3, f4)
 end
 
-# CARE: Not working!
-"""
-    flux_hllc(u_ll, u_rr, normal_direction, equations::CompressibleEulerEquations2D)
-
-Computes the HLLC flux (HLL with Contact) for compressible Euler equations developed by E.F. Toro
-[Lecture slides](http://www.prague-sum.com/download/2012/Toro_2-HLLC-RiemannSolver.pdf)
-Signal speeds: [DOI: 10.1137/S1064827593260140](https://doi.org/10.1137/S1064827593260140)
-"""
 function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
                    equations::CompressibleEulerEquations2D)
     # Calculate primitive variables and speed of sound
@@ -1271,8 +1263,8 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
     v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
     v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
-    norm_       = norm(normal_direction)
-    norm_sq     = norm_ * norm_
+    norm_ = norm(normal_direction)
+    norm_sq = norm_ * norm_
     inv_norm_sq = 1.0 / norm_sq
 
     c_ll = sqrt(equations.gamma * p_ll / rho_ll) * norm_
@@ -1318,13 +1310,18 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
         f4 = f_rr[4]
     else
         SStar = (rho_ll * v_dot_n_ll * sMu_L - rho_rr * v_dot_n_rr * sMu_R
-                 + (p_rr - p_ll) * norm_sq ) / (rho_ll * sMu_L - rho_rr * sMu_R)
+                 +
+                 (p_rr - p_ll) * norm_sq) / (rho_ll * sMu_L - rho_rr * sMu_R)
         if Ssl <= 0.0 <= SStar
             densStar = rho_ll * sMu_L / (Ssl - SStar)
-            enerStar = e_ll + (SStar - v_dot_n_ll) * (SStar * inv_norm_sq + p_ll / (rho_ll * sMu_L))
+            enerStar = e_ll +
+                       (SStar - v_dot_n_ll) *
+                       (SStar * inv_norm_sq + p_ll / (rho_ll * sMu_L))
             UStar1 = densStar
-            UStar2 = densStar * (v1_ll + (SStar - v_dot_n_ll) * normal_direction[1] * inv_norm_sq)
-            UStar3 = densStar * (v2_ll + (SStar - v_dot_n_ll) * normal_direction[2] * inv_norm_sq)
+            UStar2 = densStar *
+                     (v1_ll + (SStar - v_dot_n_ll) * normal_direction[1] * inv_norm_sq)
+            UStar3 = densStar *
+                     (v2_ll + (SStar - v_dot_n_ll) * normal_direction[2] * inv_norm_sq)
             UStar4 = densStar * enerStar
             f1 = f_ll[1] + Ssl * (UStar1 - u_ll[1])
             f2 = f_ll[2] + Ssl * (UStar2 - u_ll[2])
@@ -1332,10 +1329,14 @@ function flux_hllc(u_ll, u_rr, normal_direction::AbstractVector,
             f4 = f_ll[4] + Ssl * (UStar4 - u_ll[4])
         else
             densStar = rho_rr * sMu_R / (Ssr - SStar)
-            enerStar = e_rr + (SStar - v_dot_n_rr) * (SStar * inv_norm_sq + p_rr / (rho_rr * sMu_R))
+            enerStar = e_rr +
+                       (SStar - v_dot_n_rr) *
+                       (SStar * inv_norm_sq + p_rr / (rho_rr * sMu_R))
             UStar1 = densStar
-            UStar2 = densStar * (v1_rr + (SStar - v_dot_n_rr) * normal_direction[1] * inv_norm_sq)
-            UStar3 = densStar * (v2_rr + (SStar - v_dot_n_rr) * normal_direction[2] * inv_norm_sq)
+            UStar2 = densStar *
+                     (v1_rr + (SStar - v_dot_n_rr) * normal_direction[1] * inv_norm_sq)
+            UStar3 = densStar *
+                     (v2_rr + (SStar - v_dot_n_rr) * normal_direction[2] * inv_norm_sq)
             UStar4 = densStar * enerStar
             f1 = f_rr[1] + Ssr * (UStar1 - u_rr[1])
             f2 = f_rr[2] + Ssr * (UStar2 - u_rr[2])
