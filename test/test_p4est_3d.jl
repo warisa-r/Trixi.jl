@@ -96,6 +96,14 @@ isdir(outdir) && rm(outdir, recursive=true)
       tspan=(0.0, 0.1))
   end
 
+  @trixi_testset "elixir_euler_free_stream_extruded.jl with HLLC FLux" begin
+    @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_euler_free_stream_extruded.jl"),
+      l2   = [8.444868392439035e-16, 4.889826056731442e-15, 2.2921260987087585e-15, 4.268460455702414e-15, 1.1356712092620279e-14],
+      linf = [7.749356711883593e-14, 4.513472928735496e-13, 2.9790059308254513e-13, 1.057154364048074e-12, 1.6271428648906294e-12],
+      tspan=(0.0, 0.1),
+      surface_flux = flux_hllc)
+  end
+
   @trixi_testset "elixir_euler_ec.jl" begin
     @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_euler_ec.jl"),
       l2   = [0.010380390326164493, 0.006192950051354618, 0.005970674274073704, 0.005965831290564327, 0.02628875593094754],
