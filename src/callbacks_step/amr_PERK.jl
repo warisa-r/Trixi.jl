@@ -78,7 +78,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
           @assert length(integrator.level_info_elements_acc[end]) == 
             n_elements "highest level should contain all elements"
 
-          
+          #=
           # NOTE: Additional RHS Call computation
           # CARE: Hard-coded for each case 
           Stages = [6, 4, 3] # VRMHD O-T, Taylor-Green
@@ -96,7 +96,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
                                       (Stages[level] - MaxStage / (2^(level - 1))) * 
                                       length(integrator.level_info_elements[level])
           end
-          #=
+          
           # Contribution from non-represented levels
           for level = integrator_levels+1:integrator.n_levels
             integrator.AddRHSCalls += amr_callback.interval * 
@@ -313,6 +313,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
             @assert length(integrator.level_info_elements_acc[end]) == 
             n_elements "highest level should contain all elements"
 
+            #=
             # NOTE: Additional RHS Call computation
             # CARE: Hard-coded for each case 
             Stages = [6, 4, 3] # Rayleigh-Taylor
@@ -333,6 +334,7 @@ function (amr_callback::AMRCallback)(integrator::Union{PERK_Multi_Integrator,
                                         (MinStage - MaxStage / (2^(level - 1))) * 
                                         length(integrator.level_info_elements[level])
             end
+            =#
 
             n_interfaces = last(size(interfaces.u))
 
