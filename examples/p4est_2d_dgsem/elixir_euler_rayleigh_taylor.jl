@@ -161,9 +161,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
 
 amr_callback = AMRCallback(semi, amr_controller,
                            #interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
-                           #interval=12, #RDPK3SpFSAL35
+                           interval=12, #RDPK3SpFSAL35
                            #interval=24, # DGLDDRK73_C
-                           interval = 27, # SSPRK33
+                           #interval = 27, # SSPRK33
                            adapt_initial_condition=true,
                            adapt_initial_condition_only_refine=true)
 
@@ -203,12 +203,12 @@ sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
             ode_default_options()..., callback=callbacks);
 =#
 
-
+#=
 sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
             ode_default_options()..., callback=callbacks)
+=#
 
-#=
 callbacksDE = CallbackSet(summary_callback,
                           analysis_callback,
                           amr_callback)
@@ -216,7 +216,7 @@ callbacksDE = CallbackSet(summary_callback,
 tol = 1e-5 # maximum error tolerance
 sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True()); abstol=tol, reltol=tol,
             ode_default_options()..., callback=callbacksDE);
-=#
+
 
 summary_callback() # print the timer summary
 plot(sol)
