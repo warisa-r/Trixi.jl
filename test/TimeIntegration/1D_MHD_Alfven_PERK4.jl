@@ -16,6 +16,11 @@ solver = DGSEM(polydeg=4, surface_flux=flux_hll,
 coordinates_min = 0.0
 coordinates_max = 1.0
 
+mesh = TreeMesh(coordinates_min, coordinates_max,
+                initial_refinement_level=6,
+                n_cells_max=10_000)
+
+
 refinement_patches = (
   (type="box", coordinates_min=(0.0), coordinates_max=(0.5)),
 )
@@ -25,13 +30,14 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 refinement_patches=refinement_patches,
                 n_cells_max=10_000)
 
+
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.0)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -51,26 +57,27 @@ callbacks = CallbackSet(summary_callback,
 # run the simulation
 
 Stages = [10, 6]
-Stages = [10]
-Stages = [6]
+#Stages = [10]
+#Stages = [6]
 #Stages = [5]
 #Stages = [6, 5]
 
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/")
 
+CFL = 0.4
+
+#CFL = 0.6 # [6, 5] With refinement
+#CFL = 0.9 # [6, 5] Without refinement (randomly allocated)
+
 # S = 6
-dt = 0.004367387960068
+dt = 0.004367387960068 * CFL
 
-CFL = 0.6 # [6, 5] With refinement
+# S = 10
+#dt = 0.009300599096775 * CFL
 
-CFL = 0.9 # [6, 5] Without refinement (randomly allocated)
 
 # S = 5
-dt = 0.002268333469433 * CFL
-
-Stages = [7, 4, 3]
-
-ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/2D_NavierStokes_ShearLayer/p3/")
+#dt = 0.002268333469433 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);

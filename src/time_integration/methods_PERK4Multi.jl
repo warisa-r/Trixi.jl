@@ -8,15 +8,17 @@ using Random # NOTE: Only for tests
 
 function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int, BasePathMonCoeffs::AbstractString)
                                      
-  #=
+  # Use linear increasing timesteps for free timesteps
   c = zeros(NumStages)
   for k in 2:NumStages-4
-    c[k] = cS2 * (k - 1)/(NumStages - 3) # Equidistant timestep distribution (similar to PERK2)
+    c[k] = (k - 1)/(NumStages - 4) # Equidistant timestep distribution (similar to PERK2)
   end
-  =#
+  
   # Current approach: Use ones for simplicity
+  #=
   c = ones(NumStages)
   c[1] = 0.0
+  =#
 
   c[NumStages - 3] = 1.0
   c[NumStages - 2] = 0.479274057836310
@@ -48,8 +50,8 @@ function ComputePERK4_Multi_ButcherTableau(Stages::Vector{Int64}, NumStages::Int
   for level in eachindex(Stages)
 
     NumStageEvals = Stages[level]
-    #PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * "_" * string(NumStages) * ".txt"
-    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * ".txt"
+    PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * "_" * string(NumStages) * ".txt"
+    #PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStageEvals) * ".txt"
     NumMonCoeffs, A = read_file(PathMonCoeffs, Float64)
     @assert NumMonCoeffs == NumStageEvals - 5
 
@@ -196,11 +198,11 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     max_level = maximum_level(mesh.tree)
     
     # NOTE: For 1D, periodic BC testcase with artificial assignment
-    
+    #=
     Random.seed!(42)
     min_level = 1 # Hard-coded to our convergence study testcase
     max_level = 2 # Hard-coded to our convergence study testcase
-    
+    =#
     n_levels = max_level - min_level + 1
     
     # Initialize storage for level-wise information
@@ -211,9 +213,9 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     for element_id in 1:n_elements
       # Determine level
       # NOTE: For really different grid sizes
-      #level = mesh.tree.levels[elements.cell_ids[element_id]]
+      level = mesh.tree.levels[elements.cell_ids[element_id]]
       # NOTE: For 1D, periodic BC testcase with artificial assignment
-      level = rand(min_level:max_level)
+      #level = rand(min_level:max_level)
 
       # Convert to level id
       level_id = max_level + 1 - level
@@ -242,13 +244,13 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       
 
       # NOTE: For 1D, periodic BC testcase with artificial assignment
-      
+      #=
       if element_id in level_info_elements[1]
         level_id = 1
       elseif element_id in level_info_elements[2]
         level_id = 2
       end
-      
+      =#
 
       for l in level_id:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
