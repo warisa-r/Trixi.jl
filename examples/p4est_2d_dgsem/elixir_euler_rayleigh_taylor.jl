@@ -141,12 +141,13 @@ analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl=1.35) # p = 3, E = 3, 4, 6
+stepsize_callback = StepsizeCallback(cfl=1.5) # p = 3, E = 4
 
-stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
+#stepsize_callback = StepsizeCallback(cfl=1.15) # DGLDDRK73_C
 
 #stepsize_callback = StepsizeCallback(cfl=1.3) # ParsaniKetchesonDeconinck3S53
 
-stepsize_callback = StepsizeCallback(cfl=0.8) # SSPRK33
+#stepsize_callback = StepsizeCallback(cfl=0.8) # SSPRK33
 
 amr_indicator = IndicatorHennemannGassner(semi,
                                           alpha_max=0.5,
@@ -160,8 +161,9 @@ amr_controller = ControllerThreeLevel(semi, amr_indicator,
                                       max_level =6, max_threshold=0.0025)
 
 amr_callback = AMRCallback(semi, amr_controller,
-                           #interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
-                           interval=12, #RDPK3SpFSAL35
+                           interval=20, # PERK 3, 4, 6 ParsaniKetchesonDeconinck3S53
+                           #interval=15, # PERK 4
+                           #interval=12, #RDPK3SpFSAL35
                            #interval=24, # DGLDDRK73_C
                            #interval = 27, # SSPRK33
                            adapt_initial_condition=true,
@@ -178,23 +180,21 @@ callbacks = CallbackSet(summary_callback,
 # S = 11, p = 3
 dt = 0.007080
 
-#Stages = [11, 6, 4, 3]
 Stages = [6, 4, 3]
 
 cS2 = 1.0
 ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
 
-#ode_algorithm = PERK3(11, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
-#=
+ode_algorithm = PERK3(4, "/home/daniel/git/Paper_AMR_PERK/Data/RayleighTaylorInstability/p3/")
+
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
-=#
+
 
 #=
 sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
             dt = 1.0,
-            ode_default_options()..., callback=callbacks)
+            ode_default_options()..., callback=callbacks);
 =#
 
 #=
