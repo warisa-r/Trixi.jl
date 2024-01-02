@@ -18,11 +18,11 @@ coordinates_max = 1.0
 
 refinement_patches = ()
 
-
+#=
 refinement_patches = (
   (type="box", coordinates_min=(0.0), coordinates_max=(0.5)),
 )
-
+=#
 
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=6,
@@ -57,22 +57,40 @@ callbacks = CallbackSet(summary_callback,
 
 Stages = [10, 6]
 #Stages = [10]
-#Stages = [6]
+Stages = [6]
 #Stages = [5]
-Stages = [6, 5]
+#Stages = [6, 5]
 
-ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/")
+#ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/p4/")
 
 CFL = 0.7 # [6, 5] With refinement
+
+CFL = 1.0
 
 # S = 5
 dt = 0.002268333469433 * CFL
 
 # S = 6
-#dt = 0.004367387960068 * CFL
+dt = 0.004367387960068 * CFL
 
 # S = 10
 #dt = 0.009300599096775 * CFL
+
+# Compare case with refinement to PERK 3:
+
+CFL = 1.0
+
+# p = 3, S = 4
+dt = 0.00378903581702616074 * CFL
+
+# p = 3, S = 7
+#dt = 0.00760528563318075584
+
+Stages = [7, 4]
+#Stages = [4]
+#Stages = [7]
+
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/p3/")
 
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
