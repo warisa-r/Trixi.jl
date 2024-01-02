@@ -918,6 +918,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         # "coarsest_lvl" cannot be static for AMR, has to be checked with available levels
         integrator.coarsest_lvl = min(alg.HighestActiveLevels[stage], integrator.n_levels)
 
+        # Check if there are fewer integrators than grid levels (non-optimal method)
         if integrator.coarsest_lvl == alg.NumMethods
           integrator.coarsest_lvl = integrator.n_levels
         end

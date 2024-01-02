@@ -16,14 +16,13 @@ solver = DGSEM(polydeg=4, surface_flux=flux_hll,
 coordinates_min = 0.0
 coordinates_max = 1.0
 
-mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level=6,
-                n_cells_max=10_000)
+refinement_patches = ()
 
 
 refinement_patches = (
   (type="box", coordinates_min=(0.0), coordinates_max=(0.5)),
 )
+
 
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=6,
@@ -60,24 +59,21 @@ Stages = [10, 6]
 #Stages = [10]
 #Stages = [6]
 #Stages = [5]
-#Stages = [6, 5]
+Stages = [6, 5]
 
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/1D_MHD_AlfvenWave/")
 
-CFL = 0.4
+CFL = 0.7 # [6, 5] With refinement
 
-#CFL = 0.6 # [6, 5] With refinement
-#CFL = 0.9 # [6, 5] Without refinement (randomly allocated)
+# S = 5
+dt = 0.002268333469433 * CFL
 
 # S = 6
-dt = 0.004367387960068 * CFL
+#dt = 0.004367387960068 * CFL
 
 # S = 10
 #dt = 0.009300599096775 * CFL
 
-
-# S = 5
-#dt = 0.002268333469433 * CFL
 
 sol = Trixi.solve(ode, ode_algorithm, dt = dt,
                   save_everystep=false, callback=callbacks);
