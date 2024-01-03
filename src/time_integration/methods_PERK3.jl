@@ -122,7 +122,6 @@ function solve(ode::ODEProblem, alg::PERK3;
   t0 = first(ode.tspan)
   iter = 0
 
-
   integrator = PERK3_Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                                 (prob=ode,), ode.f, alg,
                                 PERK_IntegratorOptions(callback, ode.tspan; kwargs...), false,

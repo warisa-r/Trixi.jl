@@ -70,6 +70,11 @@ equations = CompressibleEulerEquations2D(gamma)
 
 EdgeLength = 10
 
+N_passes = 1
+T_end = 2*EdgeLength * N_passes
+tspan = (0.0, T_end)
+#tspan = (0.0, 0) # Find out minimal error (based on initial distribution)
+
 """
     initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
 
@@ -78,7 +83,7 @@ https://spectrum.library.concordia.ca/id/eprint/985444/1/Paired-explicit-Runge-K
 """
 function initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
   # Evaluate error after full domain traversion
-  if t == 2*EdgeLength
+  if t == T_end
     t = 0
   end
 
@@ -132,9 +137,6 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2*EdgeLength)
-#tspan = (0.0, 0) # Find out minimal error (based on initial distribution)
-
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -142,8 +144,6 @@ summary_callback = SummaryCallback()
 analysis_interval = 1000000
 analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      extra_analysis_errors=(:conservation_error, :l1_error))
-
-alive_callback = AliveCallback(analysis_interval=analysis_interval)
 
 # Convergence tests etc.
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
@@ -165,9 +165,8 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=true)
 
 callbacksPERK = CallbackSet(summary_callback,
-                            analysis_callback, 
-                            alive_callback,
-                            amr_callback)                
+                            #amr_callback,
+                            analysis_callback)                
 
 ###############################################################################
 # run the simulation
@@ -249,6 +248,9 @@ dtOptMin = 0.004 * CFL_Convergence # For even divisibility AMR intervals
 #Stages = [9, 5]
 Stages = [15, 9, 5]
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+
+#ode_algorithm = PERK4_Multi([5], "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+#ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 
 sol = Trixi.solve(ode, ode_algorithm,
