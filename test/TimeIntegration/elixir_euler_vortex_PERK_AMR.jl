@@ -73,7 +73,7 @@ EdgeLength = 10
 N_passes = 1
 T_end = 2*EdgeLength * N_passes
 tspan = (0.0, T_end)
-#tspan = (0.0, 0) # Find out minimal error (based on initial distribution)
+#tspan = (0.0, 0) # Find out minimal error for AMR (based on initial distribution)
 
 """
     initial_condition_isentropic_vortex(x, t, equations::CompressibleEulerEquations2D)
@@ -250,7 +250,7 @@ Stages = [15, 9, 5]
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 #ode_algorithm = PERK4_Multi([5], "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
-#ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 
 sol = Trixi.solve(ode, ode_algorithm,
