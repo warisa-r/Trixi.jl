@@ -158,7 +158,7 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
                                       max_level=Refinement+1, max_threshold=-2.0)
 =#
 
-CFL_Convergence = 0.25
+CFL_Convergence = 1.0
 amr_callback = AMRCallback(semi, amr_controller,
                            # For convergence study
                            interval=Int(20/CFL_Convergence), 
@@ -243,7 +243,7 @@ dtRefBase = 0.068393649160862
 #dtRefBase = 0.224796038007725
 
 BaseRefinement = 2
-dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab # 0.004274603072553875
 dtOptMin = 0.004 * CFL_Convergence # For even divisibility AMR intervals
 
 #Stages = [9, 5]
