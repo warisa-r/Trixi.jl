@@ -151,10 +151,12 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+2, max_threshold=-2.0)
 
+#=
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+1, max_threshold=-2.0)
+=#
 
 CFL_Convergence = 0.25
 amr_callback = AMRCallback(semi, amr_controller,
@@ -237,11 +239,15 @@ dtRefBase = 0.068393649160862
 # S = 9, p = 4
 #dtRefBase = 0.131066423282673
 
+# S = 15, p = 4
+#dtRefBase = 0.224796038007725
+
 BaseRefinement = 2
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab
 dtOptMin = 0.004 * CFL_Convergence # For even divisibility AMR intervals
 
-Stages = [9, 5]
+#Stages = [9, 5]
+Stages = [15, 9, 5]
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 
