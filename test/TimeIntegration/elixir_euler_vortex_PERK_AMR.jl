@@ -115,14 +115,14 @@ end
 initial_condition = initial_condition_isentropic_vortex
 
 surf_flux = flux_hllc # Better flux, allows much larger timesteps
-PolyDeg = 2
+PolyDeg = 6
 solver = DGSEM(polydeg=PolyDeg, surface_flux=surf_flux)
 
 
 coordinates_min = (-EdgeLength, -EdgeLength)
 coordinates_max = ( EdgeLength,  EdgeLength)
 
-Refinement = 4
+Refinement = 6
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level=Refinement,
                 n_cells_max=100_000)
@@ -151,13 +151,12 @@ amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi)
                                       med_level=Refinement+1, med_threshold=-3.0,
                                       max_level=Refinement+2, max_threshold=-2.0)
 
-# Runtime tests "fixed AMR"                                      
 amr_controller = ControllerThreeLevel(semi, TrixiExtension.IndicatorVortex(semi),
                                       base_level=Refinement,
-                                      med_level=Refinement+3, med_threshold=-3.0,
-                                      max_level=Refinement+4, max_threshold=-2.0)
+                                      med_level=Refinement+1, med_threshold=-3.0,
+                                      max_level=Refinement+1, max_threshold=-2.0)
 
-CFL_Convergence = 1.0
+CFL_Convergence = 0.25
 amr_callback = AMRCallback(semi, amr_controller,
                            # For convergence study
                            interval=Int(20/CFL_Convergence), 
@@ -188,8 +187,10 @@ dtRefBase = 0.170426237621541077
 #dtRefBase = 0.0616218607581686263
 =#
 
+CFL_Stab = 1.0
+
 BaseRefinement = 3
-dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab
 
 # For convergence study
 # p = 2, S_min = 3
@@ -199,20 +200,21 @@ dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence
 
 # For error comparison
 # p = 2
-dtOptMin = 0.025 * CFL_Convergence
+#dtOptMin = 0.025 * CFL_Convergence
 # p = 3
 #dtOptMin = 0.01282051282051282 * CFL_Convergence
 
+#=
 b1   = 0.0
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
 ode_algorithm = PERK_Multi(NumBaseStages, NumMethods, 
-                           "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg2/",
-                           #"/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg6/",
+                           #"/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg2/",
+                           "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg6/",
                            bS, cEnd,
                            stage_callbacks = ())
-
+=#
 #=
 cS2 = 1.0 # = c_{S-2}
 ode_algorithm = PERK3_Multi(NumBaseStages, NumMethods, 
@@ -228,22 +230,20 @@ ode_algorithm = PERK3_Multi(NumBaseStages, NumMethods,
 #ode_algorithm = PERK3(Int(16*CFL_Convergence), "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg3/")
 
 # Experimental!
-#=
-# S = 6, p = 4, combined A
-dtRefBase = 0.05
 
-Stages = [8, 6]
-LevelCFL = Dict([(42, 42.0)])
-cS2 = 1.0
-ode_algorithm = PERK4_Multi(Stages, 
-                           "/home/daniel/git/MA/PERK/4thOrder/",
-                           cS2,
-                           LevelCFL, Integrator_Mesh_Level_Dict,
-                           stage_callbacks = ())
+# S = 5, p = 4
+dtRefBase = 0.068393649160862
 
-CFL = 0.3 * 0.25
-dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL
-=#
+# S = 9, p = 4
+#dtRefBase = 0.131066423282673
+
+BaseRefinement = 2
+dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab
+dtOptMin = 0.004 * CFL_Convergence # For even divisibility AMR intervals
+
+Stages = [9, 5]
+ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = dtOptMin,
