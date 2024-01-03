@@ -165,7 +165,7 @@ amr_callback = AMRCallback(semi, amr_controller,
                            adapt_initial_condition=true)
 
 callbacksPERK = CallbackSet(summary_callback,
-                            #amr_callback,
+                            amr_callback,
                             analysis_callback)                
 
 ###############################################################################
@@ -250,7 +250,7 @@ Stages = [15, 9, 5]
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 #ode_algorithm = PERK4_Multi([5], "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
-ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+#ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 
 sol = Trixi.solve(ode, ode_algorithm,
