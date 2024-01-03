@@ -859,6 +859,7 @@ function solve!(integrator::PERK_Multi_Integrator)
       end
       =#
 
+      # CARE: This does not work if we have only one method but more than one grid level
       #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
@@ -888,7 +889,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
 
         # Loop over different methods with own associated level
-        for level = 1:min(alg.NumMethods-1, integrator.n_levels)
+        for level = 1:min(alg.NumMethods, integrator.n_levels)
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[level, stage - 2, 1] * integrator.k1[u_ind]
           end
@@ -900,7 +901,7 @@ function solve!(integrator::PERK_Multi_Integrator)
         end
 
         # "Remainder": Non-efficiently integrated
-        for level = alg.NumMethods:integrator.n_levels
+        for level = alg.NumMethods+1:integrator.n_levels
           @threaded for u_ind in integrator.level_u_indices_elements[level]
             integrator.u_tmp[u_ind] += alg.AMatrices[alg.NumMethods, stage - 2, 1] * integrator.k1[u_ind]
           end

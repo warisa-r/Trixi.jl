@@ -668,6 +668,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
       end
       =#
 
+      # CARE: This does not work if we have only one method but more than one grid level
       #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
@@ -687,7 +688,8 @@ function solve!(integrator::PERK4_Multi_Integrator)
                    integrator.level_info_mortars_acc[1])
       
 
-      @threaded for u_ind in integrator.level_u_indices_elements[1] # Update finest level
+      # Update finest level only
+      @threaded for u_ind in integrator.level_u_indices_elements[1]
         integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
       end
 

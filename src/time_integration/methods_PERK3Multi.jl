@@ -787,6 +787,7 @@ function solve!(integrator::PERK3_Multi_Integrator)
       end
       =#
 
+      # CARE: This does not work if we have only one method but more than one grid level
       #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
