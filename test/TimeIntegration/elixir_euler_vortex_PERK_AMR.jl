@@ -247,6 +247,7 @@ dtOptMin = 0.004 * CFL_Convergence # For even divisibility AMR intervals
 
 #Stages = [9, 5]
 Stages = [15, 9, 5]
+#Stages = [15, 9]
 ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
 
 #ode_algorithm = PERK4_Multi([5], "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
