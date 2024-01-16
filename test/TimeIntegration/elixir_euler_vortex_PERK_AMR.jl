@@ -193,20 +193,28 @@ CFL_Stab = 1.0
 BaseRefinement = 3
 dtOptMin = dtRefBase * 2.0^(BaseRefinement - Refinement) * CFL_Convergence * CFL_Stab
 
-# For convergence study
+# For convergence study (d = 6)
 # p = 2, S_min = 3
-#dtOptMin = 0.005580357142857142 * CFL_Convergence * 0.8 # End-values evaluated after refinement
+dtOptMin = 0.005580357142857142 * CFL_Convergence * 0.8 # End-values evaluated after refinement
 # p = 3, S_min = 4
 #dtOptMin = 0.005580357142857142 * CFL_Convergence * 0.75 # End-values evaluated after refinement
 
-# For error comparison
-# p = 2
+# For error comparison 
+# p = 2, d = 2
 #dtOptMin = 0.025 * CFL_Convergence
-# p = 3
+# p = 3, d = 3
 #dtOptMin = 0.01282051282051282 * CFL_Convergence
 
-#=
-b1   = 0.0
+# Standard PERK
+b1 = 0.0
+
+# Heun PERK:
+b1 = 0.5
+
+# Ralston:
+b1 = 0.25
+
+
 bS   = 1.0 - b1
 cEnd = 0.5/bS
 
@@ -215,7 +223,7 @@ ode_algorithm = PERK_Multi(NumBaseStages, NumMethods,
                            "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg6/",
                            bS, cEnd,
                            stage_callbacks = ())
-=#
+
 #=
 cS2 = 1.0 # = c_{S-2}
 ode_algorithm = PERK3_Multi(NumBaseStages, NumMethods, 
@@ -230,7 +238,7 @@ ode_algorithm = PERK3_Multi(NumBaseStages, NumMethods,
 
 #ode_algorithm = PERK3(Int(16*CFL_Convergence), "/home/daniel/git/Paper_AMR_PERK/Data/Isentropic_Vortex/PolyDeg3/")
 
-# Experimental!
+# Fourth order: Experimental!
 
 # S = 5, p = 4
 dtRefBase = 0.068393649160862
