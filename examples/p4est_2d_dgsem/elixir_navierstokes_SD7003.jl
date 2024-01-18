@@ -74,7 +74,7 @@ analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 stepsize_callback = StepsizeCallback(cfl = 3.0)
 
-save_solution = SaveSolutionCallback(interval = 10000,
+save_solution = SaveSolutionCallback(interval = analysis_interval,
                                      save_initial_solution = true,
                                      save_final_solution = true,
                                      solution_variables = cons2prim)

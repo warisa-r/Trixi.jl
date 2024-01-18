@@ -1,5 +1,5 @@
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Plots
 using Trixi
 
 ###############################################################################
@@ -44,8 +44,22 @@ function initial_condition_rotor(x, t, equations::IdealGlmMhdEquations2D)
 end
 initial_condition = initial_condition_rotor
 
+# Original publication [doi: 10.1365/s13291-018-0178-9](https://doi.org/10.1365/s13291-018-0178-9) uses outflow BCs
+@inline function boundary_condition_outflow(u_inner, orientation, direction, x, t,
+                                            surface_flux_function,
+                                            equations::IdealGlmMhdEquations2D)
+  # Use simple outflow, also for the divergence-clearing varaible psi.
+  # This follows from eq. (49) from [DOI: 10.1006/jcph.2001.6961](https://doi.org/10.1006/jcph.2001.6961)
+  return surface_flux_function(u_inner, u_inner, orientation, equations)
+end
+
+boundary_conditions = (x_neg=boundary_condition_outflow,
+                       x_pos=boundary_condition_outflow,
+                       y_neg=boundary_condition_outflow,
+                       y_pos=boundary_condition_outflow)
+
 surface_flux = (flux_lax_friedrichs, flux_nonconservative_powell)
-volume_flux = (flux_hindenlang_gassner, flux_nonconservative_powell)
+volume_flux  = (flux_central, flux_nonconservative_powell)
 polydeg = 4
 basis = LobattoLegendreBasis(polydeg)
 indicator_sc = IndicatorHennemannGassner(equations, basis,
@@ -61,51 +75,65 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 coordinates_min = (0.0, 0.0)
 coordinates_max = (1.0, 1.0)
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 4,
-                n_cells_max = 10_000)
+                initial_refinement_level=4,
+                n_cells_max=10_000,
+                periodicity=false) # Use outflow BC
 
-semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver)
+semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
+                                    boundary_conditions=boundary_conditions)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.15)
+tspan = (0.0, 0.15) # final time from paper
+
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
-analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
-
-alive_callback = AliveCallback(analysis_interval = analysis_interval)
-
-save_solution = SaveSolutionCallback(interval = 100,
-                                     save_initial_solution = true,
-                                     save_final_solution = true,
-                                     solution_variables = cons2prim)
+analysis_interval = 10000
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval, analysis_errors = Symbol[])
 
 amr_indicator = IndicatorHennemannGassner(semi,
-                                          alpha_max = 0.5,
-                                          alpha_min = 0.001,
-                                          alpha_smooth = false,
-                                          variable = density_pressure)
+                                          alpha_max=0.5,
+                                          alpha_min=0.001,
+                                          alpha_smooth=false,
+                                          variable=density_pressure)
+# For density_pressure
 amr_controller = ControllerThreeLevel(semi, amr_indicator,
-                                      base_level = 4,
-                                      max_level = 6, max_threshold = 0.01)
+                                      base_level=3,
+                                      med_level =7, med_threshold=0.0025,
+                                      max_level =9, max_threshold=0.25)                                           
+                                      
 amr_callback = AMRCallback(semi, amr_controller,
-                           interval = 6,
-                           adapt_initial_condition = true,
-                           adapt_initial_condition_only_refine = true)
+                           #interval = 20, # SSPRK33
+                           #interval = 6, # PERK [10, 6, 4], DGLDDRK73_C
+                           #interval = 7, # PERK 6 Single
+                           interval = 10, # ParsaniKetchesonDeconinck3S53
+                           #interval = 10, # PERK [6, 4, 3], [10, 6, 3]
+                           adapt_initial_condition=true,
+                           adapt_initial_condition_only_refine=true)
 
-cfl = 0.35
-stepsize_callback = StepsizeCallback(cfl = cfl)
+cfl = 0.57 # SSPRK33
+
+# Finest level = 9
+cfl = 2.1 # PERK, [10, 6, 4]
+#cfl = 1.3 # PERK, [10, 6, 3]
+#cfl = 1.2 # PERK, [6, 4, 3]
+
+#cfl = 2.1 # PERK 10
+#cfl = 1.6 # PERK 6
+
+#cfl = 1.7 # DGLDDRK73_C
+#cfl = 1.1 # ParsaniKetchesonDeconinck3S53
+cfl = 1.1 # RDPK3SpFSAL35
+
+stepsize_callback = StepsizeCallback(cfl=cfl)
 
 glm_speed_callback = GlmSpeedCallback(glm_scale = 0.5, cfl = cfl)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback,
-                        alive_callback,
-                        save_solution,
                         amr_callback,
                         stepsize_callback,
                         glm_speed_callback)
@@ -113,7 +141,72 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false),
-            dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep = false, callback = callbacks);
+dt = 42.0
+
+Stages = [10, 6, 4] # Ref 2
+#Stages = [10, 6, 3] # Ref 2
+#Stages = [6, 4, 3] # Ref 2
+
+cS2 = 1.0
+ode_algorithm = PERK3_Multi(Stages, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/", cS2)
+
+#ode_algorithm = PERK3(6, "/home/daniel/git/Paper_AMR_PERK/Data/MHD_Rotor/")
+
+
+for i = 1:10
+  mesh = TreeMesh(coordinates_min, coordinates_max,
+                  initial_refinement_level=4,
+                  n_cells_max=10_000,
+                  periodicity=false)
+
+    semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
+                                        boundary_conditions=boundary_conditions)
+
+    ode = semidiscretize(semi, tspan)
+
+  
+    #=
+    sol = Trixi.solve(ode, ode_algorithm,
+                    dt = dt,
+                    save_everystep=false, callback=callbacks);
+    =#
+    
+    #=
+    sol = solve(ode, SSPRK33(;thread = OrdinaryDiffEq.True());
+                dt=dt,
+                save_everystep=false, callback=callbacks,
+                ode_default_options()...);
+    =#
+    
+    #=
+    sol = solve(ode, ParsaniKetchesonDeconinck3S53(;thread = OrdinaryDiffEq.True());
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks);
+    =#
+    
+    #=
+    sol = solve(ode, DGLDDRK73_C(;thread = OrdinaryDiffEq.True());
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks);
+    =#
+
+    sol = solve(ode, RDPK3SpFSAL35(;thread = OrdinaryDiffEq.True());
+                adaptive = false,
+                dt = 1.0,
+                ode_default_options()..., callback=callbacks);
+end
+
 summary_callback() # print the timer summary
+
+
+plot(sol)
+
+pd = PlotData2D(sol)
+plot(pd["rho"])
+
+#pgfplotsx() very slow
+
+# Margin does not seem wot do anything
+plot(pd["p"], title = "\$ p, t_f = 0.15 \$", c = :jet, left_margin = 0Plots.px, right_margin = 0Plots.px)
+MeshPlot = plot(getmesh(pd), xlabel = "\$x\$", ylabel="\$y\$", title = "Mesh at \$t_f = 0.15\$")
+savefig(MeshPlot, "/home/daniel/git/Paper_AMR_PERK/Plotscripts/MHD_Rotor/mesh.svg")

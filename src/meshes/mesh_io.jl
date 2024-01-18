@@ -44,6 +44,7 @@ function save_mesh_file(mesh::TreeMesh, output_directory, timestep,
         file["neighbor_ids"] = @view mesh.tree.neighbor_ids[:, 1:n_cells]
         file["levels"] = @view mesh.tree.levels[1:n_cells]
         file["coordinates"] = @view mesh.tree.coordinates[:, 1:n_cells]
+        file["capacity"] = mesh.tree.capacity
     end
 
     return filename

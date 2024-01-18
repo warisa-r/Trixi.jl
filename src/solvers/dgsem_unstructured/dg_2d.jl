@@ -312,6 +312,7 @@ function calc_boundary_flux!(cache, t, boundary_condition::BoundaryConditionPeri
     @assert isempty(eachboundary(dg, cache))
 end
 
+# TODO: Adapt these for P4est & P-ERK!
 # Function barrier for type stability
 function calc_boundary_flux!(cache, t, boundary_conditions,
                              mesh::Union{UnstructuredMesh2D, P4estMesh, T8codeMesh},

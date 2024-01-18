@@ -134,6 +134,9 @@ include("callbacks_step/callbacks_step.jl")
 include("callbacks_stage/callbacks_stage.jl")
 include("semidiscretization/semidiscretization_euler_gravity.jl")
 
+# TODO: Quick & dirty include of AMR_PERK after definition of "PERK_Multi_Integrator"
+include("callbacks_step/amr_PERK.jl")
+
 # `trixi_include` and special elixirs such as `convergence_test`
 include("auxiliary/special_elixirs.jl")
 
@@ -149,6 +152,7 @@ export AcousticPerturbationEquations2D,
        CompressibleEulerMulticomponentEquations2D,
        CompressibleEulerEquationsQuasi1D,
        IdealGlmMhdEquations1D, IdealGlmMhdEquations2D, IdealGlmMhdEquations3D,
+       ViscoResistiveMhdDiffusion2D, ViscoResistiveMhdDiffusion3D,
        IdealGlmMhdMulticomponentEquations1D, IdealGlmMhdMulticomponentEquations2D,
        HyperbolicDiffusionEquations1D, HyperbolicDiffusionEquations2D,
        HyperbolicDiffusionEquations3D,
@@ -218,7 +222,7 @@ export initial_condition_eoc_test_coupled_euler_gravity,
 
 export cons2cons, cons2prim, prim2cons, cons2macroscopic, cons2state, cons2mean,
        cons2entropy, entropy2cons
-export density, pressure, density_pressure, velocity, global_mean_vars,
+export density, pressure, density_pressure, velocity, v1, v2, v3, global_mean_vars,
        equilibrium_distribution, waterheight_pressure
 export entropy, energy_total, energy_kinetic, energy_internal, energy_magnetic,
        cross_helicity,
@@ -279,6 +283,8 @@ export trixi_include, examples_dir, get_examples, default_example,
        default_example_unstructured, ode_default_options
 
 export ode_norm, ode_unstable_check
+
+export PERK, PERK_Multi, PERK3, PERK3_Multi, PERK4, PERK4_Multi
 
 export convergence_test, jacobian_fd, jacobian_ad_forward, linear_structure
 

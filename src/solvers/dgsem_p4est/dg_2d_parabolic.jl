@@ -918,3 +918,21 @@ function calc_boundary_flux!(cache, t,
         end
     end
 end
+
+function apply_jacobian_parabolic!(du, mesh::P4estMesh{2},
+                                   equations::AbstractEquationsParabolic,
+                                   dg::DG, cache)
+    @unpack inverse_jacobian = cache.elements
+
+    @threaded for element in eachelement(dg, cache)
+        for j in eachnode(dg), i in eachnode(dg)
+            factor = inverse_jacobian[i, j, element]
+
+            for v in eachvariable(equations)
+                du[v, i, j, element] *= factor
+            end
+        end
+    end
+
+    return nothing
+end
