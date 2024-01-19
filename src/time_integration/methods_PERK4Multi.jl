@@ -409,6 +409,8 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
     =#
     
+    # TODO: Revisit this! This is probably not optimal in the sense that 
+    # the admissible timestep might not be exactly linear
     n_levels = Int(log2(round(h_max / h_min))) + 1
     if n_levels == 1
       h_bins = [h_max]
