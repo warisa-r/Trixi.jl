@@ -4,15 +4,23 @@ using Trixi
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 
-prandtl_number() = 0.72
-mu() = 1e-4
+U_inf = 0.2
+c_inf = 1.0
+rho_inf = 1.4
+Re = 10000.0
+airfoil_cord_length = 1.0
 
-equations = CompressibleEulerEquations2D(1.4)
+gamma = 1.4
+prandtl_number() = 0.72
+mu() = rho_inf * U_inf * airfoil_cord_length / Re
+
+equations = CompressibleEulerEquations2D(gamma)
 equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu = mu(),
                                                           Prandtl = prandtl_number(),
                                                           gradient_variables = GradientVariablesPrimitive())
 
-@inline function initial_condition_mach2_flow(x, t, equations)
+# TODO: Angle of attack (modify inflow)                                                          
+@inline function initial_condition_mach02_flow(x, t, equations)
   # set the freestream flow parameters
   rho_freestream = 1.4
   v1 = 0.2
@@ -23,7 +31,7 @@ equations_parabolic = CompressibleNavierStokesDiffusion2D(equations, mu = mu(),
   return prim2cons(prim, equations)
 end
 
-initial_condition = initial_condition_mach2_flow
+initial_condition = initial_condition_mach02_flow
 
 # Boundary conditions for free-stream testing
 boundary_condition_free_stream = BoundaryConditionDirichlet(initial_condition)
@@ -64,15 +72,19 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.0)
+t_c = airfoil_cord_length / U_inf
+tspan = (0.0, t_c)
+
 ode = semidiscretize(semi, tspan; split_form = false)
+#ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 10000
+analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl = 3.0)
+stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 S 14
+#stepsize_callback = StepsizeCallback(cfl = 2.1) # CarpenterKennedy2N54
 
 save_solution = SaveSolutionCallback(interval = analysis_interval,
                                      save_initial_solution = true,
@@ -87,28 +99,29 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-#ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+dtRatios = [0.191469431854785, 
+            0.184602899151614,
+            0.169882330226391,
+            0.148737624222123,
+            0.125358798070687,
+            0.106506037112321,
+            0.092058178144161,
+            0.066218481684170,
+            0.047412460769779,
+            0.027795091314087] / 0.191469431854785
 
-# S = 5, p = 4
-dtRefBase = 0.068393649160862
-
-# S = 9, p = 4
-#dtRefBase = 0.131066423282673
-
-# S = 15, p = 4
-#dtRefBase = 0.224796038007725
-
-dtRatios = [1.0, 0.131066423282673/0.224796038007725, 0.068393649160862/0.224796038007725]
-
-#Stages = [9, 5]
-Stages = [15, 9, 5]
-#Stages = [15, 9]
-ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/",
+Stages = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
+ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/",
                             dtRatios)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 42.0,
                   save_everystep=false, callback=callbacks);
+
+
+sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false, thread = OrdinaryDiffEq.True()),
+            dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+            save_everystep = false, callback = callbacks);
 
 #=
 sol = solve(ode, SSPRK104(; thread = OrdinaryDiffEq.True()),
