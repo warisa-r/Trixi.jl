@@ -802,8 +802,8 @@ function solve!(integrator::PERK4_Multi_Integrator)
         end
         integrator.t_stage = integrator.t + alg.c[alg.NumStages - 3 + stage] * integrator.dt
 
-        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for u_ind in eachindex(integrator.u)
           integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt

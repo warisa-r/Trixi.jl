@@ -57,11 +57,9 @@ mesh = P4estMesh{2}(mesh_file, polydeg = polydeg, boundary_symbols = boundary_sy
 
 
 boundary_conditions = Dict(:FarField => boundary_condition_free_stream,
-                           #:Airfoil => boundary_condition_free_stream)
                            :Airfoil => boundary_condition_slip_wall)
 
 boundary_conditions_parabolic = Dict(:FarField => boundary_condition_free_stream,
-                                     #:Airfoil => boundary_condition_free_stream)
                                      :Airfoil => boundary_condition_airfoil)
 
 semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabolic),
