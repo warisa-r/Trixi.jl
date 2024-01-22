@@ -261,7 +261,7 @@ end
 # Transform solution variables prior to taking the gradient
 # (e.g., conservative to primitive variables). Defaults to doing nothing.
 # TODO: can we avoid copying data?
-function transform_variables!(u_transformed, u, mesh::TreeMesh{2},
+function transform_variables!(u_transformed, u, mesh::Union{TreeMesh{2}, P4estMesh{2}},
                               equations_parabolic::AbstractEquationsParabolic,
                               dg::DG, parabolic_scheme, cache, cache_parabolic,
                               level_info_elements_acc::Vector{Int64})
@@ -342,10 +342,10 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
-function prolong2interfaces!(cache_parabolic, flux_viscous,
+function prolong2interfaces!(cache_parabolic, flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
     @unpack orientations, neighbor_ids = interfaces
     interfaces_u = interfaces.u
@@ -383,11 +383,11 @@ end
 # This is the version used when calculating the divergence of the viscous fluxes
 # We pass the `surface_integral` argument solely for dispatch
 function prolong2interfaces!(cache_parabolic,
-                             flux_viscous,
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_interfaces_acc::Vector{Int64})
+                             level_info_interfaces_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack interfaces = cache_parabolic
     @unpack orientations = interfaces
 
@@ -500,10 +500,10 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 function prolong2boundaries!(cache_parabolic,
-                             flux_viscous,
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
-                             surface_integral, dg::DG, cache)
+                             surface_integral, dg::DG, cache) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack orientations, neighbor_sides, neighbor_ids = boundaries
     boundaries_u = boundaries.u
@@ -551,11 +551,11 @@ end
 
 # This is the version used when calculating the divergence of the viscous fluxes
 function prolong2boundaries!(cache_parabolic,
-                             flux_viscous,
+                             flux_viscous::Vector{Array{uEltype, 4}},
                              mesh::TreeMesh{2},
                              equations_parabolic::AbstractEquationsParabolic,
                              surface_integral, dg::DG, cache,
-                             level_info_boundaries_acc::Vector{Int64})
+                             level_info_boundaries_acc::Vector{Int64}) where {uEltype <: Real}
     @unpack boundaries = cache_parabolic
     @unpack orientations, neighbor_sides = boundaries
     flux_viscous_x, flux_viscous_y = flux_viscous
