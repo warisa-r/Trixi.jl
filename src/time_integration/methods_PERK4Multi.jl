@@ -93,6 +93,7 @@ mutable struct PERK4_Multi{StageCallbacks}
   const NumStageEvalsMin::Int64
   const NumMethods::Int64
   const NumStages::Int64
+  const dtRatios::Vector{Float64}
   stage_callbacks::StageCallbacks
 
   AMatrices::Array{Float64, 3}
@@ -104,11 +105,13 @@ mutable struct PERK4_Multi{StageCallbacks}
 
   function PERK4_Multi(Stages_::Vector{Int64},
                        BasePathMonCoeffs_::AbstractString,
+                       dtRatios_,
                        stage_callbacks=())
 
     newPERK4_Multi = new{typeof(stage_callbacks)}(minimum(Stages_),
                           length(Stages_),
                           maximum(Stages_),
+                          dtRatios_,
                           stage_callbacks)
 
     newPERK4_Multi.AMatrices, newPERK4_Multi.AMatrix, newPERK4_Multi.c, 
@@ -355,18 +358,19 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
         # pull the four corners numbered as right-handed
         P0 = cache.elements.node_coordinates[:, 1     , 1     , element_id]
         P1 = cache.elements.node_coordinates[:, nnodes, 1     , element_id]
-        #P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
-        #P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
+        P2 = cache.elements.node_coordinates[:, nnodes, nnodes, element_id]
+        P3 = cache.elements.node_coordinates[:, 1     , nnodes, element_id]
         # compute the four side lengths and get the smallest
-        #L0 = sqrt( sum( (P1-P0).^2 ) )
-        L0 = abs(P1[1] - P0[1])
-        #=
+        L0 = sqrt( sum( (P1-P0).^2 ) )
         L1 = sqrt( sum( (P2-P1).^2 ) )
         L2 = sqrt( sum( (P3-P2).^2 ) )
         L3 = sqrt( sum( (P0-P3).^2 ) )
-        =#
-        #h = min(L0, L1, L2, L3)
-        h = L0
+        h = min(L0, L1, L2, L3)
+
+        # For square elements (RTI)
+        #L0 = abs(P1[1] - P0[1])
+        #h = L0
+
         h_min_per_element[element_id] = h
         if h > h_max 
           h_max = h
@@ -401,27 +405,28 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
         end
       end
     end
-
-    #=
-    S_min = alg.NumStageEvalsMin
-    S_max = alg.NumStages
-    n_levels = Int((S_max - S_min)/2) + 1 # Linearly increasing levels
-    h_bins = LinRange(h_min, h_max, n_levels+1) # These are the intervals
-    =#
     
-    # TODO: Revisit this! This is probably not optimal in the sense that 
-    # the admissible timestep might not be exactly linear
+    #=
+    # Assumes linear timestep scaling
     n_levels = Int(log2(round(h_max / h_min))) + 1
     if n_levels == 1
       h_bins = [h_max]
     else
       h_bins = [ceil(h_min, digits = 10) * 2^i for i = 0:n_levels-1]
     end
+    =#
+
+    n_levels = alg.NumMethods
 
     println("h_min: ", h_min, " h_max: ", h_max)
     println("h_max/h_min: ", h_max/h_min)
-    println("h_bins:")
-    display(h_bins)
+
+    #println("h_bins:")
+    #display(h_bins)
+
+    println("dtRatios:")
+    display(alg.dtRatios)
+
     println("\n")
 
     level_info_elements = [Vector{Int64}() for _ in 1:n_levels]
@@ -429,14 +434,18 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
     for element_id in 1:n_elements
       h = h_min_per_element[element_id]
 
-      level = findfirst(x-> x >= h, h_bins)
-      #=
-      level = findfirst(x-> x >= h, h_bins) - 1
-      # Catch case h = h_min
-      if level == 0
-        level = 1
+      # Approach for square cells (RTI) & linear timestep scaling
+      #level = findfirst(x-> x >= h, h_bins)
+
+      # Beyond linear scaling of timestep
+      level = findfirst(x-> x < h_min/h, alg.dtRatios)
+      # Catch case that cell is "too coarse" for method with fewest stage evals
+      if level === nothing
+        level = n_levels
+      else # Avoid reduction in timestep: Use next higher level
+        level = level - 1
       end
-      =#
+
       append!(level_info_elements[level], element_id)
 
       for l in level:n_levels
@@ -457,14 +466,17 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       element_id = interfaces.neighbor_ids[1, interface_id]
       h = h_min_per_element[element_id]
       
-      level = findfirst(x-> x >= h, h_bins)
-      #=
-      level = findfirst(x-> x >= h, h_bins) - 1
-      # Catch case h = h_min
-      if level == 0
-        level = 1
+      # Approach for square cells (RTI) & linear timestep scaling
+      #level = findfirst(x-> x >= h, h_bins)
+
+      # Beyond linear scaling of timestep
+      level = findfirst(x-> x < h_min/h, alg.dtRatios)
+      # Catch case that cell is "too coarse" for method with fewest stage evals
+      if level === nothing
+        level = n_levels
+      else # Avoid reduction in timestep: Use next higher level
+        level = level - 1
       end
-      =#
 
       for l in level:n_levels
         push!(level_info_interfaces_acc[l], interface_id)
@@ -486,15 +498,17 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       element_id = boundaries.neighbor_ids[boundary_id]
       h = h_min_per_element[element_id]
 
-      # Determine level
-      level = findfirst(x-> x >= h, h_bins)
-      #=
-      level = findfirst(x-> x >= h, h_bins) - 1
-      # Catch case h = h_min
-      if level == 0
-        level = 1
+      # Approach for square cells (RTI) & linear timestep scaling
+      #level = findfirst(x-> x >= h, h_bins)
+
+      # Beyond linear scaling of timestep
+      level = findfirst(x-> x < h_min/h, alg.dtRatios)
+      # Catch case that cell is "too coarse" for method with fewest stage evals
+      if level === nothing
+        level = n_levels
+      else # Avoid reduction in timestep: Use next higher level
+        level = level - 1
       end
-      =#
 
       # Add to accumulated container
       for l in level:n_levels
@@ -517,15 +531,17 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       element_id_higher = mortars.neighbor_ids[2, mortar_id]
       h_higher = h_min_per_element[element_id_higher]
 
-      # Determine level
-      level = findfirst(x-> x >= h, h_bins)
-      #=
-      level = findfirst(x-> x >= h, h_bins) - 1
-      # Catch case h = h_min
-      if level == 0
-        level = 1
+      # Approach for square cells (RTI) & linear timestep scaling
+      #level = findfirst(x-> x >= h, h_bins)
+
+      # Beyond linear scaling of timestep
+      level = findfirst(x-> x < h_min/h, alg.dtRatios)
+      # Catch case that cell is "too coarse" for method with fewest stage evals
+      if level === nothing
+        level = n_levels
+      else # Avoid reduction in timestep: Use next higher level
+        level = level - 1
       end
-      =#
 
       # Add to accumulated container
       for l in level:n_levels
@@ -536,9 +552,14 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
       n_mortars "highest level should contain all mortars"
   end
 
-  #=
+  
   println("level_info_elements:")
   display(level_info_elements); println()
+
+  for i in 1:n_levels
+    println("level_info_elements_count[", i, "]: ", level_info_elements_count[i])
+  end
+
   println("level_info_elements_acc:")
   display(level_info_elements_acc); println()
 
@@ -552,7 +573,6 @@ function solve(ode::ODEProblem, alg::PERK4_Multi;
 
   println("level_info_mortars_acc:")
   display(level_info_mortars_acc); println()
-  =#
 
   # Set initial distribution of DG Base function coefficients 
   @unpack equations, solver = ode.p
@@ -651,8 +671,8 @@ function solve!(integrator::PERK4_Multi_Integrator)
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
       
       # k1: Evaluated on entire domain / all levels
-      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
-      integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
+      integrator.f(integrator.du, integrator.u, prob.p, integrator.t, integrator.du_ode_hyp)
+      #integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
 
       @threaded for i in eachindex(integrator.du)
         integrator.k1[i] = integrator.du[i] * integrator.dt
@@ -671,7 +691,7 @@ function solve!(integrator::PERK4_Multi_Integrator)
       =#
 
       # CARE: This does not work if we have only one method but more than one grid level
-      #=
+      
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
@@ -680,15 +700,15 @@ function solve!(integrator::PERK4_Multi_Integrator)
                    integrator.level_info_mortars_acc[1],
                    integrator.level_u_indices_elements, 1,
                    integrator.du_ode_hyp)
-      =#
       
+      #=
       integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                    integrator.level_info_elements_acc[1],
                    integrator.level_info_interfaces_acc[1],
                    integrator.level_info_boundaries_acc[1],
                    integrator.level_info_boundaries_orientation_acc[1],
                    integrator.level_info_mortars_acc[1])
-      
+      =#
 
       # Update finest level only
       @threaded for u_ind in integrator.level_u_indices_elements[1]
@@ -745,8 +765,8 @@ function solve!(integrator::PERK4_Multi_Integrator)
           stage_callback(integrator.u_tmp, integrator, prob.p, integrator.t_stage)
         end
         =#
+      
         
-        #=
         # Joint RHS evaluation with all elements sharing this timestep
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                      integrator.level_info_elements_acc[integrator.coarsest_lvl],
@@ -756,15 +776,15 @@ function solve!(integrator::PERK4_Multi_Integrator)
                      integrator.level_info_mortars_acc[integrator.coarsest_lvl],
                      integrator.level_u_indices_elements, integrator.coarsest_lvl,
                      integrator.du_ode_hyp)
-        =#
         
+        #=
         integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, 
                      integrator.level_info_elements_acc[integrator.coarsest_lvl],
                      integrator.level_info_interfaces_acc[integrator.coarsest_lvl],
                      integrator.level_info_boundaries_acc[integrator.coarsest_lvl],
                      integrator.level_info_boundaries_orientation_acc[integrator.coarsest_lvl],
                      integrator.level_info_mortars_acc[integrator.coarsest_lvl])
-        
+        =#
 
         # Update k_higher of relevant levels
         for level in 1:integrator.coarsest_lvl          

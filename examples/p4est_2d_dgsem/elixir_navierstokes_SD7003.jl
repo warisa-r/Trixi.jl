@@ -65,7 +65,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 tspan = (0.0, 0.0)
-ode = semidiscretize(semi, tspan)
+ode = semidiscretize(semi, tspan; split_form = false)
 
 summary_callback = SummaryCallback()
 
@@ -87,15 +87,35 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+#ode_algorithm = PERK4(5, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/")
+
+# S = 5, p = 4
+dtRefBase = 0.068393649160862
+
+# S = 9, p = 4
+#dtRefBase = 0.131066423282673
+
+# S = 15, p = 4
+#dtRefBase = 0.224796038007725
+
+dtRatios = [1.0, 0.131066423282673/0.224796038007725, 0.068393649160862/0.224796038007725]
+
+#Stages = [9, 5]
+Stages = [15, 9, 5]
+#Stages = [15, 9]
+ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/2D_CEE_IsentropicVortex/PolyDeg6/",
+                            dtRatios)
 
 sol = Trixi.solve(ode, ode_algorithm,
-                  dt = dtOptMin,
-                  save_everystep=false, callback=callbacksPERK);
+                  dt = 42.0,
+                  save_everystep=false, callback=callbacks);
 
+#=
 sol = solve(ode, SSPRK104(; thread = OrdinaryDiffEq.True()),
             dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep = false, callback = callbacks);
+=#
+
 summary_callback() # print the timer summary
 
 
