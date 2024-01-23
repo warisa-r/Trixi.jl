@@ -29,6 +29,7 @@ function ComputePERK4_ButcherTableau(NumStages::Int, BasePathMonCoeffs::Abstract
   CoeffsMax = NumStages - 5
 
   AMatrices = zeros(CoeffsMax, 2)
+  AMatrices[:, 1] = c[3:NumStages-3]
 
   PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * "_" * string(NumStages) * ".txt"
   #PathMonCoeffs = BasePathMonCoeffs * "a_" * string(NumStages) * ".txt"
@@ -184,8 +185,12 @@ function solve!(integrator::PERK4_Integrator)
         integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
       end
 
-      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+      integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+      #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+
+      @threaded for u_ind in eachindex(integrator.u)
+        integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt
+      end
 
       for stage = 3:alg.NumStages - 3
 
@@ -197,8 +202,8 @@ function solve!(integrator::PERK4_Integrator)
 
         integrator.t_stage = integrator.t + alg.c[stage] * integrator.dt
         
-        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
         
         @threaded for i in eachindex(integrator.du)
           integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -213,8 +218,8 @@ function solve!(integrator::PERK4_Integrator)
         end
         integrator.t_stage = integrator.t + alg.c[alg.NumStages - 3 + stage] * integrator.dt
 
-        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
-        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage, integrator.du_ode_hyp)
+        #integrator.f(integrator.du, integrator.u_tmp, prob.p, integrator.t_stage)
 
         @threaded for u_ind in eachindex(integrator.u)
           integrator.k_higher[u_ind] = integrator.du[u_ind] * integrator.dt

@@ -81,8 +81,10 @@ summary_callback = SummaryCallback()
 analysis_interval = 100000
 analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 S 14
+stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 Multi E = 5, ..., 14
 #stepsize_callback = StepsizeCallback(cfl = 2.1) # CarpenterKennedy2N54
+
+stepsize_callback = StepsizeCallback(cfl = 5.6) # PERK_4 Single 14
 
 save_solution = SaveSolutionCallback(interval = analysis_interval,
                                      save_initial_solution = true,
@@ -109,8 +111,9 @@ dtRatios = [0.191469431854785,
             0.027795091314087] / 0.191469431854785
 
 Stages = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
-ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/",
-                            dtRatios)
+#ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/", dtRatios)
+
+ode_algorithm = PERK4(14, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 42.0,
