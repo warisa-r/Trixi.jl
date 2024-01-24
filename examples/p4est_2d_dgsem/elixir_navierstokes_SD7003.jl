@@ -10,6 +10,9 @@ rho_inf = 1.4
 Re = 10000.0
 airfoil_cord_length = 1.0
 
+# TODO: Change angle of attack!
+aoa = 0.0
+
 gamma = 1.4
 prandtl_number() = 0.72
 mu() = rho_inf * U_inf * airfoil_cord_length / Re
@@ -71,7 +74,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 t_c = airfoil_cord_length / U_inf
-tspan = (0.0, t_c)
+tspan = (0.0, 0.1 * t_c)
 
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
@@ -79,12 +82,24 @@ ode = semidiscretize(semi, tspan; split_form = false)
 summary_callback = SummaryCallback()
 
 analysis_interval = 100000
-analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
+
+semi.boundary_conditions.boundary_dictionary
+indices = semi_ -> semi.boundary_conditions.boundary_indices[2]
+# TODO: Not sure if airfoil_cord_length = l_inf is correct usage
+my_drag_force = Trixi.AnalysisSurfaceIntegral(indices, Trixi.DragForcePressure(aoa, rho_inf, U_inf, airfoil_cord_length))
+
+my_lift_force = Trixi.AnalysisSurfaceIntegral(indices, Trixi.LiftForcePressure(aoa, rho_inf, U_inf, airfoil_cord_length))
+
+
+analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
+                                     analysis_errors = Symbol[], # Turn errors off
+                                     output_directory = "out", save_analysis = true,
+                                     analysis_integrals = (my_drag_force, my_lift_force))
 
 stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 Multi E = 5, ..., 14
 #stepsize_callback = StepsizeCallback(cfl = 2.1) # CarpenterKennedy2N54
 
-stepsize_callback = StepsizeCallback(cfl = 5.6) # PERK_4 Single 14
+#stepsize_callback = StepsizeCallback(cfl = 5.6) # PERK_4 Single 14
 
 save_solution = SaveSolutionCallback(interval = analysis_interval,
                                      save_initial_solution = true,

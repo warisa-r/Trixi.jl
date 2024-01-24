@@ -694,3 +694,5 @@ include("analysis_dg2d.jl")
 include("analysis_dg2d_parallel.jl")
 include("analysis_dg3d.jl")
 include("analysis_dg3d_parallel.jl")
+
+include("analysis_surfaceforces2d.jl")
