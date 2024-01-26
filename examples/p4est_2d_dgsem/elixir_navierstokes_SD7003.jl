@@ -74,7 +74,7 @@ semi = SemidiscretizationHyperbolicParabolic(mesh, (equations, equations_parabol
 # ODE solvers, callbacks etc.
 
 t_c = airfoil_cord_length / U_inf
-tspan = (0.0, 0.1 * t_c)
+tspan = (0.0, t_c)
 
 ode = semidiscretize(semi, tspan; split_form = false)
 #ode = semidiscretize(semi, tspan)
@@ -96,7 +96,8 @@ analysis_callback = AnalysisCallback(semi, interval=analysis_interval,
                                      output_directory = "out", save_analysis = true,
                                      analysis_integrals = (my_drag_force, my_lift_force))
 
-stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 Multi E = 5, ..., 14
+#stepsize_callback = StepsizeCallback(cfl = 5.1) # PERK_4 Multi E = 5, ..., 14
+stepsize_callback = StepsizeCallback(cfl = 5.4) # PERK_4 Multi E = 5, ..., 16
 #stepsize_callback = StepsizeCallback(cfl = 2.1) # CarpenterKennedy2N54
 
 #stepsize_callback = StepsizeCallback(cfl = 5.6) # PERK_4 Single 14
@@ -114,6 +115,7 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
+#=
 dtRatios = [0.191469431854785, 
             0.184602899151614,
             0.169882330226391,
@@ -124,11 +126,26 @@ dtRatios = [0.191469431854785,
             0.066218481684170,
             0.047412460769779,
             0.027795091314087] / 0.191469431854785
+=#
 
-Stages = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
-#ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/", dtRatios)
+dtRatios = [0.249748130716557,
+            0.229743135233184,
+            0.191469431854785, 
+            0.184602899151614,
+            0.169882330226391,
+            0.148737624222123,
+            0.125358798070687,
+            0.106506037112321,
+            0.092058178144161,
+            0.066218481684170,
+            0.047412460769779,
+            0.027795091314087] / 0.249748130716557
 
-ode_algorithm = PERK4(14, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/")
+#Stages = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
+Stages = [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
+ode_algorithm = PERK4_Multi(Stages, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/", dtRatios)
+
+#ode_algorithm = PERK4(14, "/home/daniel/git/MA/EigenspectraGeneration/SD7003/")
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 42.0,
