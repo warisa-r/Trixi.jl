@@ -8,7 +8,7 @@ using NLsolve: nlsolve
 #! format: noindent
 
 # Initialize Butcher array abscissae c for PERK3 based on SSPRK33 base method
-function c_PERK3_SSP33(num_stages, c_S2)
+function c_PERK3_SSP33(num_stages, c_s2)
     c = zeros(num_stages)
 
     # Last timesteps as for SSPRK33
@@ -17,17 +17,18 @@ function c_PERK3_SSP33(num_stages, c_S2)
 
     # Linear increasing timestep for remainder
     for i in 2:(num_stages - 2)
-        c[i] = c_S2 * (i - 1) / (num_stages - 3)
+        c[i] = c_s2 * (i - 1) / (num_stages - 3)
     end
 
     return c
 end
 
-function PERK3_Butcher_tableau_objective(a_unknown, num_stages, num_stage_evals,
-                                         mon_coeffs, c_S2)
-    c_ts = c_PERK3_SSP33(num_stages, c_S2) # ts = timestep
+function PERK3_butcher_tableau_objective_function(a_unknown, num_stages,
+                                                  num_stage_evals,
+                                                  mon_coeffs, c_s2)
+    c_ts = c_PERK3_SSP33(num_stages, c_s2) # ts = timestep
 
-    c_eq = zeros(num_stage_evals - 2) # Add equality constraint that c_S2 is equal to 1
+    c_eq = zeros(num_stage_evals - 2) # Add equality constraint that c_s2 is equal to 1
     # Both terms should be present
     for i in 1:(num_stage_evals - 4)
         term1 = a_unknown[num_stage_evals - 1]
@@ -57,11 +58,11 @@ function PERK3_Butcher_tableau_objective(a_unknown, num_stages, num_stage_evals,
     return c_eq
 end
 
-function compute_PERK3_Butcher_tableau(num_stages, semi::AbstractSemidiscretization,
-                                       c_S2)
+function compute_PERK3_butcher_tableau(num_stages, eig_vals::Vector{ComplexF64},
+                                       c_s2)
 
     # Initialize array of c
-    c = c_PERK3_SSP33(num_stages, c_S2)
+    c = c_PERK3_SSP33(num_stages, c_s2)
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stages)
@@ -77,9 +78,6 @@ function compute_PERK3_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
         dt_eps = 1e-9
         filter_threshold = 1e-12
 
-        # Compute spectrum
-        J = jacobian_ad_forward(semi)
-        eig_vals = eigvals(J)
         num_eig_vals, eig_vals = filter_eigvals(eig_vals, filter_threshold)
 
         mon_coeffs, dt_opt = bisection(cons_order, num_eig_vals, num_stages, dtmax,
@@ -88,8 +86,8 @@ function compute_PERK3_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
 
         # Define the objective_function
         function objective_function(x)
-            return PERK3_Butcher_tableau_objective(x, num_stages, num_stages,
-                                                   mon_coeffs, c_S2)
+            return PERK3_butcher_tableau_objective_function(x, num_stages, num_stages,
+                                                            mon_coeffs, c_s2)
         end
 
         # Call nlsolver to solve repeatedly until the result is not NaN or negative values
@@ -111,8 +109,9 @@ function compute_PERK3_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
         end
     end
 
+    # For debugging purpose
     println("a_unknown")
-    println(a_unknown[3:end]) # To debug
+    println(a_unknown[3:end])
 
     a_matrix = zeros(num_stages - 2, 2)
     a_matrix[:, 1] = c[3:end]
@@ -122,11 +121,11 @@ function compute_PERK3_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
     return a_matrix, c
 end
 
-function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
-                                       c_S2)
+function compute_PERK3_butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
+                                       c_s2)
 
     # Initialize array of c
-    c = c_PERK3_SSP33(num_stages, c_S2)
+    c = c_PERK3_SSP33(num_stages, c_s2)
 
     println("Timestep-split: ")
     display(c)
@@ -140,9 +139,11 @@ function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
 
     path_mon_coeffs = base_path_mon_coeffs * "a_" * string(num_stages) * "_" *
                       string(num_stages) * ".txt"
-    num_mon_coeffs, A = read_file(path_mon_coeffs, Float64)
-    @assert num_mon_coeffs == coeffs_max
+    @assert isfile(path_mon_coeffs) "Couldn't find file"
+    mon_coeffs = readdlm(path_mon_coeffs, Float64)
+    num_mon_coeffs = size(mon_coeffs, 1)
 
+    @assert num_mon_coeffs == coeffs_max
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
 
@@ -173,27 +174,36 @@ mutable struct PERK3 <: PERKSingle
 
     # Constructor for previously computed A Coeffs
     function PERK3(num_stages, base_path_mon_coeffs::AbstractString,
-                   c_S2 = 1.0)
+                   c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
                                                                       base_path_mon_coeffs,
-                                                                      c_S2)
+                                                                      c_s2)
 
         return newPERK3
     end
 
     # Constructor that computes Butcher matrix A coefficients from a semidiscretization
     function PERK3(num_stages, semi::AbstractSemidiscretization,
-                   c_S2 = 1.0)
+                   c_s2 = 1.0)
+        eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages,
-                                                                      semi,
-                                                                      c_S2)
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
+                                                                      eig_vals,
+                                                                      c_s2)
 
-        display(newPERK3.a_matrix)
+        return newPERK3
+    end
 
+    # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
+    function PERK3(num_stages, eig_vals::Vector{ComplexF64}, c_end = c_s2)
+        newPERK3 = new(num_stages)
+
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
+                                                                      eig_vals,
+                                                                      c_s2)
         return newPERK3
     end
 end # struct PERK3
