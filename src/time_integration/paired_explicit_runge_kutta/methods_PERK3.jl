@@ -3,6 +3,7 @@
 # we need to opt-in explicitly.
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
 using NLsolve: nlsolve
+using DelimitedFiles: readdlm
 
 @muladd begin
 #! format: noindent
