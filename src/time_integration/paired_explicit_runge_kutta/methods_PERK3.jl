@@ -198,7 +198,8 @@ mutable struct PERK3 <: PERKSingle
     end
 
     # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-    function PERK3(num_stages, eig_vals::Vector{ComplexF64}, c_end = c_s2)
+    function PERK3(num_stages, eig_vals::Vector{ComplexF64},
+                   c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
         newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
