@@ -60,8 +60,8 @@ end
 
 @trixi_testset "elixir_burgers_PERK3.jl" begin
     @test_trixi_include(joinpath(EXAMPLES_DIR, "elixir_burgers_PERK3.jl"),
-                        l2=[2.1660627788398715e-6],
-                        linf=[1.271923809431641e-5],
+                        l2=[2.1660627814208253e-6],
+                        linf=[1.2719238097869123e-5],
                         atol=1.0e-5)
     # Ensure that we do not have excessive memory allocations
     # (e.g., from type instabilities)
