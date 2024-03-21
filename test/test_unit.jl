@@ -1276,7 +1276,7 @@ end
         0.5011914484393387,
         0.8829127712445113,
         0.43024132987932817,
-        0.7560616633050348,
+        0.7560616633050348
     ]
 
     equations = CompressibleEulerEquations2D(1.4)
@@ -1433,7 +1433,7 @@ end
         u_values = [SVector(1.0, 0.5, -0.7, 1.0),
             SVector(1.5, -0.2, 0.1, 5.0)]
         fluxes = [flux_central, flux_ranocha, flux_shima_etal, flux_kennedy_gruber,
-            FluxLMARS(340), flux_hll, FluxHLL(min_max_speed_davis), flux_hlle, flux_hllc,
+            FluxLMARS(340), flux_hll, FluxHLL(min_max_speed_davis), flux_hlle, flux_hllc
         ]
 
         for f_std in fluxes
@@ -1457,7 +1457,7 @@ end
         u_values = [SVector(1.0, 0.5, -0.7, 0.1, 1.0),
             SVector(1.5, -0.2, 0.1, 0.2, 5.0)]
         fluxes = [flux_central, flux_ranocha, flux_shima_etal, flux_kennedy_gruber,
-            FluxLMARS(340), flux_hll, FluxHLL(min_max_speed_davis), flux_hlle, flux_hllc,
+            FluxLMARS(340), flux_hll, FluxHLL(min_max_speed_davis), flux_hlle, flux_hllc
         ]
 
         for f_std in fluxes
@@ -1496,7 +1496,7 @@ end
             flux_central,
             flux_hindenlang_gassner,
             FluxHLL(min_max_speed_davis),
-            flux_hlle,
+            flux_hlle
         ]
 
         for f_std in fluxes
@@ -1523,7 +1523,7 @@ end
             flux_central,
             flux_hindenlang_gassner,
             FluxHLL(min_max_speed_davis),
-            flux_hlle,
+            flux_hlle
         ]
 
         for f_std in fluxes
@@ -1618,10 +1618,10 @@ end
 
     ode_algorithm = PERK3(6, path_coeff_file)
 
-    @test ode_algorithm.a_matrix == [0.616104  0.050563
-                                     0.890928  0.109072
-                                     0.823718  0.176282
-                                     0.294071  0.205929]
+    @test ode_algorithm.a_matrix == [0.616104 0.050563
+           0.890928 0.109072
+           0.823718 0.176282
+           0.294071 0.205929]
 
     Trixi.download("https://gist.githubusercontent.com/warisa-r/2c16d632fcfa0c481362870405e5e31e/raw/37edb065153c30da3729e05bd86c5939cb867f01/EigenvalueList_Refined2.txt",
                    joinpath(path_coeff_file, "spectrum.txt"))
@@ -1630,10 +1630,10 @@ end
     tspan = (0.0, 1.0)
     ode_algorithm = PERK3(6, tspan, vec(eig_vals))
 
-    @test ode_algorithm.a_matrix == [0.569562   0.097105
-                                     0.824964   0.175036
-                                     0.0495822  0.950418
-                                     0.487604   0.0123955]
+    @test ode_algorithm.a_matrix == [0.569562 0.097105
+           0.824964 0.175036
+           0.0495822 0.950418
+           0.487604 0.0123955]
 end
 end
 
