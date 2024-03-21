@@ -59,9 +59,8 @@ function PERK3_butcher_tableau_objective_function(a_unknown, num_stages,
     return c_eq
 end
 
-function compute_PERK3_butcher_tableau(num_stages, eig_vals::Vector{ComplexF64},
+function compute_PERK3_butcher_tableau(num_stages, tspan, eig_vals::Vector{ComplexF64},
                                        c_s2)
-
     # Initialize array of c
     c = c_PERK3_SSP33(num_stages, c_s2)
 
@@ -75,7 +74,7 @@ function compute_PERK3_butcher_tableau(num_stages, eig_vals::Vector{ComplexF64},
     else
         # Calculate coefficients of the stability polynomial in monomial form
         cons_order = 3
-        dtmax = 1.0
+        dtmax = tspan[2] - tspan[1]
         dt_eps = 1e-9
         filter_threshold = 1e-12
 
@@ -141,8 +140,8 @@ function compute_PERK3_butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
     path_mon_coeffs = base_path_mon_coeffs * "a_" * string(num_stages) * "_" *
                       string(num_stages) * ".txt"
     @assert isfile(path_mon_coeffs) "Couldn't find file"
-    mon_coeffs = readdlm(path_mon_coeffs, Float64)
-    num_mon_coeffs = size(mon_coeffs, 1)
+    A = readdlm(path_mon_coeffs, Float64)
+    num_mon_coeffs = size(A, 1)
 
     @assert num_mon_coeffs == coeffs_max
     a_matrix[:, 1] -= A
@@ -186,12 +185,12 @@ mutable struct PERK3 <: PERKSingle
     end
 
     # Constructor that computes Butcher matrix A coefficients from a semidiscretization
-    function PERK3(num_stages, semi::AbstractSemidiscretization,
+    function PERK3(num_stages, tspan, semi::AbstractSemidiscretization,
                    c_s2 = 1.0)
         eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
 
@@ -199,11 +198,11 @@ mutable struct PERK3 <: PERKSingle
     end
 
     # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-    function PERK3(num_stages, eig_vals::Vector{ComplexF64},
+    function PERK3(num_stages, tspan, eig_vals::Vector{ComplexF64},
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
         return newPERK3

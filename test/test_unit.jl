@@ -3,6 +3,8 @@ module TestUnit
 using Test
 using Trixi
 
+using DelimitedFiles: readdlm
+
 include("test_trixi.jl")
 
 # Start with a clean environment: remove Trixi.jl output directory if it exists
@@ -600,6 +602,7 @@ end
 end
 
 @timed_testset "TimeSeriesCallback" begin
+    # Test the 2D TreeMesh version of the callback and some warnings
     @test_nowarn_mod trixi_include(@__MODULE__,
                                    joinpath(examples_dir(), "tree_2d_dgsem",
                                             "elixir_acoustics_gaussian_source.jl"),
@@ -1574,6 +1577,63 @@ end
     mesh = DGMultiMesh(dg, cells_per_dimension, periodicity = false)
 
     @test mesh.boundary_faces[:entire_boundary] == [1, 2]
+end
+
+@testset "PERK Single p2 Constructors" begin
+    path_coeff_file = joinpath(examples_dir(), "tree_1d_dgsem/")
+    Trixi.download("https://gist.githubusercontent.com/DanielDoehring/8db0808b6f80e59420c8632c0d8e2901/raw/39aacf3c737cd642636dd78592dbdfe4cb9499af/MonCoeffsS6p2.txt",
+                   joinpath(path_coeff_file, "gamma_6.txt"))
+
+    ode_algorithm = PERK2(6, path_coeff_file)
+
+    @test ode_algorithm.a_matrix == [0.12405417889682908 0.07594582110317093
+           0.16178873711001726 0.13821126288998273
+           0.16692313960864164 0.2330768603913584
+           0.12281292901258256 0.37718707098741744]
+
+    Trixi.download("https://gist.githubusercontent.com/DanielDoehring/c7a89eaaa857e87dde055f78eae9b94a/raw/2937f8872ffdc08e0dcf444ee35f9ebfe18735b0/Spectrum_2D_IsentropicVortex_CEE.txt",
+                   joinpath(path_coeff_file, "spectrum_2d.txt"))
+
+    eig_vals = readdlm(joinpath(path_coeff_file, "spectrum_2d.txt"), ComplexF64)
+    tspan = (0.0, 1.0)
+    ode_algorithm = PERK2(12, tspan, vec(eig_vals))
+
+    @test ode_algorithm.a_matrix == [0.06460030228718522 0.026308788621905697
+           0.09476728053612687 0.04159635582750947
+           0.12338555995285924 0.058432621865322575
+           0.14992047611512016 0.0773522511576071
+           0.17346509036190638 0.09926218236536634
+           0.19265658773758804 0.12552523044423014
+           0.20526524445560954 0.1583711191807541
+           0.2073723615813174 0.20171854750959173
+           0.19137613735041836 0.26316931719503617
+           0.13943312463511776 0.36056687536488224]
+end
+
+@testset "PERK Single p3 Constructors" begin
+    #TODO: edit and make this suitable for p3 and finish this
+    path_coeff_file = joinpath(examples_dir(), "structured_1d_dgsem/")
+    Trixi.download("https://gist.githubusercontent.com/warisa-r/234ebacae0862e9ab49189e75eb007e7/raw/7cf83406765a20f02c97f8eed626272e4dd9ffd4/a_6_6.txt",
+                   joinpath(path_coeff_file, "a_6_6.txt"))
+
+    ode_algorithm = PERK3(6, path_coeff_file)
+
+    @test ode_algorithm.a_matrix == [0.616104  0.050563
+                                     0.890928  0.109072
+                                     0.823718  0.176282
+                                     0.294071  0.205929]
+
+    Trixi.download("https://gist.githubusercontent.com/warisa-r/2c16d632fcfa0c481362870405e5e31e/raw/37edb065153c30da3729e05bd86c5939cb867f01/EigenvalueList_Refined2.txt",
+                   joinpath(path_coeff_file, "spectrum.txt"))
+
+    eig_vals = readdlm(joinpath(path_coeff_file, "spectrum.txt"), ComplexF64)
+    tspan = (0.0, 1.0)
+    ode_algorithm = PERK3(6, tspan, vec(eig_vals))
+
+    @test ode_algorithm.a_matrix == [0.569562   0.097105
+                                     0.824964   0.175036
+                                     0.0495822  0.950418
+                                     0.487604   0.0123955]
 end
 end
 
