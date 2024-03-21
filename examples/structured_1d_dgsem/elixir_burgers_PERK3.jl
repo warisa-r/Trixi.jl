@@ -43,7 +43,7 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 
-ode_algorithm = PERK3(8, semi)
+ode_algorithm = PERK3(6, tspan, semi)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
@@ -51,3 +51,5 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
+
+analysis_callback(sol)
