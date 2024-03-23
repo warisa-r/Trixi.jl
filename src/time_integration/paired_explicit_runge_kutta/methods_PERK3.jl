@@ -88,7 +88,7 @@ function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
 
         # Define the objective_function
         function objective_function(x)
-            return PERK3_butcher_tableau_objective_function(x, num_stages, num_stages,
+            return PERK3_Butcher_tableau_objective_function(x, num_stages, num_stages,
                                                             mon_coeffs, c_s2)
         end
 

@@ -27,7 +27,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_convergen
 # ODE solvers, callbacks etc.
 
 # Create ODE problem with time span from 0.0 to 1.0
-ode = semidiscretize(semi, (0.0, 1.0));
+tspan = (0.0, 1.0)
+ode = semidiscretize(semi, tspan);
 
 # At the beginning of the main loop, the SummaryCallback prints a summary of the simulation setup
 # and resets the timers
@@ -37,16 +38,23 @@ summary_callback = SummaryCallback()
 analysis_callback = AnalysisCallback(semi, interval = 100)
 
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl = 2.5/4)
+stepsize_callback = StepsizeCallback(cfl = 2.5)
+
+alive_callback = AliveCallback(alive_interval = 1)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-callbacks = CallbackSet(summary_callback, analysis_callback,
+callbacks = CallbackSet(summary_callback,
+                        alive_callback,
+                        analysis_callback,
                         stepsize_callback)
 
 ###############################################################################
 # run the simulation
 
-ode_algorithm = PERK2(6, semi)
+# Construct second order PERK method with 6 stages for given simulation setup.
+# Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
+# in calculating the polynomial coefficients in the ODE algorithm.
+ode_algorithm = PERK2(6, tspan, semi)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback

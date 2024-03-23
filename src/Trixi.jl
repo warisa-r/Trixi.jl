@@ -191,7 +191,8 @@ export flux, flux_central, flux_lax_friedrichs, flux_hll, flux_hllc, flux_hlle,
        FluxUpwind
 
 export splitting_steger_warming, splitting_vanleer_haenel,
-       splitting_coirier_vanleer, splitting_lax_friedrichs
+       splitting_coirier_vanleer, splitting_lax_friedrichs,
+       splitting_drikakis_tsangaris
 
 export initial_condition_constant,
        initial_condition_gauss,
@@ -276,7 +277,7 @@ export trixi_include, examples_dir, get_examples, default_example,
 
 export ode_norm, ode_unstable_check
 
-export PERK2, PERK3
+export PERK2
 
 export convergence_test, jacobian_fd, jacobian_ad_forward, linear_structure
 

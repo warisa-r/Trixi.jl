@@ -2,19 +2,22 @@
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
 # See https://ranocha.de/blog/Optimizing_EC_Trixi for further details.
+using DelimitedFiles: readdlm
+
 @muladd begin
 #! format: noindent
 
-# Abstract base type for both single/standalone and multi-level P-ERK time integration schemes
+# Abstract base type for both single/standalone and multi-level 
+# PERK (Paired-Explicit Runge-Kutta) time integration schemes
 abstract type PERK end
-# Abstract base type for single/standalone P-ERK time integration schemes
+# Abstract base type for single/standalone PERK time integration schemes
 abstract type PERKSingle <: PERK end
 
-function compute_a_coeffs(num_stage_evals, se_factors, mon_coeffs)
-    a_coeffs = mon_coeffs
+function compute_a_coeffs(num_stage_evals, bc_factors, mon_coeffs)
+    a_coeffs = copy(mon_coeffs)
 
     for stage in 1:(num_stage_evals - 2)
-        a_coeffs[stage] /= se_factors[stage]
+        a_coeffs[stage] /= bc_factors[stage]
         for prev_stage in 1:(stage - 1)
             a_coeffs[stage] /= a_coeffs[prev_stage]
         end
@@ -23,7 +26,7 @@ function compute_a_coeffs(num_stage_evals, se_factors, mon_coeffs)
     return reverse(a_coeffs)
 end
 
-function compute_PERK2_Butcher_tableau(num_stages, semi::AbstractSemidiscretization,
+function compute_PERK2_butcher_tableau(num_stages, eig_vals, tspan,
                                        bS, c_end)
 
     # c Vector form Butcher Tableau (defines timestep per stage)
@@ -31,10 +34,7 @@ function compute_PERK2_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
     for k in 2:num_stages
         c[k] = c_end * (k - 1) / (num_stages - 1)
     end
-    println("Timestep-split: ")
-    display(c)
-    println("\n")
-    se_factors = bS * reverse(c[2:(end - 1)])
+    bc_factors = bS * reverse(c[2:(end - 1)])
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     coeffs_max = num_stages - 2
@@ -44,32 +44,26 @@ function compute_PERK2_Butcher_tableau(num_stages, semi::AbstractSemidiscretizat
 
     cons_order = 2
     filter_thres = 1e-12
-    dtmax = 1.0
-    dt_eps = 1e-9
-
-    eig_vals = eigvals(jacobian_ad_forward(semi))
+    dtmax = tspan[2] - tspan[1]
+    dteps = 1e-9
 
     num_eig_vals, eig_vals = filter_eigvals(eig_vals, filter_thres)
 
-    mon_coeffs, dt_opt = bisection(cons_order, num_eig_vals, num_stages, dtmax, dt_eps,
+    mon_coeffs, dt_opt = bisection(cons_order, num_eig_vals, num_stages, dtmax, dteps,
                                    eig_vals)
     mon_coeffs = undo_normalization!(cons_order, num_stages, mon_coeffs)
 
     num_mon_coeffs = length(mon_coeffs)
     @assert num_mon_coeffs == coeffs_max
-    A = compute_a_coeffs(num_stages, se_factors, mon_coeffs)
+    A = compute_a_coeffs(num_stages, bc_factors, mon_coeffs)
 
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
 
-    println("A matrix: ")
-    display(a_matrix)
-    println()
-
     return a_matrix, c
 end
 
-function compute_PERK2_Butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
+function compute_PERK2_butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
                                        bS, c_end)
 
     # c Vector form Butcher Tableau (defines timestep per stage)
@@ -77,10 +71,7 @@ function compute_PERK2_Butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
     for k in 2:num_stages
         c[k] = c_end * (k - 1) / (num_stages - 1)
     end
-    println("Timestep-split: ")
-    display(c)
-    println("\n")
-    se_factors = bS * reverse(c[2:(end - 1)])
+    bc_factors = bS * reverse(c[2:(end - 1)])
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     coeffs_max = num_stages - 2
@@ -89,16 +80,15 @@ function compute_PERK2_Butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
     a_matrix[:, 1] = c[3:end]
 
     path_mon_coeffs = base_path_mon_coeffs * "gamma_" * string(num_stages) * ".txt"
-    num_mon_coeffs, mon_coeffs = read_file(path_mon_coeffs, Float64)
+    @assert isfile(path_mon_coeffs) "Couldn't find file"
+    mon_coeffs = readdlm(path_mon_coeffs, Float64)
+    num_mon_coeffs = size(mon_coeffs, 1)
+
     @assert num_mon_coeffs == coeffs_max
-    A = compute_a_coeffs(num_stages, se_factors, mon_coeffs)
+    A = compute_a_coeffs(num_stages, bc_factors, mon_coeffs)
 
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
-
-    println("A matrix: ")
-    display(a_matrix)
-    println()
 
     return a_matrix, c
 end
@@ -107,12 +97,12 @@ end
     PERK2()
 
 The following structures and methods provide a minimal implementation of
-the second-order paired explicit Runge-Kutta method
+the second-order paired explicit Runge-Kutta (PERK) method
 optimized for a certain simulation setup (PDE, IC & BC, Riemann Solver, DG Solver).
 
-- Vermeire (2019).
-Paired explicit Runge-Kutta schemes for stiff systems of equations
-[DOI: 10.1016/j.jcp.2019.05.014](https://doi.org/10.1016/j.jcp.2019.05.014)
+- Brian Vermeire (2019).
+  Paired explicit Runge-Kutta schemes for stiff systems of equations
+  [DOI: 10.1016/j.jcp.2019.05.014](https://doi.org/10.1016/j.jcp.2019.05.014)
 """
 
 mutable struct PERK2 <: PERKSingle
@@ -120,16 +110,16 @@ mutable struct PERK2 <: PERKSingle
 
     a_matrix::Matrix{Float64}
     c::Vector{Float64}
-    bS::Float64
     b1::Float64
+    bS::Float64
     c_end::Float64
 
-    #Constructor that read the coefficients from the file
+    # Constructor that reads the coefficients from a file
     function PERK2(num_stages, base_path_mon_coeffs::AbstractString, bS = 1.0,
                    c_end = 0.5)
         newPERK2 = new(num_stages)
 
-        newPERK2.a_matrix, newPERK2.c = compute_PERK2_Butcher_tableau(num_stages,
+        newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
                                                                       base_path_mon_coeffs,
                                                                       bS, c_end)
 
@@ -139,12 +129,29 @@ mutable struct PERK2 <: PERKSingle
         return newPERK2
     end
 
-    #Constructor that calculate the coefficients with polynomial optimizer
-    function PERK2(num_stages, semi::AbstractSemidiscretization, bS = 1.0, c_end = 0.5)
+    # Constructor that calculates the coefficients with polynomial optimizer from a semidiscretization
+    function PERK2(num_stages, tspan, semi::AbstractSemidiscretization, bS = 1.0,
+                   c_end = 0.5)
+        eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK2 = new(num_stages)
 
-        newPERK2.a_matrix, newPERK2.c = compute_PERK2_Butcher_tableau(num_stages,
-                                                                      semi,
+        newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
+                                                                      eig_vals, tspan,
+                                                                      bS, c_end)
+
+        newPERK2.b1 = one(bS) - bS
+        newPERK2.bS = bS
+        newPERK2.c_end = c_end
+        return newPERK2
+    end
+
+    # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
+    function PERK2(num_stages, tspan, eig_vals::Vector{ComplexF64}, bS = 1.0,
+                   c_end = 0.5)
+        newPERK2 = new(num_stages)
+
+        newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
+                                                                      eig_vals, tspan,
                                                                       bS, c_end)
 
         newPERK2.b1 = one(bS) - bS
@@ -279,7 +286,7 @@ function solve!(integrator::PERK2Integrator)
             end
 
             # Higher stages
-            for stage in 3:(alg.num_stages)
+            for stage in 3:alg.num_stages
                 # Construct current state
                 @threaded for i in eachindex(integrator.du)
                     integrator.u_tmp[i] = integrator.u[i] +
@@ -306,11 +313,14 @@ function solve!(integrator::PERK2Integrator)
         integrator.iter += 1
         integrator.t += integrator.dt
 
-        # handle callbacks
-        if callbacks isa CallbackSet
-            for cb in callbacks.discrete_callbacks
-                if cb.condition(integrator.u, integrator.t, integrator)
-                    cb.affect!(integrator)
+        @trixi_timeit timer() "Step-Callbacks" begin
+            # handle callbacks
+            if callbacks isa CallbackSet
+                foreach(callbacks.discrete_callbacks) do cb
+                    if cb.condition(integrator.u, integrator.t, integrator)
+                        cb.affect!(integrator)
+                    end
+                    return nothing
                 end
             end
         end
