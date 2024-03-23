@@ -24,11 +24,14 @@ function c_PERK3_SSP33(num_stages, c_s2)
     return c
 end
 
-function PERK3_butcher_tableau_objective_function(a_unknown, num_stages,
+function PERK3_Butcher_tableau_objective_function(a_unknown, num_stages,
                                                   num_stage_evals,
                                                   mon_coeffs, c_s2)
     c_ts = c_PERK3_SSP33(num_stages, c_s2) # ts = timestep
 
+    # EQuality Constraint array that ensures that the stability polynomial computed from 
+    # the to-be-constructed Butcher-Tableau matches the monomial coefficients of the 
+    # optimized stability polynomial.
     c_eq = zeros(num_stage_evals - 2) # Add equality constraint that c_s2 is equal to 1
     # Both terms should be present
     for i in 1:(num_stage_evals - 4)
@@ -59,7 +62,7 @@ function PERK3_butcher_tableau_objective_function(a_unknown, num_stages,
     return c_eq
 end
 
-function compute_PERK3_butcher_tableau(num_stages, tspan, eig_vals::Vector{ComplexF64},
+function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{ComplexF64},
                                        c_s2)
     # Initialize array of c
     c = c_PERK3_SSP33(num_stages, c_s2)
@@ -70,7 +73,6 @@ function compute_PERK3_butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
     # Special case of e = 3
     if num_stages == 3
         a_unknown = [0, c[2], 0.25]
-
     else
         # Calculate coefficients of the stability polynomial in monomial form
         cons_order = 3
@@ -121,15 +123,11 @@ function compute_PERK3_butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
     return a_matrix, c
 end
 
-function compute_PERK3_butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
+function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
                                        c_s2)
 
     # Initialize array of c
     c = c_PERK3_SSP33(num_stages, c_s2)
-
-    println("Timestep-split: ")
-    display(c)
-    println("\n")
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     coeffs_max = num_stages - 2
@@ -157,15 +155,21 @@ end
 """
     PERK3()
 
-The following structures and methods provide a minimal implementation of
+The following structures and methods provide a implementation of
 the third-order paired explicit Runge-Kutta method
 optimized for a certain simulation setup (PDE, IC & BC, Riemann Solver, DG Solver).
+
+The original paper is
 
 - Nasab, Vermeire (2022)
 Third-order Paired Explicit Runge-Kutta schemes for stiff systems of equations
 [DOI: 10.1016/j.jcp.2022.111470](https://doi.org/10.1016/j.jcp.2022.111470)
-"""
 
+While the changes to SSPRK33 base-scheme are described in 
+- Doehring, Schlottke-Lakemper, Gassner, Torrilhon (2024)
+Multirate Time-Integration based on Dynamic ODE Partitioning through Adaptively Refined Meshes for Compressible Fluid Dynamics
+[Arxiv: 10.48550/arXiv.2403.05144](https://doi.org/10.48550/arXiv.2403.05144)
+"""
 mutable struct PERK3 <: PERKSingle
     const num_stages::Int
 
@@ -177,7 +181,7 @@ mutable struct PERK3 <: PERKSingle
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages,
                                                                       base_path_mon_coeffs,
                                                                       c_s2)
 
@@ -190,7 +194,7 @@ mutable struct PERK3 <: PERKSingle
         eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages, tspan,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
 
@@ -202,7 +206,7 @@ mutable struct PERK3 <: PERKSingle
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_butcher_tableau(num_stages, tspan,
+        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
         return newPERK3
@@ -231,7 +235,7 @@ mutable struct PERK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
     # PERK stages:
     k1::uType
     k_higher::uType
-    k_s1::uType # Required for third order
+    k_s1::uType # Required for custom third order version of PERK3
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
