@@ -196,9 +196,10 @@ mutable struct PERK3 <: PERKSingle
         eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages, tspan,
-                                                                      eig_vals,
-                                                                      c_s2)
+        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages,
+                                                                                       tspan,
+                                                                                       eig_vals,
+                                                                                       c_s2)
 
         return newPERK3
     end
@@ -208,9 +209,10 @@ mutable struct PERK3 <: PERKSingle
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages, tspan,
-                                                                      eig_vals,
-                                                                      c_s2)
+        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages,
+                                                                                       tspan,
+                                                                                       eig_vals,
+                                                                                       c_s2)
         return newPERK3
     end
 end # struct PERK3

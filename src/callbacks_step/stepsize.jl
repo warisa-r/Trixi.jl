@@ -33,7 +33,7 @@ function Base.show(io::IO, ::MIME"text/plain",
         stepsize_callback = cb.affect!
 
         setup = [
-            "CFL number" => stepsize_callback.cfl_number,
+            "CFL number" => stepsize_callback.cfl_number
         ]
         summary_box(io, "StepsizeCallback", setup)
     end
@@ -64,7 +64,7 @@ end
         t = integrator.t
         u_ode = integrator.u
         semi = integrator.p
-    
+
         # If the integrator is an optimized integrator, calculate cfl number instead of using the input cfl number
         if isa(integrator.alg, PERK2) || isa(integrator.alg, PERK3)
             cfl_number = calculate_cfl_number(u_ode, t, integrator.alg.dt_opt, semi)
@@ -92,11 +92,13 @@ end
 function calculate_cfl_number(u_ode, t, dt_opt, semi::AbstractSemidiscretization)
     mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
     u = wrap_array(u_ode, mesh, equations, solver, cache)
-    max_dt_variable = max_dt(u, t, mesh,have_constant_speed(equations), equations, solver, cache)
+    max_dt_variable = max_dt(u, t, mesh, have_constant_speed(equations), equations,
+                             solver, cache)
+    # For debugging purpose, especially for PERK3
     println("max_dt $max_dt_variable")
     cfl_number = dt_opt / max_dt(u, t, mesh,
-                 have_constant_speed(equations), equations,
-                 solver, cache)
+                        have_constant_speed(equations), equations,
+                        solver, cache)
 
     return cfl_number
 end

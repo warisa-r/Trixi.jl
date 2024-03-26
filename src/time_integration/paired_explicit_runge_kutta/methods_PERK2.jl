@@ -138,8 +138,10 @@ mutable struct PERK2 <: PERKSingle
         newPERK2 = new(num_stages)
 
         newPERK2.a_matrix, newPERK2.c, newPERK2.dt_opt = compute_PERK2_butcher_tableau(num_stages,
-                                                                      eig_vals, tspan,
-                                                                      bS, c_end)
+                                                                                       eig_vals,
+                                                                                       tspan,
+                                                                                       bS,
+                                                                                       c_end)
 
         newPERK2.b1 = one(bS) - bS
         newPERK2.bS = bS
@@ -153,8 +155,10 @@ mutable struct PERK2 <: PERKSingle
         newPERK2 = new(num_stages)
 
         newPERK2.a_matrix, newPERK2.c, newPERK2.dt_opt = compute_PERK2_butcher_tableau(num_stages,
-                                                                      eig_vals, tspan,
-                                                                      bS, c_end)
+                                                                                       eig_vals,
+                                                                                       tspan,
+                                                                                       bS,
+                                                                                       c_end)
 
         newPERK2.b1 = one(bS) - bS
         newPERK2.bS = bS
@@ -288,7 +292,7 @@ function solve!(integrator::PERK2Integrator)
             end
 
             # Higher stages
-            for stage in 3:alg.num_stages
+            for stage in 3:(alg.num_stages)
                 # Construct current state
                 @threaded for i in eachindex(integrator.du)
                     integrator.u_tmp[i] = integrator.u[i] +
