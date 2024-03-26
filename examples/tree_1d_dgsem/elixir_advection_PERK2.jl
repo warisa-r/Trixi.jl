@@ -38,7 +38,8 @@ summary_callback = SummaryCallback()
 analysis_callback = AnalysisCallback(semi, interval = 100)
 
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl = 2.5)
+# With an optimized integrator, cfl number is calculated and don't need to be input
+stepsize_callback = StepsizeCallback()
 
 alive_callback = AliveCallback(alive_interval = 1)
 
@@ -62,3 +63,4 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
+analysis_callback(sol)

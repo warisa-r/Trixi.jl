@@ -64,7 +64,15 @@ end
         t = integrator.t
         u_ode = integrator.u
         semi = integrator.p
-        @unpack cfl_number = stepsize_callback
+    
+        # If the integrator is an optimized integrator, calculate cfl number instead of using the input cfl number
+        if isa(integrator.alg, PERK2) || isa(integrator.alg, PERK3)
+            cfl_number = calculate_cfl_number(u_ode, t, integrator.alg.dt_opt, semi)
+            println("cfl number: $cfl_number")
+        else
+            println(integrator.alg)
+            @unpack cfl_number = stepsize_callback
+        end
 
         # Dispatch based on semidiscretization
         dt = @trixi_timeit timer() "calculate dt" calculate_dt(u_ode, t, cfl_number,
@@ -78,6 +86,19 @@ end
     # avoid re-evaluating possible FSAL stages
     u_modified!(integrator, false)
     return nothing
+end
+
+# Case for a single semidiscretization when PERK integrator is called
+function calculate_cfl_number(u_ode, t, dt_opt, semi::AbstractSemidiscretization)
+    mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
+    u = wrap_array(u_ode, mesh, equations, solver, cache)
+    max_dt_variable = max_dt(u, t, mesh,have_constant_speed(equations), equations, solver, cache)
+    println("max_dt $max_dt_variable")
+    cfl_number = dt_opt / max_dt(u, t, mesh,
+                 have_constant_speed(equations), equations,
+                 solver, cache)
+
+    return cfl_number
 end
 
 # General case for a single semidiscretization

@@ -60,12 +60,12 @@ function compute_PERK2_butcher_tableau(num_stages, eig_vals, tspan,
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
 
-    return a_matrix, c
+    return a_matrix, c, dt_opt
 end
 
 function compute_PERK2_butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
                                        bS, c_end)
-
+    #TODO: allow user to give dt_opt
     # c Vector form Butcher Tableau (defines timestep per stage)
     c = zeros(num_stages)
     for k in 2:num_stages
@@ -113,15 +113,17 @@ mutable struct PERK2 <: PERKSingle
     b1::Float64
     bS::Float64
     c_end::Float64
+    dt_opt::Float64
 
     # Constructor that reads the coefficients from a file
-    function PERK2(num_stages, base_path_mon_coeffs::AbstractString, bS = 1.0,
+    function PERK2(num_stages, base_path_mon_coeffs::AbstractString, dt_opt, bS = 1.0,
                    c_end = 0.5)
         newPERK2 = new(num_stages)
 
         newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
                                                                       base_path_mon_coeffs,
                                                                       bS, c_end)
+        newPERK2.dt_opt = dt_opt
 
         newPERK2.b1 = one(bS) - bS
         newPERK2.bS = bS
@@ -135,7 +137,7 @@ mutable struct PERK2 <: PERKSingle
         eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK2 = new(num_stages)
 
-        newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
+        newPERK2.a_matrix, newPERK2.c, newPERK2.dt_opt = compute_PERK2_butcher_tableau(num_stages,
                                                                       eig_vals, tspan,
                                                                       bS, c_end)
 
@@ -150,7 +152,7 @@ mutable struct PERK2 <: PERKSingle
                    c_end = 0.5)
         newPERK2 = new(num_stages)
 
-        newPERK2.a_matrix, newPERK2.c = compute_PERK2_butcher_tableau(num_stages,
+        newPERK2.a_matrix, newPERK2.c, newPERK2.dt_opt = compute_PERK2_butcher_tableau(num_stages,
                                                                       eig_vals, tspan,
                                                                       bS, c_end)
 

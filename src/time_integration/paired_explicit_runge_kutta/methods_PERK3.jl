@@ -120,7 +120,7 @@ function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
     a_matrix[:, 1] -= a_unknown[3:end]
     a_matrix[:, 2] = a_unknown[3:end]
 
-    return a_matrix, c
+    return a_matrix, c, dt_opt
 end
 
 function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
@@ -175,15 +175,17 @@ mutable struct PERK3 <: PERKSingle
 
     a_matrix::Matrix{Float64}
     c::Vector{Float64}
+    dt_opt::Float64
 
     # Constructor for previously computed A Coeffs
-    function PERK3(num_stages, base_path_mon_coeffs::AbstractString,
+    function PERK3(num_stages, base_path_mon_coeffs::AbstractString, dt_opt,
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
         newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages,
                                                                       base_path_mon_coeffs,
                                                                       c_s2)
+        newPERK3.dt_opt = dt_opt
 
         return newPERK3
     end
@@ -194,7 +196,7 @@ mutable struct PERK3 <: PERKSingle
         eig_vals = eigvals(jacobian_ad_forward(semi))
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages, tspan,
+        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
 
@@ -206,7 +208,7 @@ mutable struct PERK3 <: PERKSingle
                    c_s2 = 1.0)
         newPERK3 = new(num_stages)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages, tspan,
+        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages, tspan,
                                                                       eig_vals,
                                                                       c_s2)
         return newPERK3
