@@ -35,7 +35,9 @@ analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 
 # With an optimized integrator, cfl number is calculated and don't need to be input
-stepsize_callback = StepsizeCallback()
+# TODO: Warisa: I'm not so sure if this comment is correct.
+# However, if the equation is known to not have constant speed, user should input cfl number
+stepsize_callback = StepsizeCallback(cfl = 3.0)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
@@ -52,3 +54,4 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
+analysis_callback(sol)

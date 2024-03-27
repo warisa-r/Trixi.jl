@@ -67,8 +67,8 @@ end
 
         # If the integrator is an optimized integrator, calculate cfl number instead of using the input cfl number
         if isa(integrator.alg, PERK2) || isa(integrator.alg, PERK3)
-            cfl_number = calculate_cfl_number(u_ode, t, integrator.alg.dt_opt, semi)
-            println("cfl number: $cfl_number")
+            cfl_number = calculate_cfl_number(u_ode, t, integrator.alg.dt_opt, semi,
+                                              stepsize_callback)
         else
             println(integrator.alg)
             @unpack cfl_number = stepsize_callback
@@ -89,16 +89,21 @@ end
 end
 
 # Case for a single semidiscretization when PERK integrator is called
-function calculate_cfl_number(u_ode, t, dt_opt, semi::AbstractSemidiscretization)
+function calculate_cfl_number(u_ode, t, dt_opt, semi::AbstractSemidiscretization,
+                              input_cfl_number)
     mesh, equations, solver, cache = mesh_equations_solver_cache(semi)
     u = wrap_array(u_ode, mesh, equations, solver, cache)
-    max_dt_variable = max_dt(u, t, mesh, have_constant_speed(equations), equations,
-                             solver, cache)
-    # For debugging purpose, especially for PERK3
-    println("max_dt $max_dt_variable")
-    cfl_number = dt_opt / max_dt(u, t, mesh,
-                        have_constant_speed(equations), equations,
-                        solver, cache)
+    max_dt_value = max_dt(u, t, mesh, have_constant_speed(equations), equations,
+                          solver, cache)
+
+    # If the value of max_dt from calculation becomes problematic, use the value user input instead
+    if max_dt_value == 0.0 || isinf(max_dt_value)
+        # Show where max_dt approaches zero or infinity
+        println("max_dt: $max_dt_value at timestep $t")
+        @unpack cfl_number = input_cfl_number
+    else
+        cfl_number = dt_opt / max_dt_value
+    end
 
     return cfl_number
 end
