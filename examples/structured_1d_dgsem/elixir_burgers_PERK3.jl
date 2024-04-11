@@ -37,7 +37,7 @@ alive_callback = AliveCallback(analysis_interval = analysis_interval)
 # With an optimized integrator, cfl number is calculated and don't need to be input
 # TODO: Warisa: I'm not so sure if this comment is correct.
 # However, if the equation is known to not have constant speed, user should input cfl number
-stepsize_callback = StepsizeCallback(cfl = 3.0)
+stepsize_callback = StepsizeCallback()
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,

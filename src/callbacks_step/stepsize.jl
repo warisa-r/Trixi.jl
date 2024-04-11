@@ -67,16 +67,16 @@ end
 
         # If the integrator is an optimized integrator, calculate cfl number instead of using the input cfl number
         if isa(integrator.alg, PERK2) || isa(integrator.alg, PERK3)
-            cfl_number = calculate_cfl_number(u_ode, t, integrator.alg.dt_opt, semi,
-                                              stepsize_callback)
+            dt = @trixi_timeit timer() "calculate dt" integrator.alg.dt_opt
         else
             println(integrator.alg)
             @unpack cfl_number = stepsize_callback
+            # Dispatch based on semidiscretization
+            dt = @trixi_timeit timer() "calculate dt" calculate_dt(u_ode, t, cfl_number,
+                                                                   semi)
         end
 
-        # Dispatch based on semidiscretization
-        dt = @trixi_timeit timer() "calculate dt" calculate_dt(u_ode, t, cfl_number,
-                                                               semi)
+        
 
         set_proposed_dt!(integrator, dt)
         integrator.opts.dtmax = dt
