@@ -8,8 +8,8 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
-# Initialize Butcher array abscissae c for PERK3 based on SSPRK33 base method
-function c_PERK3_SSP33(num_stages, c_s2)
+# Initialize Butcher array abscissae c for PairedExplicitRK3 based on SSPRK33 base method
+function compute_c_coeff_SSP33(num_stages, c_s2)
     c = zeros(num_stages)
 
     # Last timesteps as for SSPRK33
@@ -24,12 +24,12 @@ function c_PERK3_SSP33(num_stages, c_s2)
     return c
 end
 
-function PERK3_Butcher_tableau_objective_function(a_unknown, num_stages,
+function PairedExplicitRK3_Butcher_tableau_objective_function(a_unknown, num_stages,
                                                   num_stage_evals,
                                                   mon_coeffs, c_s2)
-    c_ts = c_PERK3_SSP33(num_stages, c_s2) # ts = timestep
+    c_ts = compute_c_coeff_SSP33(num_stages, c_s2) # ts = timestep
 
-    # EQuality Constraint array that ensures that the stability polynomial computed from 
+    # Equality Constraint array that ensures that the stability polynomial computed from 
     # the to-be-constructed Butcher-Tableau matches the monomial coefficients of the 
     # optimized stability polynomial.
     c_eq = zeros(num_stage_evals - 2) # Add equality constraint that c_s2 is equal to 1
@@ -62,10 +62,10 @@ function PERK3_Butcher_tableau_objective_function(a_unknown, num_stages,
     return c_eq
 end
 
-function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{ComplexF64},
+function compute_PairedExplicitRK3_butcher_tableau(num_stages, tspan, eig_vals::Vector{ComplexF64},
                                        c_s2)
     # Initialize array of c
-    c = c_PERK3_SSP33(num_stages, c_s2)
+    c = compute_c_coeff_SSP33(num_stages, c_s2)
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stages)
@@ -88,7 +88,7 @@ function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
 
         # Define the objective_function
         function objective_function(x)
-            return PERK3_Butcher_tableau_objective_function(x, num_stages, num_stages,
+            return PairedExplicitRK3_Butcher_tableau_objective_function(x, num_stages, num_stages,
                                                             mon_coeffs, c_s2)
         end
 
@@ -123,11 +123,11 @@ function compute_PERK3_Butcher_tableau(num_stages, tspan, eig_vals::Vector{Compl
     return a_matrix, c, dt_opt
 end
 
-function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
+function compute_PairedExplicitRK3_butcher_tableau(num_stages, base_path_mon_coeffs::AbstractString,
                                        c_s2)
 
     # Initialize array of c
-    c = c_PERK3_SSP33(num_stages, c_s2)
+    c = compute_c_coeff_SSP33(num_stages, c_s2)
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     coeffs_max = num_stages - 2
@@ -135,6 +135,7 @@ function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
     a_matrix = zeros(coeffs_max, 2)
     a_matrix[:, 1] = c[3:end]
 
+    # TODO: update this to work with CI mktempdir()
     path_mon_coeffs = base_path_mon_coeffs * "a_" * string(num_stages) * "_" *
                       string(num_stages) * ".txt"
     @assert isfile(path_mon_coeffs) "Couldn't find file"
@@ -153,7 +154,7 @@ function compute_PERK3_Butcher_tableau(num_stages, base_path_mon_coeffs::Abstrac
 end
 
 """
-    PERK3()
+    PairedExplicitRK3()
 
 The following structures and methods provide a implementation of
 the third-order paired explicit Runge-Kutta method
@@ -170,59 +171,55 @@ While the changes to SSPRK33 base-scheme are described in
 Multirate Time-Integration based on Dynamic ODE Partitioning through Adaptively Refined Meshes for Compressible Fluid Dynamics
 [Arxiv: 10.48550/arXiv.2403.05144](https://doi.org/10.48550/arXiv.2403.05144)
 """
-mutable struct PERK3 <: PERKSingle
+mutable struct PairedExplicitRK3 <: PairedExplicitRKSingle
     const num_stages::Int
 
     a_matrix::Matrix{Float64}
     c::Vector{Float64}
     dt_opt::Float64
+end # struct PairedExplicitRK3
 
-    # Constructor for previously computed A Coeffs
-    function PERK3(num_stages, base_path_mon_coeffs::AbstractString, dt_opt,
-                   c_s2 = 1.0)
-        newPERK3 = new(num_stages)
+ # Constructor for previously computed A Coeffs
+ function PairedExplicitRK3(num_stages, base_path_mon_coeffs::AbstractString, dt_opt,
+    c_s2 = 1.0)
 
-        newPERK3.a_matrix, newPERK3.c = compute_PERK3_Butcher_tableau(num_stages,
-                                                                      base_path_mon_coeffs,
-                                                                      c_s2)
-        newPERK3.dt_opt = dt_opt
+    a_matrix, c = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+                                                        base_path_mon_coeffs,
+                                                        c_s2)
 
-        return newPERK3
-    end
+    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
+end
 
-    # Constructor that computes Butcher matrix A coefficients from a semidiscretization
-    function PERK3(num_stages, tspan, semi::AbstractSemidiscretization,
-                   c_s2 = 1.0)
-        eig_vals = eigvals(jacobian_ad_forward(semi))
-        newPERK3 = new(num_stages)
+# Constructor that computes Butcher matrix A coefficients from a semidiscretization
+function PairedExplicitRK3(num_stages, tspan, semi::AbstractSemidiscretization,
+    c_s2 = 1.0)
+    eig_vals = eigvals(jacobian_ad_forward(semi))
 
-        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages,
-                                                                                       tspan,
-                                                                                       eig_vals,
-                                                                                       c_s2)
+    a_matrix, c, dt_opt = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+                                                                            tspan,
+                                                                            eig_vals,
+                                                                            c_s2)
 
-        return newPERK3
-    end
+    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
+end
 
-    # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-    function PERK3(num_stages, tspan, eig_vals::Vector{ComplexF64},
-                   c_s2 = 1.0)
-        newPERK3 = new(num_stages)
+# Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
+function PairedExplicitRK3(num_stages, tspan, eig_vals::Vector{ComplexF64},
+    c_s2 = 1.0)
 
-        newPERK3.a_matrix, newPERK3.c, newPERK3.dt_opt = compute_PERK3_Butcher_tableau(num_stages,
-                                                                                       tspan,
-                                                                                       eig_vals,
-                                                                                       c_s2)
-        return newPERK3
-    end
-end # struct PERK3
+    a_matrix, c, dt_opt = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+                                                                            tspan,
+                                                                            eig_vals,
+                                                                            c_s2)
+    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
+end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.
-mutable struct PERK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
-                               PERKIntegratorOptions} <: PERKSingleIntegrator
+mutable struct PairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
+                               PairedExplicitRKIntegratorOptions} <: PairedExplicitRKSingleIntegrator
     u::uType
     du::uType
     u_tmp::uType
@@ -234,22 +231,22 @@ mutable struct PERK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
     sol::Sol # faked
     f::F
     alg::Alg # This is our own class written above; Abbreviation for ALGorithm
-    opts::PERKIntegratorOptions
+    opts::PairedExplicitRKIntegratorOptions
     finalstep::Bool # added for convenience
-    # PERK stages:
+    # PairedExplicitRK stages:
     k1::uType
     k_higher::uType
-    k_s1::uType # Required for custom third order version of PERK3
+    k_s1::uType # Required for custom third order version of PairedExplicitRK3
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::PERK3;
+function solve(ode::ODEProblem, alg::PairedExplicitRK3;
                dt, callback = nothing, kwargs...)
     u0 = copy(ode.u0)
     du = zero(u0)
     u_tmp = zero(u0)
 
-    # PERK stages
+    # PairedExplicitRK stages
     k1 = zero(u0)
     k_higher = zero(u0)
     k_s1 = zero(u0)
@@ -257,9 +254,9 @@ function solve(ode::ODEProblem, alg::PERK3;
     t0 = first(ode.tspan)
     iter = 0
 
-    integrator = PERK3Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
+    integrator = PairedExplicitRK3Integrator(u0, du, u_tmp, t0, dt, zero(dt), iter, ode.p,
                                  (prob = ode,), ode.f, alg,
-                                 PERKIntegratorOptions(callback, ode.tspan; kwargs...),
+                                 PairedExplicitRKIntegratorOptions(callback, ode.tspan; kwargs...),
                                  false,
                                  k1, k_higher, k_s1)
 
@@ -278,7 +275,7 @@ function solve(ode::ODEProblem, alg::PERK3;
     solve!(integrator)
 end
 
-function solve!(integrator::PERK3Integrator)
+function solve!(integrator::PairedExplicitRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -351,11 +348,11 @@ function solve!(integrator::PERK3Integrator)
             end
 
             @threaded for i in eachindex(integrator.u)
-                # "Own" PERK based on SSPRK33
+                # "Own" PairedExplicitRK based on SSPRK33
                 integrator.u[i] += (integrator.k1[i] + integrator.k_s1[i] +
                                     4.0 * integrator.k_higher[i]) / 6.0
             end
-        end # PERK step timer
+        end # PairedExplicitRK step timer
 
         integrator.iter += 1
         integrator.t += integrator.dt
@@ -382,7 +379,7 @@ function solve!(integrator::PERK3Integrator)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::PERK3Integrator, new_size)
+function Base.resize!(integrator::PairedExplicitRK3Integrator, new_size)
     resize!(integrator.u, new_size)
     resize!(integrator.du, new_size)
     resize!(integrator.u_tmp, new_size)
