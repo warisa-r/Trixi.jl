@@ -47,8 +47,7 @@ alive_callback = AliveCallback(alive_interval = analysis_interval)
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
-                        analysis_callback,
-                        stepsize_callback)
+                        analysis_callback)
 
 ###############################################################################
 # run the simulation
@@ -59,8 +58,12 @@ callbacks = CallbackSet(summary_callback,
 ode_algorithm = Trixi.PairedExplicitRK2(6, tspan, semi)
 
 sol = Trixi.solve(ode, ode_algorithm,
-                  dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+                  dt = 2.0e-3, # solve needs some value here but it will be overwritten by the stepsize_callback
                   save_everystep = false, callback = callbacks);
 
 # Print the timer summary
 summary_callback()
+
+#TODO: delete this and add a test
+#TODO: formatting the new PERK2
+analysis_callback(sol)
