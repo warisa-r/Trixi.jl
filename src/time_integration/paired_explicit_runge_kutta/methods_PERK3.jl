@@ -112,7 +112,7 @@ function compute_PairedExplicitRK3_butcher_tableau(num_stages, tspan,
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    return a_matrix, c
+    return a_matrix, c, dt_opt
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -184,6 +184,7 @@ mutable struct PairedExplicitRK3 <: AbstractPairedExplicitRKSingle
 
     a_matrix::Matrix{Float64}
     c::Vector{Float64}
+    dt_opt::Float64
 end # struct PairedExplicitRK3
 
 # Constructor for previously computed A Coeffs
@@ -193,7 +194,7 @@ function PairedExplicitRK3(num_stages, base_path_a_coeffs::AbstractString;
                                                             base_path_a_coeffs;
                                                             cS2)
 
-    return PairedExplicitRK3(num_stages, a_matrix, c)
+    return PairedExplicitRK3(num_stages, a_matrix, c, 0.42) # TODO! This is a placeholder value
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
@@ -207,11 +208,11 @@ end
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
 function PairedExplicitRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1)
-    a_matrix, c = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+    a_matrix, c, dt_opt = compute_PairedExplicitRK3_butcher_tableau(num_stages,
                                                             tspan,
                                                             eig_vals;
                                                             verbose, cS2)
-    return PairedExplicitRK3(num_stages, a_matrix, c)
+    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
