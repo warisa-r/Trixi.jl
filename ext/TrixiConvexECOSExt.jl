@@ -54,6 +54,10 @@ function stability_polynomials!(pnoms, consistency_order, num_stage_evals,
         end
     end
 
+    if consistency_order == num_stage_evals
+        return maximum(abs.(pnoms))
+    end
+
     # Contribution from free coefficients
     for k in (consistency_order + 1):num_stage_evals
         pnoms += gamma[k - consistency_order] * normalized_powered_eigvals_scaled[:, k]
@@ -118,27 +122,36 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
             end
         end
 
-        # Use last optimal values for gamma in (potentially) next iteration
-        problem = minimize(stability_polynomials!(pnoms, consistency_order,
-                                                  num_stage_evals,
-                                                  normalized_powered_eigvals_scaled,
-                                                  gamma))
+        stability_polynomials = stability_polynomials!(pnoms, consistency_order,
+                                                       num_stage_evals,
+                                                       normalized_powered_eigvals_scaled,
+                                                       gamma)
 
-        solve!(problem,
-               # Parameters taken from default values for EiCOS
-               MOI.OptimizerWithAttributes(Optimizer, "gamma" => 0.99,
-                                           "delta" => 2e-7,
-                                           "feastol" => 1e-9,
-                                           "abstol" => 1e-9,
-                                           "reltol" => 1e-9,
-                                           "feastol_inacc" => 1e-4,
-                                           "abstol_inacc" => 5e-5,
-                                           "reltol_inacc" => 5e-5,
-                                           "nitref" => 9,
-                                           "maxit" => 100,
-                                           "verbose" => 3); silent = true)
+        if num_stage_evals != consistency_order
 
-        abs_p = problem.optval
+            # Use last optimal values for gamma in (potentially) next iteration
+            problem = minimize(stability_polynomials)
+
+            solve!(problem,
+                # Parameters taken from default values for EiCOS
+                MOI.OptimizerWithAttributes(Optimizer, "gamma" => 0.99,
+                                            "delta" => 2e-7,
+                                            "feastol" => 1e-9,
+                                            "abstol" => 1e-9,
+                                            "reltol" => 1e-9,
+                                            "feastol_inacc" => 1e-4,
+                                            "abstol_inacc" => 5e-5,
+                                            "reltol_inacc" => 5e-5,
+                                            "nitref" => 9,
+                                            "maxit" => 100,
+                                            "verbose" => 3); silent = true)
+
+            abs_p = problem.optval
+            gamma_opt = evaluate(gamma)
+        else
+            abs_p = stability_polynomials
+            gamma_opt = []
+        end
 
         if abs_p < 1
             dtmin = dt
@@ -151,7 +164,13 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
         println("Concluded stability polynomial optimization \n")
     end
 
-    return evaluate(gamma), dt
+    
+
+    if isa(gamma_opt, Number)
+        gamma_opt = [gamma_opt]
+    end
+
+    return gamma_opt, dt
 end
 end # @muladd
 
