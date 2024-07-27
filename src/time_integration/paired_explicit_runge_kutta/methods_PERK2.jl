@@ -73,9 +73,15 @@ end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 2
 # using provided monomial coefficients file
-function compute_PairedExplicitRK2_butcher_tableau(num_stages,
-                                                   base_path_monomial_coeffs::AbstractString,
+function compute_PairedExplicitRK2_butcher_tableau(path_monomial_coeffs::AbstractString,
                                                    bS, cS)
+
+    @assert isfile(path_monomial_coeffs) "Couldn't find file"
+    monomial_coeffs = readdlm(path_monomial_coeffs, Float64)
+    num_monomial_coeffs = size(monomial_coeffs, 1)
+
+    # + 2 since the first entry of A is always zero (explicit method) and the second is given by c_2 (consistency)
+    num_stages = num_monomial_coeffs + 2
 
     # c Vector form Butcher Tableau (defines timestep per stage)
     c = zeros(num_stages)
@@ -84,40 +90,28 @@ function compute_PairedExplicitRK2_butcher_tableau(num_stages,
     end
     stage_scaling_factors = bS * reverse(c[2:(end - 1)])
 
-    # - 2 Since first entry of A is always zero (explicit method) and second is given by c_2 (consistency)
-    coeffs_max = num_stages - 2
-
     a_matrix = zeros(coeffs_max, 2)
     a_matrix[:, 1] = c[3:end]
 
-    path_monomial_coeffs = joinpath(base_path_monomial_coeffs,
-                                    "gamma_" * string(num_stages) * ".txt")
-
-    @assert isfile(path_monomial_coeffs) "Couldn't find file"
-    monomial_coeffs = readdlm(path_monomial_coeffs, Float64)
-    num_monomial_coeffs = size(monomial_coeffs, 1)
-
-    @assert num_monomial_coeffs == coeffs_max
     A = compute_a_coeffs(num_stages, stage_scaling_factors, monomial_coeffs)
 
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
 
-    return a_matrix, c
+    return num_stages, a_matrix, c
 end
 
 @doc raw"""
-    PairedExplicitRK2(num_stages, base_path_monomial_coeffs::AbstractString,
+    PairedExplicitRK2(path_monomial_coeffs::AbstractString,
                       bS = 1.0, cS = 0.5)
     PairedExplicitRK2(num_stages, tspan, semi::AbstractSemidiscretization;
                       verbose = false, bS = 1.0, cS = 0.5)
     PairedExplicitRK2(num_stages, tspan, eig_vals::Vector{ComplexF64};
                       verbose = false, bS = 1.0, cS = 0.5)
     Parameters:
+    - `path_monomial_coeffs` (`AbstractString`): Path to a file containing monomial coefficients of the stability polynomial
+       of PERK method.
     - `num_stages` (`Int`): Number of stages in the PERK method.
-    - `base_path_monomial_coeffs` (`AbstractString`): Path to a file containing 
-      monomial coefficients of the stability polynomial of PERK method.
-      The coefficients should be stored in a text file at `joinpath(base_path_monomial_coeffs, "gamma_$(num_stages).txt")` and separated by line breaks.
     - `tspan`: Time span of the simulation.
     - `semi` (`AbstractSemidiscretization`): Semidiscretization setup.
     -  `eig_vals` (`Vector{ComplexF64}`): Eigenvalues of the Jacobian of the right-hand side (rhs) of the ODEProblem after the
@@ -147,9 +141,9 @@ mutable struct PairedExplicitRK2 <: AbstractPairedExplicitRKSingle
 end # struct PairedExplicitRK2
 
 # Constructor that reads the coefficients from a file
-function PairedExplicitRK2(num_stages, base_path_monomial_coeffs::AbstractString,
+function PairedExplicitRK2(path_monomial_coeffs::AbstractString,
                            bS = 1.0, cS = 0.5)
-    a_matrix, c = compute_PairedExplicitRK2_butcher_tableau(num_stages,
+    num_stages, a_matrix, c = compute_PairedExplicitRK2_butcher_tableau(num_stages,
                                                             base_path_monomial_coeffs,
                                                             bS, cS)
 
