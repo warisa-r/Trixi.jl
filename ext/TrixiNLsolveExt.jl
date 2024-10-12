@@ -75,7 +75,7 @@ end
 # Hairer, Wanner: Solving Ordinary Differential Equations 2
 function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, monomial_coeffs,
                                                c_s2, c;
-                                               verbose, max_iter = 100000)
+                                               verbose, max_iter = 100000) #TODO: Add an argument of num_stage_evals here
 
     # Define the objective_function
     function objective_function!(c_eq, x)
