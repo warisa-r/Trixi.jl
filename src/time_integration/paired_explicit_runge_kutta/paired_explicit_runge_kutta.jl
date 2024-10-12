@@ -8,6 +8,7 @@
 # Basic implementation of the second-order paired explicit Runge-Kutta (PERK) method
 include("methods_PERK2.jl")
 include("methods_PERK3.jl")
+include("methods_embedded_PERK3.jl")
 # Define all of the functions necessary for polynomial optimizations
 include("polynomial_optimizer.jl")
 
@@ -15,4 +16,5 @@ include("polynomial_optimizer.jl")
 # such that hey can be exported from Trixi.jl and extended in the TrixiConvexECOSExt package
 # extension or by the NLsolve-specific code loaded by Requires.jl
 function solve_a_butcher_coeffs_unknown! end
+function solve_b_butcher_coeffs_unknown end
 end # @muladd

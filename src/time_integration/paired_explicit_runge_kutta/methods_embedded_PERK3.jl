@@ -9,7 +9,7 @@ using DelimitedFiles: readdlm
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
-function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, tspan,
+function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, tspan,
                                                    eig_vals::Vector{ComplexF64};
                                                    verbose = false, cS2)
     # Initialize array of c
@@ -39,7 +39,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, tspan,
         # Solve the nonlinear system of equations from monomial coefficient and
         # Butcher array abscissae c to find Butcher matrix A
         # This function is extended in TrixiNLsolveExt.jl
-        a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages,
+        a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_evals, #TODO: We have to change this in TrixiNLsolveExt.jl (add one more argument to it) but for PERK3 let num_stages = num_stages_evals -> in the PERK3 file
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
     end
@@ -49,7 +49,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, tspan,
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    return a_matrix, c, dt_opt
+    b_opt = solve_b_butcher_coeffs_unknown(num_stages, a_matrix, c, dt_opt,
+                                           eig_vals; verbose) #TODO: define and overload this function in TrixiConvexClarabelExt
+
+    return a_matrix, c, b_opt, dt_opt
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -64,6 +67,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     a_coeffs_max = num_stages - 2
 
+    #TODO: Read the values from the file
     b = zeros(num_stages)
 
     a_matrix = zeros(a_coeffs_max, 2)
@@ -131,6 +135,7 @@ end # struct EmbeddedPairedRK3
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals, base_path_a_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
+    #TODO: Update this constructor to have num_stage_evals as well
     a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                             base_path_a_coeffs;
                                                             cS2)
@@ -149,7 +154,7 @@ end
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
                                                                     tspan,
                                                                     eig_vals;
                                                                     verbose, cS2)
