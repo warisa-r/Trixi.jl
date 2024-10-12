@@ -7,26 +7,9 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
-# Initialize Butcher array abscissae c for PairedExplicitRK3 based on SSPRK33 base method
-function compute_c_coeffs(num_stages, cS2)
-    c = zeros(num_stages)
-
-    # Last timesteps as for SSPRK33, see motivation in Section 3.3 of
-    # https://doi.org/10.1016/j.jcp.2024.113223
-    c[num_stages - 1] = 1.0f0
-    c[num_stages] = 0.5f0
-
-    # Linear increasing timestep for remainder
-    for i in 2:(num_stages - 2)
-        c[i] = cS2 * (i - 1) / (num_stages - 3)
-    end
-
-    return c
-end
-
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
-function compute_PairedExplicitRK3_butcher_tableau(num_stages, tspan,
+function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, tspan,
                                                    eig_vals::Vector{ComplexF64};
                                                    verbose = false, cS2)
     # Initialize array of c
@@ -71,7 +54,7 @@ end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using provided values of coefficients a in A-matrix of Butcher tableau
-function compute_PairedExplicitRK3_butcher_tableau(num_stages,
+function compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                    base_path_a_coeffs::AbstractString;
                                                    cS2)
 
@@ -80,6 +63,8 @@ function compute_PairedExplicitRK3_butcher_tableau(num_stages,
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
     a_coeffs_max = num_stages - 2
+
+    b = zeros(num_stages)
 
     a_matrix = zeros(a_coeffs_max, 2)
     a_matrix[:, 1] = c[3:end]
@@ -96,15 +81,15 @@ function compute_PairedExplicitRK3_butcher_tableau(num_stages,
     a_matrix[:, 1] -= a_coeffs
     a_matrix[:, 2] = a_coeffs
 
-    return a_matrix, c
+    return a_matrix, b, c
 end
 
 @doc raw"""
-    PairedExplicitRK3(num_stages, base_path_a_coeffs::AbstractString, dt_opt;
+    EmbeddedPairedRK3(num_stages, base_path_a_coeffs::AbstractString, dt_opt;
                       cS2 = 1.0f0)
-    PairedExplicitRK3(num_stages, tspan, semi::AbstractSemidiscretization;
+    EmbeddedPairedRK3(num_stages, tspan, semi::AbstractSemidiscretization;
                       verbose = false, cS2 = 1.0f0)
-    PairedExplicitRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
+    EmbeddedPairedRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
                       verbose = false, cS2 = 1.0f0)
 
     Parameters:
@@ -133,47 +118,49 @@ While the changes to SSPRK33 base-scheme are described in
 Multirate Time-Integration based on Dynamic ODE Partitioning through Adaptively Refined Meshes for Compressible Fluid Dynamics
 [DOI: 10.1016/j.jcp.2024.113223](https://doi.org/10.1016/j.jcp.2024.113223)
 """
-mutable struct PairedExplicitRK3 <: AbstractPairedExplicitRKSingle
+mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     const num_stages::Int # S
+    const num_stage_evals::Int # e
 
     a_matrix::Matrix{Float64}
+    b::Vector{Float64}
     c::Vector{Float64}
     dt_opt::Float64
-end # struct PairedExplicitRK3
+end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
-function PairedExplicitRK3(num_stages, base_path_a_coeffs::AbstractString, dt_opt;
+function EmbeddedPairedRK3(num_stages, num_stage_evals, base_path_a_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
-    a_matrix, c = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                             base_path_a_coeffs;
                                                             cS2)
 
-    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
-function PairedExplicitRK3(num_stages, tspan, semi::AbstractSemidiscretization;
+function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, semi::AbstractSemidiscretization;
                            verbose = false, cS2 = 1.0f0)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
-    return PairedExplicitRK3(num_stages, tspan, eig_vals; verbose, cS2)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-function PairedExplicitRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
+function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, c, dt_opt = compute_PairedExplicitRK3_butcher_tableau(num_stages,
+    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                     tspan,
                                                                     eig_vals;
                                                                     verbose, cS2)
-    return PairedExplicitRK3(num_stages, a_matrix, c, dt_opt)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.jl.
-mutable struct PairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
+mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
                                            PairedExplicitRKOptions} <:
                AbstractPairedExplicitRKSingleIntegrator
     u::uType
@@ -197,7 +184,7 @@ mutable struct PairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     k_higher::uType
 end
 
-function init(ode::ODEProblem, alg::PairedExplicitRK3;
+function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
               dt, callback = nothing, kwargs...)
     u0 = copy(ode.u0)
     du = zero(u0)
@@ -205,13 +192,13 @@ function init(ode::ODEProblem, alg::PairedExplicitRK3;
 
     # PairedExplicitRK stages
     k1 = zero(u0)
-    k_higher = zero(u0)
+    k_higher = zero(u0, alg.num_stage_evals - 2)
 
     t0 = first(ode.tspan)
     tdir = sign(ode.tspan[end] - ode.tspan[1])
     iter = 0
 
-    integrator = PairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
+    integrator = EmbeddedPairedRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
                                              ode.p,
                                              (prob = ode,), ode.f, alg,
                                              PairedExplicitRKOptions(callback,
@@ -236,7 +223,7 @@ function init(ode::ODEProblem, alg::PairedExplicitRK3;
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::PairedExplicitRK3;
+function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
                dt, callback = nothing, kwargs...)
     integrator = init(ode, alg, dt = dt, callback = callback; kwargs...)
 
@@ -244,7 +231,7 @@ function solve(ode::ODEProblem, alg::PairedExplicitRK3;
     solve!(integrator)
 end
 
-function solve!(integrator::PairedExplicitRK3Integrator)
+function solve!(integrator::EmbeddedPairedRK3Integrator)
     @unpack prob = integrator.sol
 
     integrator.finalstep = false
@@ -258,7 +245,7 @@ function solve!(integrator::PairedExplicitRK3Integrator)
                                   integrator.sol.prob)
 end
 
-function step!(integrator::PairedExplicitRK3Integrator)
+function step!(integrator::EmbeddedPairedRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -297,8 +284,8 @@ function step!(integrator::PairedExplicitRK3Integrator)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
         end
 
-        # Higher stages
-        for stage in 3:(alg.num_stages - 1)
+        # Higher stages where the weight of b in the butcher tableau is zero
+        for stage in 3:(alg.num_stages - alg.num_stage_evals + 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
@@ -316,6 +303,31 @@ function step!(integrator::PairedExplicitRK3Integrator)
             end
         end
 
+        # Higher stages where the weight of b in the butcher tableau is non-zero
+        for stage in (alg.num_stages - alg.num_stage_evals + 2):(alg.num_stages -1)
+            # Construct current state
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_tmp[i] = integrator.u[i] +
+                                      alg.a_matrix[stage - 2, 1] *
+                                      integrator.k1[i] +
+                                      alg.a_matrix[stage - 2, 2] *
+                                      integrator.k_higher[i]
+            end
+
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                         integrator.t + alg.c[stage] * integrator.dt)
+
+            @threaded for i in eachindex(integrator.du)
+                integrator.k_higher[i] = integrator.du[i] * integrator.dt
+            end
+
+            @threaded for i in eachindex(integrator.u)
+                integrator.u[i] += integrator.k_higher[i] * alg.b[stage - alg.num_stages + alg.num_stage_evals - 1]
+            end
+        end 
+
+        #TODO: Check if commenting this is equal to not commenting
+        #=
         # Last stage
         @threaded for i in eachindex(integrator.du)
             integrator.u_tmp[i] = integrator.u[i] +
@@ -324,16 +336,14 @@ function step!(integrator::PairedExplicitRK3Integrator)
                                   alg.a_matrix[alg.num_stages - 2, 2] *
                                   integrator.k_higher[i]
         end
+        
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
                      integrator.t + alg.c[alg.num_stages] * integrator.dt)
-
+        =#
         @threaded for i in eachindex(integrator.u)
-            # "Own" PairedExplicitRK based on SSPRK33.
-            # Note that 'k_higher' carries the values of K_{S-1}
-            # and that we construct 'K_S' "in-place" from 'integrator.du'
-            integrator.u[i] += (integrator.k1[i] + integrator.k_higher[i] +
-                                4.0 * integrator.du[i] * integrator.dt) / 6.0
+            # add the contribution of the first stage
+            integrator.u[i] += (1 - sum(alg.b)) * integrator.k1[i]
         end
     end # PairedExplicitRK step timer
 
@@ -357,7 +367,7 @@ function step!(integrator::PairedExplicitRK3Integrator)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::PairedExplicitRK3Integrator, new_size)
+function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
     resize!(integrator.u, new_size)
     resize!(integrator.du, new_size)
     resize!(integrator.u_tmp, new_size)
