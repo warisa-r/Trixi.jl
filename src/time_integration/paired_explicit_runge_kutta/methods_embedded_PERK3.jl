@@ -50,8 +50,11 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    b_opt = solve_b_butcher_coeffs_unknown(num_stages, a_matrix, c, dt_opt,
-                                           eig_vals; verbose) #TODO: define and overload this function in TrixiConvexClarabelExt
+    b_opt = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
+                                           num_stages, num_stage_evals,
+                                           num_stages_embedded,
+                                           num_stage_evals_embedded,
+                                           a_unknown, c, dtmax, dteps)
 
     return a_matrix, c, b_opt, dt_opt
 end
