@@ -39,7 +39,8 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         # Solve the nonlinear system of equations from monomial coefficient and
         # Butcher array abscissae c to find Butcher matrix A
         # This function is extended in TrixiNLsolveExt.jl
-        a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_evals, #TODO: We have to change this in TrixiNLsolveExt.jl (add one more argument to it) but for PERK3 let num_stages = num_stages_evals -> in the PERK3 file
+        a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages,
+                                                    num_stage_evals,
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
     end
@@ -133,18 +134,20 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
-function EmbeddedPairedRK3(num_stages, num_stage_evals, base_path_a_coeffs::AbstractString, dt_opt;
+function EmbeddedPairedRK3(num_stages, num_stage_evals,
+                           base_path_a_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
     #TODO: Update this constructor to have num_stage_evals as well
     a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                            base_path_a_coeffs;
-                                                            cS2)
+                                                               base_path_a_coeffs;
+                                                               cS2)
 
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
-function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, semi::AbstractSemidiscretization;
+function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
+                           semi::AbstractSemidiscretization;
                            verbose = false, cS2 = 1.0f0)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
@@ -152,12 +155,14 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, semi::AbstractSem
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals::Vector{ComplexF64};
+function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
+                           eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
-                                                                    tspan,
-                                                                    eig_vals;
-                                                                    verbose, cS2)
+    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+                                                                       num_stage_evals,
+                                                                       tspan,
+                                                                       eig_vals;
+                                                                       verbose, cS2)
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
 end
 
@@ -309,7 +314,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages where the weight of b in the butcher tableau is non-zero
-        for stage in (alg.num_stages - alg.num_stage_evals + 2):(alg.num_stages -1)
+        for stage in (alg.num_stages - alg.num_stage_evals + 2):(alg.num_stages - 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
@@ -327,9 +332,10 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             end
 
             @threaded for i in eachindex(integrator.u)
-                integrator.u[i] += integrator.k_higher[i] * alg.b[stage - alg.num_stages + alg.num_stage_evals - 1]
+                integrator.u[i] += integrator.k_higher[i] *
+                                   alg.b[stage - alg.num_stages + alg.num_stage_evals - 1]
             end
-        end 
+        end
 
         #TODO: Check if commenting this is equal to not commenting
         #=
@@ -341,7 +347,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
                                   alg.a_matrix[alg.num_stages - 2, 2] *
                                   integrator.k_higher[i]
         end
-        
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
                      integrator.t + alg.c[alg.num_stages] * integrator.dt)
