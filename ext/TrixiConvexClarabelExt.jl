@@ -21,17 +21,22 @@ using Trixi: Trixi, @muladd
 @muladd begin
 #! format: noindent
 
-# New version of stability polynomial of the embedded scheme
-# Compute stability polynomials for paired explicit Runge-Kutta up to specified consistency
-# order(p = 2), including contributions from free coefficients for higher orders, and
-# return the maximum absolute value
-function stability_polynomials!(pnoms,
-                                num_stages_embedded, num_stage_evals_embedded,
-                                normalized_powered_eigvals_scaled,
-                                a, b, c)
+# Compute new version of stability polynomial of the embedded scheme for paired explicit Runge-Kutta 
+# up to specified consistency order(p = 2), including contributions from free coefficients for higher
+# orders, and return the maximum absolute value
+function embedded_scheme_stability_polynomials!(pnoms,
+                                                num_stages_embedded,
+                                                num_stage_evals_embedded,
+                                                normalized_powered_eigvals_scaled,
+                                                a, b, c)
 
     # Construct a full b coefficient vector #TODO: is there a way to not do this and just use b directly?
-    b_coeff = [1 - sum(b), zeros(Float64, num_stages_embedded - num_stage_evals_embedded)..., b..., 0]
+    b_coeff = [
+        1 - sum(b),
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
+        b...,
+        0
+    ]
     num_eig_vals = length(pnoms)
 
     # Initialize with 1 + z
@@ -72,7 +77,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
     a = zeros(num_stages)
     num_a_unknown = length(a_unknown)
 
-    for i = 1:num_a_unknown
+    for i in 1:num_a_unknown
         a[num_stages - i + 1] = a_unknown[num_a_unknown - i + 1]
     end
 
@@ -115,11 +120,11 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
             2 * dot(b, c[(num_stages - num_stage_evals + 2):(num_stages - 1)]) == 1.0]
 
         # Use last optimal values for b in (potentially) next iteration
-        problem = minimize(stability_polynomials!(pnoms,
-                                                  num_stages_embedded,
-                                                  num_stage_evals_embedded,
-                                                  normalized_powered_eigvals_scaled,
-                                                  a, b, c), constraints)
+        problem = minimize(embedded_scheme_stability_polynomials!(pnoms,
+                                                                  num_stages_embedded,
+                                                                  num_stage_evals_embedded,
+                                                                  normalized_powered_eigvals_scaled,
+                                                                  a, b, c), constraints)
 
         #=                                                  
         solve!(problem,
