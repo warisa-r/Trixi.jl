@@ -197,7 +197,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
 
     # PairedExplicitRK stages
     k1 = zero(u0)
-    k_higher = zero(u0, alg.num_stage_evals - 2)
+    k_higher = zero(u0)
 
     t0 = first(ode.tspan)
     tdir = sign(ode.tspan[end] - ode.tspan[1])
