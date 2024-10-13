@@ -3,7 +3,7 @@ module TrixiConvexClarabelExt
 
 # Required for coefficient optimization in P-ERK scheme integrators
 if isdefined(Base, :get_extension)
-    using Convex: MOI, solve!, Variable, minimize, evaluate
+    using Convex: MOI, solve!, Variable, minimize, evaluate, dot
     using Clarabel: Optimizer
 else
     # Until Julia v1.9 is the minimum required version for Trixi.jl, we still support Requires.jl
@@ -143,8 +143,8 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
         =#
 
         solve!(problem,
-               Convex.MOI.OptimizerWithAttributes(Clarabel.Optimizer,
-                                                  "tol_feas" => 1e-12);
+               MOI.OptimizerWithAttributes(Optimizer,
+                                           "tol_feas" => 1e-12);
                silent_solver = false)
 
         abs_p = problem.optval

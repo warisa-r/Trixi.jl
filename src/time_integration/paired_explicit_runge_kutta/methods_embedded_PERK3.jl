@@ -50,13 +50,15 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    b_opt = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
+
+    #TODO: something wrong when s = e
+    b, _ = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
                                            num_stages, num_stage_evals,
-                                           num_stages_embedded,
-                                           num_stage_evals_embedded,
+                                           num_stages - 1, # num_stages_embedded = num_stages - 1	
+                                           num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
                                            a_unknown, c, dtmax, dteps)
 
-    return a_matrix, c, b_opt, dt_opt
+    return a_matrix, b, c, dt_opt
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -140,7 +142,7 @@ end # struct EmbeddedPairedRK3
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_a_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
-    #TODO: Update this constructor to have num_stage_evals as well
+    #TODO: Update this constructor to have num_stage_evals as well and also return correct things
     a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                base_path_a_coeffs;
                                                                cS2)
@@ -285,43 +287,46 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             integrator.k1[i] = integrator.du[i] * integrator.dt
         end
 
-        # Construct current state
-        @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] + alg.c[2] * integrator.k1[i]
-        end
-        # k2
-        integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                     integrator.t + alg.c[2] * integrator.dt)
-
-        @threaded for i in eachindex(integrator.du)
-            integrator.k_higher[i] = integrator.du[i] * integrator.dt
-        end
-
         # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 3:(alg.num_stages - alg.num_stage_evals + 1)
+        for stage in 2:alg.num_stage_evals - 1
             # Construct current state
             @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - 2, 1] *
-                                      integrator.k1[i] +
-                                      alg.a_matrix[stage - 2, 2] *
-                                      integrator.k_higher[i]
+                integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
             end
 
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                         integrator.t + alg.c[stage] * integrator.dt)
+                        integrator.t + alg.c[stage] * integrator.dt)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
             end
         end
 
-        # Higher stages where the weight of b in the butcher tableau is non-zero
-        for stage in (alg.num_stages - alg.num_stage_evals + 2):(alg.num_stages - 1)
+        # k_e (k at posoition num_stage_evals)
+        
+        # Construct current state
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
+        end
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                    integrator.t + alg.c[stage] * integrator.dt)
+
+        @threaded for i in eachindex(integrator.du)
+            integrator.k_higher[i] = integrator.du[i] * integrator.dt
+        end
+
+        @threaded for i in eachindex(integrator.u)
+            integrator.u[i] += integrator.k_higher[i] *
+                               alg.b[1]
+        end
+
+        # Higher stages after num_stage_evals where b is non-zero
+        for stage in alg.num_stage_evals + 1:(alg.num_stages - 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - 2, 1] *
+                                      alg.a_matrix[stage - 2, 1] * #TODO: work on the indexing here and below
                                       integrator.k1[i] +
                                       alg.a_matrix[stage - 2, 2] *
                                       integrator.k_higher[i]
