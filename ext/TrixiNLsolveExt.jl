@@ -73,15 +73,15 @@ end
 # non-linear equations that arise from the relation of the stability polynomial to the Butcher tableau.
 # For details, see Proposition 3.2, Equation (3.3) from 
 # Hairer, Wanner: Solving Ordinary Differential Equations 2
-function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, monomial_coeffs,
+function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_evals, monomial_coeffs,
                                                c_s2, c;
-                                               verbose, max_iter = 100000) #TODO: Add an argument of num_stage_evals here
+                                               verbose, max_iter = 100000)
 
     # Define the objective_function
     function objective_function!(c_eq, x)
         return PairedExplicitRK3_butcher_tableau_objective_function!(c_eq, x,
                                                                      num_stages,
-                                                                     num_stages,
+                                                                     num_stage_evals,
                                                                      monomial_coeffs,
                                                                      c_s2)
     end
