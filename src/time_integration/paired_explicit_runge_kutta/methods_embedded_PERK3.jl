@@ -288,6 +288,11 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             integrator.k1[i] = integrator.du[i] * integrator.dt
         end
 
+        @threaded for i in eachindex(integrator.u)
+            # add the contribution of the first stage
+            integrator.u[i] += (1 - sum(alg.b)) * integrator.k1[i]
+        end
+
         # Higher stages where the weight of b in the butcher tableau is zero
         for stage in 2:alg.num_stage_evals - 1
             # Construct current state
@@ -357,10 +362,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
                      integrator.t + alg.c[alg.num_stages] * integrator.dt)
 
-        @threaded for i in eachindex(integrator.u)
-            # add the contribution of the first stage
-            integrator.u[i] += (1 - sum(alg.b)) * integrator.k1[i]
-        end
     end # PairedExplicitRK step timer
 
     integrator.iter += 1

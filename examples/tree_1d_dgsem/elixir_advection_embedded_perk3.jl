@@ -65,7 +65,7 @@ callbacks = CallbackSet(summary_callback,
 # Construct second order paired explicit Runge-Kutta method with 6 stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 8, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedRK3(10, 7, tspan, semi)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
@@ -73,3 +73,13 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
+
+function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
+    # Construct the b vector
+    b = [1 - sum(b_unknown), zeros(Float64, num_stages_embedded - num_stage_evals_embedded)..., b_unknown..., 0]
+    return b
+end
+
+b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1, ode_algorithm.num_stage_evals - 1)
+println("dot(b, c) = ", dot(b, ode_algorithm.c))
+println("sum(b) = ", sum(b))

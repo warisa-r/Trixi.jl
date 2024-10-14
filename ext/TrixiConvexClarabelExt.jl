@@ -116,7 +116,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
 
         # Second-order constraint
         # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from other non-zero entries of b
-        constraints = [b >= 0,
+        constraints = [b > 0,
             2 * dot(b, c[(num_stages - num_stage_evals + 2):(num_stages - 1)]) == 1.0]
 
         # Use last optimal values for b in (potentially) next iteration
