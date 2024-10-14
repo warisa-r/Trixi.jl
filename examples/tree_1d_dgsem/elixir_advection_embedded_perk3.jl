@@ -54,16 +54,16 @@ save_solution = SaveSolutionCallback(dt = 0.1,
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
 
-
-###############################################################################
-# run the simulation
-
-# Construct second order paired explicit Runge-Kutta method with 6 stages for given simulation setup.
+# Construct embedded order paired explicit Runge-Kutta method with 10 stages and 7 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 7, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedRK3(10, 6, tspan, semi)
+
+# Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
+# b values in the Butcher tableau of the ODE algorithm).
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
-stepsize_callback = StepsizeCallback(cfl = cfl_number)
+stepsize_callback = StepsizeCallback(cfl = cfl_number) # Warisa: This number is very small in contrast the other one from optimizing A
+                                                       # I've tried using cfl of 1.5 and the error is very similar.
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
@@ -71,6 +71,8 @@ callbacks = CallbackSet(summary_callback,
                         analysis_callback,
                         stepsize_callback)
 
+###############################################################################
+# run the simulation
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
                   save_everystep = false, callback = callbacks);

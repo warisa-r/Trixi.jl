@@ -294,7 +294,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 2:alg.num_stage_evals - 1
+        for stage in 2:alg.num_stages - alg.num_stage_evals + 1
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
@@ -308,14 +308,14 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             end
         end
 
-        # k_e (k at posoition num_stage_evals)
+        # k_(s-e+2)
         # Construct current state
         @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] + alg.c[alg.num_stage_evals] * integrator.k1[i]
+            integrator.u_tmp[i] = integrator.u[i] + alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.k1[i]
         end
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                    integrator.t + alg.c[alg.num_stage_evals] * integrator.dt)
+                    integrator.t + alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -327,13 +327,13 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages after num_stage_evals where b is non-zero
-        for stage in alg.num_stage_evals + 1:(alg.num_stages - 1)
+        for stage in alg.num_stages - alg.num_stage_evals + 3:(alg.num_stages - 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - alg.num_stage_evals, 1] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2, 1] *
                                       integrator.k1[i] +
-                                      alg.a_matrix[stage - alg.num_stage_evals, 2] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2, 2] *
                                       integrator.k_higher[i]
             end
             
@@ -346,7 +346,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.u)
                 integrator.u[i] += integrator.k_higher[i] *
-                                   alg.b[stage - alg.num_stage_evals + 1]
+                                   alg.b[stage - alg.num_stages + alg.num_stage_evals - 1]
             end
         end
 

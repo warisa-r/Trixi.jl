@@ -112,8 +112,8 @@ function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_
         # and also c[i] - a[i, i-1] >= 0.0 since all coefficients should be non-negative
         # to avoid downwinding of numerical fluxes.
         is_sol_valid = all(x -> !isnan(x) && x >= 0, a_unknown) &&
-                       all(!isnan(c[i] - a_unknown[i - num_stage_evals]) &&
-                           c[i] - a_unknown[i - num_stage_evals] >= 0 for i in eachindex(c) if i > num_stage_evals)
+                       all(!isnan(c[i] - a_unknown[i - num_stages + num_stage_evals - 2]) &&
+                           c[i] - a_unknown[i - num_stages + num_stage_evals - 2] >= 0 for i in eachindex(c) if i > num_stages - num_stage_evals + 2)
 
         if is_sol_valid
             return a_unknown

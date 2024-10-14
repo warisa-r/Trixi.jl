@@ -45,10 +45,11 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      solution_variables = cons2prim)
 
 
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 7, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedRK3(10, 6, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 
-stepsize_callback = StepsizeCallback(cfl = 0.5)
+stepsize_callback = StepsizeCallback(cfl = 0.5) # Warisa: This number is extremely small in contrast the other one from optimizing A
+                                                # I've tried using cfl of 0.5 and the error is very similar.
                                      
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
