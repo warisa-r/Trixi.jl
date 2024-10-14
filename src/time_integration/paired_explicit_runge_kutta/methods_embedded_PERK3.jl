@@ -51,7 +51,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 2] = a_unknown
 
 
-    #TODO: something wrong when s = e
+    # Find the optimal b coeffficient from the Butcher tableau and its time step
     b, dt_opt_b = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
                                            num_stages, num_stage_evals,
                                            num_stages - 1, # num_stages_embedded = num_stages - 1	
@@ -59,44 +59,51 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                            a_unknown, c, dtmax, dteps)
 
 
-    return a_matrix, b, c, dt_opt_b
+    return a_matrix, b, c, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using provided values of coefficients a in A-matrix of Butcher tableau
-function compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                   base_path_a_coeffs::AbstractString;
+function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
+                                                   base_path_coeffs::AbstractString;
                                                    cS2)
 
     # Initialize array of c
     c = compute_c_coeffs(num_stages, cS2)
 
     # - 2 Since First entry of A is always zero (explicit method) and second is given by c_2 (consistency)
-    a_coeffs_max = num_stages - 2
+    coeffs_max = num_stage_evals - 2
 
-    #TODO: Read the values from the file
-    b = zeros(num_stages)
-
-    a_matrix = zeros(a_coeffs_max, 2)
+    a_matrix = zeros(coeffs_max, 2)
     a_matrix[:, 1] = c[3:end]
 
-    path_a_coeffs = joinpath(base_path_a_coeffs,
-                             "a_" * string(num_stages) * ".txt")
+    b = zeros(coeffs_max)
+
+    path_a_coeffs = joinpath(base_path_coeffs,
+                             "a_" * string(num_stages) * "_" * string(num_stage_evals) * ".txt")
+
+    path_b_coeffs = joinpath(base_path_coeffs,
+                             "b_" * string(num_stages) * "_" * string(num_stage_evals) * ".txt")
 
     @assert isfile(path_a_coeffs) "Couldn't find file $path_a_coeffs"
     a_coeffs = readdlm(path_a_coeffs, Float64)
     num_a_coeffs = size(a_coeffs, 1)
 
-    @assert num_a_coeffs == a_coeffs_max
+    @assert num_a_coeffs == coeffs_max
     # Fill A-matrix in P-ERK style
     a_matrix[:, 1] -= a_coeffs
     a_matrix[:, 2] = a_coeffs
+
+    @assert isfile(path_b_coeffs) "Couldn't find file $path_b_coeffs"
+    b = readdlm(path_b_coeffs, Float64)
+    num_b_coeffs = size(b, 1)
+    @assert num_b_coeffs == coeffs_max
 
     return a_matrix, b, c
 end
 
 @doc raw"""
-    EmbeddedPairedRK3(num_stages, base_path_a_coeffs::AbstractString, dt_opt;
+    EmbeddedPairedRK3(num_stages, base_path_coeffs::AbstractString, dt_opt;
                       cS2 = 1.0f0)
     EmbeddedPairedRK3(num_stages, tspan, semi::AbstractSemidiscretization;
                       verbose = false, cS2 = 1.0f0)
@@ -105,8 +112,8 @@ end
 
     Parameters:
     - `num_stages` (`Int`): Number of stages in the paired explicit Runge-Kutta (P-ERK) method.
-    - `base_path_a_coeffs` (`AbstractString`): Path to a file containing some coefficients in the A-matrix in 
-      the Butcher tableau of the Runge Kutta method.
+    - `base_path_coeffs` (`AbstractString`): Path to a file containing some coefficients in the A-matrix and a file constaining 
+      in some coefficients in the b vector of the Butcher tableau of the Runge Kutta method.
       The matrix should be stored in a text file at `joinpath(base_path_a_coeffs, "a_$(num_stages).txt")` and separated by line breaks.
     - `dt_opt` (`Float64`): Optimal time step size for the simulation setup.
     - `tspan`: Time span of the simulation.
@@ -141,11 +148,10 @@ end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
-                           base_path_a_coeffs::AbstractString, dt_opt;
+                           base_path_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
-    #TODO: Update this constructor to have num_stage_evals as well and also return correct things
-    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                               base_path_a_coeffs;
+    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
+                                                               base_path_coeffs;
                                                                cS2)
 
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)

@@ -62,7 +62,7 @@ ode_algorithm = Trixi.EmbeddedPairedRK3(10, 6, tspan, semi)
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
-stepsize_callback = StepsizeCallback(cfl = cfl_number) # Warisa: This number is very small in contrast the other one from optimizing A
+stepsize_callback = StepsizeCallback(cfl = cfl_number) # Warisa: This number is quite small in contrast the other one from optimizing A
                                                        # I've tried using cfl of 1.5 and the error is very similar.
 
 callbacks = CallbackSet(summary_callback,
@@ -80,6 +80,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
+# Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
     b = [1 - sum(b_unknown), zeros(Float64, num_stages_embedded - num_stage_evals_embedded)..., b_unknown..., 0]
