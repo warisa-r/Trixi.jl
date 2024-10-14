@@ -44,7 +44,6 @@ analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
 
-
 alive_callback = AliveCallback(alive_interval = analysis_interval)
 
 save_solution = SaveSolutionCallback(dt = 0.1,
@@ -63,7 +62,7 @@ ode_algorithm = Trixi.EmbeddedPairedRK3(10, 6, tspan, semi)
 # b values in the Butcher tableau of the ODE algorithm).
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = cfl_number) # Warisa: This number is quite small in contrast the other one from optimizing A
-                                                       # I've tried using cfl of 1.5 and the error is very similar.
+# I've tried using cfl of 1.5 and the error is very similar.
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
@@ -83,10 +82,16 @@ summary_callback()
 # Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
-    b = [1 - sum(b_unknown), zeros(Float64, num_stages_embedded - num_stage_evals_embedded)..., b_unknown..., 0]
+    b = [
+        1 - sum(b_unknown),
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
+        b_unknown...,
+        0
+    ]
     return b
 end
 
-b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1, ode_algorithm.num_stage_evals - 1)
+b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1,
+                       ode_algorithm.num_stage_evals - 1)
 println("dot(b, c) = ", dot(b, ode_algorithm.c))
 println("sum(b) = ", sum(b))

@@ -46,18 +46,16 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
-    a_matrix[:, 1] = c[num_stages - num_stage_evals + 3:end] # issue
+    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end] # issue
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-
     # Find the optimal b coeffficient from the Butcher tableau and its time step
     b, dt_opt_b = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
-                                           num_stages, num_stage_evals,
-                                           num_stages - 1, # num_stages_embedded = num_stages - 1	
-                                           num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
-                                           a_unknown, c, dtmax, dteps)
-
+                                                 num_stages, num_stage_evals,
+                                                 num_stages - 1, # num_stages_embedded = num_stages - 1	
+                                                 num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
+                                                 a_unknown, c, dtmax, dteps)
 
     return a_matrix, b, c, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
@@ -80,10 +78,12 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
     b = zeros(coeffs_max)
 
     path_a_coeffs = joinpath(base_path_coeffs,
-                             "a_" * string(num_stages) * "_" * string(num_stage_evals) * ".txt")
+                             "a_" * string(num_stages) * "_" * string(num_stage_evals) *
+                             ".txt")
 
     path_b_coeffs = joinpath(base_path_coeffs,
-                             "b_" * string(num_stages) * "_" * string(num_stage_evals) * ".txt")
+                             "b_" * string(num_stages) * "_" * string(num_stage_evals) *
+                             ".txt")
 
     @assert isfile(path_a_coeffs) "Couldn't find file $path_a_coeffs"
     a_coeffs = readdlm(path_a_coeffs, Float64)
@@ -150,7 +150,8 @@ end # struct EmbeddedPairedRK3
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt;
                            cS2 = 1.0f0)
-    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
+    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+                                                               num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
@@ -300,14 +301,14 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 2:alg.num_stages - alg.num_stage_evals + 1
+        for stage in 2:(alg.num_stages - alg.num_stage_evals + 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
             end
 
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                        integrator.t + alg.c[stage] * integrator.dt)
+                         integrator.t + alg.c[stage] * integrator.dt)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -317,11 +318,14 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         # k_(s-e+2)
         # Construct current state
         @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] + alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.k1[i]
+            integrator.u_tmp[i] = integrator.u[i] +
+                                  alg.c[alg.num_stages - alg.num_stage_evals + 2] *
+                                  integrator.k1[i]
         end
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                    integrator.t + alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.dt)
+                     integrator.t +
+                     alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -333,16 +337,18 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages after num_stage_evals where b is non-zero
-        for stage in alg.num_stages - alg.num_stage_evals + 3:(alg.num_stages - 1)
+        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages - 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2, 1] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
+                                                   1] *
                                       integrator.k1[i] +
-                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2, 2] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
+                                                   2] *
                                       integrator.k_higher[i]
             end
-            
+
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
                          integrator.t + alg.c[stage] * integrator.dt)
 
@@ -367,7 +373,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
                      integrator.t + alg.c[alg.num_stages] * integrator.dt)
-
     end # PairedExplicitRK step timer
 
     integrator.iter += 1
