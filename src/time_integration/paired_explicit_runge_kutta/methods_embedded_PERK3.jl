@@ -16,10 +16,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     c = compute_c_coeffs(num_stages, cS2)
 
     # Initialize the array of our solution
-    a_unknown = zeros(num_stages - 2)
+    a_unknown = zeros(num_stage_evals - 2)
 
     # Special case of e = 3
-    if num_stages == 3
+    if num_stage_evals == 3
         a_unknown = [0.25] # Use classic SSPRK33 (Shu-Osher) Butcher Tableau
     else
         # Calculate coefficients of the stability polynomial in monomial form
@@ -45,8 +45,8 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     verbose)
     end
     # Fill A-matrix in P-ERK style
-    a_matrix = zeros(num_stages - 2, 2)
-    a_matrix[:, 1] = c[3:end]
+    a_matrix = zeros(num_stage_evals - 2, 2)
+    a_matrix[:, 1] = c[num_stages - num_stage_evals + 3:end] # issue
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
@@ -303,14 +303,13 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # k_e (k at posoition num_stage_evals)
-        
         # Construct current state
         @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
+            integrator.u_tmp[i] = integrator.u[i] + alg.c[alg.num_stage_evals] * integrator.k1[i]
         end
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                    integrator.t + alg.c[stage] * integrator.dt)
+                    integrator.t + alg.c[alg.num_stage_evals] * integrator.dt)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
@@ -326,9 +325,9 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - 2, 1] * #TODO: work on the indexing here and below
+                                      alg.a_matrix[stage - alg.num_stage_evals, 1]
                                       integrator.k1[i] +
-                                      alg.a_matrix[stage - 2, 2] *
+                                      alg.a_matrix[stage - alg.num_stage_evals, 2] *
                                       integrator.k_higher[i]
             end
 
@@ -341,24 +340,22 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.u)
                 integrator.u[i] += integrator.k_higher[i] *
-                                   alg.b[stage - alg.num_stages + alg.num_stage_evals - 1]
+                                   alg.b[stage - alg.num_stage_evals + 1]
             end
         end
 
-        #TODO: Check if commenting this is equal to not commenting
-        #=
         # Last stage
         @threaded for i in eachindex(integrator.du)
             integrator.u_tmp[i] = integrator.u[i] +
-                                  alg.a_matrix[alg.num_stages - 2, 1] *
+                                  alg.a_matrix[alg.num_stages - alg.num_stage_evals - 1, 1] *
                                   integrator.k1[i] +
-                                  alg.a_matrix[alg.num_stages - 2, 2] *
+                                  alg.a_matrix[alg.num_stages - alg.num_stage_evals - 1, 2] *
                                   integrator.k_higher[i]
         end
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
                      integrator.t + alg.c[alg.num_stages] * integrator.dt)
-        =#
+
         @threaded for i in eachindex(integrator.u)
             # add the contribution of the first stage
             integrator.u[i] += (1 - sum(alg.b)) * integrator.k1[i]

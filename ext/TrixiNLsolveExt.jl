@@ -100,7 +100,7 @@ function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_
         # Due to the nature of the nonlinear solver, different initial guesses can lead to 
         # small numerical differences in the solution.
 
-        x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stages - 2)
+        x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stage_evals - 2)
 
         sol = nlsolve(objective_function!, x0, method = :trust_region,
                       ftol = 4.0e-16, # Enforce objective up to machine precision
@@ -112,8 +112,8 @@ function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_
         # and also c[i] - a[i, i-1] >= 0.0 since all coefficients should be non-negative
         # to avoid downwinding of numerical fluxes.
         is_sol_valid = all(x -> !isnan(x) && x >= 0, a_unknown) &&
-                       all(!isnan(c[i] - a_unknown[i - 2]) &&
-                           c[i] - a_unknown[i - 2] >= 0 for i in eachindex(c) if i > 2)
+                       all(!isnan(c[i] - a_unknown[i - num_stage_evals]) &&
+                           c[i] - a_unknown[i - num_stage_evals] >= 0 for i in eachindex(c) if i > num_stage_evals)
 
         if is_sol_valid
             return a_unknown
