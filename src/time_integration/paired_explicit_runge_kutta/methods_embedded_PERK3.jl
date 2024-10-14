@@ -52,14 +52,14 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
 
     #TODO: something wrong when s = e
-    b, _ = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
+    b, dt_opt_b = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
                                            num_stages, num_stage_evals,
                                            num_stages - 1, # num_stages_embedded = num_stages - 1	
                                            num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
                                            a_unknown, c, dtmax, dteps)
 
 
-    return a_matrix, b, c, dt_opt
+    return a_matrix, b, c, dt_opt_b
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3

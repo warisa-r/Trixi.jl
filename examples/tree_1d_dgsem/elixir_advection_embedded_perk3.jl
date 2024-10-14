@@ -43,7 +43,7 @@ analysis_interval = 100
 analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl = 1.5)
+
 
 alive_callback = AliveCallback(alive_interval = analysis_interval)
 
@@ -53,11 +53,7 @@ save_solution = SaveSolutionCallback(dt = 0.1,
                                      solution_variables = cons2prim)
 
 # Create a CallbackSet to collect all callbacks such that they can be passed to the ODE solver
-callbacks = CallbackSet(summary_callback,
-                        alive_callback,
-                        save_solution,
-                        analysis_callback,
-                        stepsize_callback)
+
 
 ###############################################################################
 # run the simulation
@@ -66,6 +62,14 @@ callbacks = CallbackSet(summary_callback,
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
 ode_algorithm = Trixi.EmbeddedPairedRK3(10, 7, tspan, semi)
+cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+stepsize_callback = StepsizeCallback(cfl = cfl_number)
+
+callbacks = CallbackSet(summary_callback,
+                        alive_callback,
+                        save_solution,
+                        analysis_callback,
+                        stepsize_callback)
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
