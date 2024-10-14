@@ -145,7 +145,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
         solve!(problem,
                MOI.OptimizerWithAttributes(Optimizer,
                                            "tol_feas" => 1e-12);
-               silent_solver = false)
+               silent = false)
 
         abs_p = problem.optval
 
