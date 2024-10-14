@@ -325,12 +325,12 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - alg.num_stage_evals, 1]
+                                      alg.a_matrix[stage - alg.num_stage_evals, 1] *
                                       integrator.k1[i] +
                                       alg.a_matrix[stage - alg.num_stage_evals, 2] *
                                       integrator.k_higher[i]
             end
-
+            
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
                          integrator.t + alg.c[stage] * integrator.dt)
 
@@ -347,9 +347,9 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         # Last stage
         @threaded for i in eachindex(integrator.du)
             integrator.u_tmp[i] = integrator.u[i] +
-                                  alg.a_matrix[alg.num_stages - alg.num_stage_evals - 1, 1] *
+                                  alg.a_matrix[alg.num_stage_evals - 2, 1] *
                                   integrator.k1[i] +
-                                  alg.a_matrix[alg.num_stages - alg.num_stage_evals - 1, 2] *
+                                  alg.a_matrix[alg.num_stage_evals - 2, 2] *
                                   integrator.k_higher[i]
         end
 
