@@ -43,7 +43,7 @@ analysis_interval = 100
 analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 # The StepsizeCallback handles the re-calculation of the maximum Δt after each time step
-stepsize_callback = StepsizeCallback(cfl = 1.0)
+stepsize_callback = StepsizeCallback(cfl = 1.5)
 
 alive_callback = AliveCallback(alive_interval = analysis_interval)
 
