@@ -58,6 +58,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                            num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
                                            a_unknown, c, dtmax, dteps)
 
+
     return a_matrix, b, c, dt_opt
 end
 
