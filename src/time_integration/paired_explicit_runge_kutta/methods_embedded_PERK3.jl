@@ -112,7 +112,7 @@ end
 
     Parameters:
     - `num_stages` (`Int`): Number of stages in the paired explicit Runge-Kutta (P-ERK) method.
-    - `base_path_coeffs` (`AbstractString`): Path to a file containing some coefficients in the A-matrix and a file constaining 
+    - `base_path_coeffs` (`AbstractString`): Path to a file containing some coefficients in the A-matrix and a file containing 
       in some coefficients in the b vector of the Butcher tableau of the Runge Kutta method.
       The matrix should be stored in a text file at `joinpath(base_path_a_coeffs, "a_$(num_stages).txt")` and separated by line breaks.
     - `dt_opt` (`Float64`): Optimal time step size for the simulation setup.
