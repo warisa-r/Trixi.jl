@@ -56,12 +56,12 @@ save_solution = SaveSolutionCallback(dt = 0.1,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 7 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 6, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedRK3(10, 10, tspan, semi)
 
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
-cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
-stepsize_callback = StepsizeCallback(cfl = cfl_number) # Warisa: This number is quite small in contrast the other one from optimizing A
+#cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+stepsize_callback = StepsizeCallback(cfl = 0.75) # Warisa: This number is quite small in contrast the other one from optimizing A
 # I've tried using cfl of 1.5 and the error is very similar.
 
 callbacks = CallbackSet(summary_callback,
@@ -95,3 +95,7 @@ b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1,
                        ode_algorithm.num_stage_evals - 1)
 println("dot(b, c) = ", dot(b, ode_algorithm.c))
 println("sum(b) = ", sum(b))
+
+println("dt_opt_a = ", ode_algorithm.dt_opt_a)
+println("dt_opt_b = ", ode_algorithm.dt_opt_b)
+println("ratio = ", ode_algorithm.dt_opt_b / ode_algorithm.dt_opt_a * 100)

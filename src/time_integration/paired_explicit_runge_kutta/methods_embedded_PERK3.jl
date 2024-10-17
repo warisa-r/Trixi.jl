@@ -29,7 +29,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
-        monomial_coeffs, dt_opt = bisect_stability_polynomial(consistency_order,
+        monomial_coeffs, dt_opt_a = bisect_stability_polynomial(consistency_order,
                                                               num_eig_vals, num_stages,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
@@ -46,7 +46,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
-    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end] # issue
+    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
@@ -57,7 +57,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                  num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
                                                  a_unknown, c, dtmax, dteps)
 
-    return a_matrix, b, c, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
+    return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -143,19 +143,20 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     a_matrix::Matrix{Float64}
     b::Vector{Float64}
     c::Vector{Float64}
-    dt_opt::Float64
+    dt_opt_a::Float64
+    dt_opt_b::Float64
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
-                           base_path_coeffs::AbstractString, dt_opt;
+                           base_path_coeffs::AbstractString, dt_opt_a, dt_opt_b;
                            cS2 = 1.0f0)
     a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a, dt_opt_b)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
@@ -171,12 +172,12 @@ end
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, b, c, dt_opt = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b, c, dt_opt_a, dt_opt_b = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                        num_stage_evals,
                                                                        tspan,
                                                                        eig_vals;
                                                                        verbose, cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a, dt_opt_b)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
