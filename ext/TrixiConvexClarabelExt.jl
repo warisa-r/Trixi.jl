@@ -90,11 +90,11 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
     normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals)
 
     for j in 1:num_stage_evals
-        #fac_j = factorial(j)
+        fac_j = factorial(j)
         for i in 1:num_eig_vals
-            #normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
+            normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
             # Try first without factorial normalization
-            normalized_powered_eigvals[i, j] = eig_vals[i]^j
+            #normalized_powered_eigvals[i, j] = eig_vals[i]^j
         end
     end
 
@@ -145,7 +145,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
         solve!(problem,
                MOI.OptimizerWithAttributes(Optimizer,
                                            "tol_feas" => 1e-12);
-               silent = false)
+               silent_solver = true)
 
         abs_p = problem.optval
 
