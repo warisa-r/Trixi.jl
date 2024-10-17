@@ -10,6 +10,10 @@ using DelimitedFiles: readdlm
 using Convex: Convex
 using ECOS: Optimizer
 
+# Use NLsolve to load the extension that extends functions for testing
+# PERK Single p3 Constructors
+using NLsolve: nlsolve
+
 include("test_trixi.jl")
 
 # Start with a clean environment: remove Trixi.jl output directory if it exists
@@ -1699,6 +1703,42 @@ end
                     0.13942836392866081 0.3605716360713392], atol = 1e-13)
 end
 
+@testset "PERK Single p3 Constructors" begin
+    path_coeff_file = mktempdir()
+    Trixi.download("https://gist.githubusercontent.com/warisa-r/0796db36abcd5abe735ac7eebf41b973/raw/32889062fd5dcf7f450748f4f5f0797c8155a18d/a_8_8.txt",
+                   joinpath(path_coeff_file, "a_8.txt"))
+
+    ode_algorithm = Trixi.PairedExplicitRK3(8, path_coeff_file, 42) # dummy optimal time step (dt_opt plays no role in determining `a_matrix`)
+
+    @test isapprox(ode_algorithm.a_matrix,
+                   [0.33551678438002486 0.06448322158043965
+                    0.49653494442225443 0.10346507941960345
+                    0.6496890912144586 0.15031092070647037
+                    0.789172498521197 0.21082750147880308
+                    0.7522972036571336 0.2477027963428664
+                    0.31192569908571666 0.18807430091428337], atol = 1e-13)
+
+    Trixi.download("https://gist.githubusercontent.com/warisa-r/8d93f6a3ae0635e13b9f51ee32ab7fff/raw/54dc5b14be9288e186b745facb5bbcb04d1476f8/EigenvalueList_Refined2.txt",
+                   joinpath(path_coeff_file, "spectrum.txt"))
+
+    eig_vals = readdlm(joinpath(path_coeff_file, "spectrum.txt"), ComplexF64)
+    tspan = (0.0, 1.0)
+    ode_algorithm = Trixi.PairedExplicitRK3(13, tspan, vec(eig_vals))
+
+    @test isapprox(ode_algorithm.a_matrix,
+                   [0.19258815508348048 0.007411847896751755
+                    0.28723293302534425 0.012767078895584727
+                    0.38017717306156973 0.01982283289889476
+                    0.4706748926615584 0.02932510733844162
+                    0.5575748313419124 0.04242519249994544
+                    0.6390917539959684 0.06090823408310269
+                    0.7124876783811593 0.08751233353976957
+                    0.7736369902636945 0.12636298589444758
+                    0.8161315438506253 0.18386845614937475
+                    0.7532704353232954 0.24672956467670462
+                    0.3116823911691762 0.18831760883082385], atol = 1e-13)
+end
+
 @testset "Sutherlands Law" begin
     function mu(u, equations)
         T_ref = 291.15
@@ -1736,6 +1776,123 @@ end
     # Comparison value from https://www.engineeringtoolbox.com/air-absolute-kinematic-viscosity-d_601.html at 18°C
     @test isapprox(mu_control(u, equations_parabolic, T_ref, R_specific, C, mu_ref),
                    1.803e-5, atol = 5e-8)
+end
+
+# Velocity functions are present in many equations and are tested here
+@testset "Velocity functions for different equations" begin
+    gamma = 1.4
+    rho = pi * pi
+    pres = sqrt(pi)
+    v1, v2, v3 = pi, exp(1.0), exp(pi) # use pi, exp to test with non-trivial numbers
+    v_vector = SVector(v1, v2, v3)
+    normal_direction_2d = SVector(pi^2, pi^3)
+    normal_direction_3d = SVector(normal_direction_2d..., pi^4)
+    v_normal_1d = v1 * normal_direction_2d[1]
+    v_normal_2d = v1 * normal_direction_2d[1] + v2 * normal_direction_2d[2]
+    v_normal_3d = v_normal_2d + v3 * normal_direction_3d[3]
+
+    equations_euler_1d = CompressibleEulerEquations1D(gamma)
+    u = prim2cons(SVector(rho, v1, pres), equations_euler_1d)
+    @test isapprox(velocity(u, equations_euler_1d), v1)
+
+    equations_euler_2d = CompressibleEulerEquations2D(gamma)
+    u = prim2cons(SVector(rho, v1, v2, pres), equations_euler_2d)
+    @test isapprox(velocity(u, equations_euler_2d), SVector(v1, v2))
+    @test isapprox(velocity(u, normal_direction_2d, equations_euler_2d), v_normal_2d)
+    for orientation in 1:2
+        @test isapprox(velocity(u, orientation, equations_euler_2d),
+                       v_vector[orientation])
+    end
+
+    equations_euler_3d = CompressibleEulerEquations3D(gamma)
+    u = prim2cons(SVector(rho, v1, v2, v3, pres), equations_euler_3d)
+    @test isapprox(velocity(u, equations_euler_3d), SVector(v1, v2, v3))
+    @test isapprox(velocity(u, normal_direction_3d, equations_euler_3d), v_normal_3d)
+    for orientation in 1:3
+        @test isapprox(velocity(u, orientation, equations_euler_3d),
+                       v_vector[orientation])
+    end
+
+    rho1, rho2 = rho, rho * pi # use pi to test with non-trivial numbers
+    gammas = (gamma, exp(gamma))
+    gas_constants = (0.387, 1.678) # Standard numbers + 0.1
+
+    equations_multi_euler_1d = CompressibleEulerMulticomponentEquations1D(; gammas,
+                                                                          gas_constants)
+    u = prim2cons(SVector(v1, pres, rho1, rho2), equations_multi_euler_1d)
+    @test isapprox(velocity(u, equations_multi_euler_1d), v1)
+
+    equations_multi_euler_2d = CompressibleEulerMulticomponentEquations2D(; gammas,
+                                                                          gas_constants)
+    u = prim2cons(SVector(v1, v2, pres, rho1, rho2), equations_multi_euler_2d)
+    @test isapprox(velocity(u, equations_multi_euler_2d), SVector(v1, v2))
+    @test isapprox(velocity(u, normal_direction_2d, equations_multi_euler_2d),
+                   v_normal_2d)
+    for orientation in 1:2
+        @test isapprox(velocity(u, orientation, equations_multi_euler_2d),
+                       v_vector[orientation])
+    end
+
+    kappa = 0.1 * pi # pi for non-trivial test
+    equations_polytropic = PolytropicEulerEquations2D(gamma, kappa)
+    u = prim2cons(SVector(rho, v1, v2), equations_polytropic)
+    @test isapprox(velocity(u, equations_polytropic), SVector(v1, v2))
+    equations_polytropic = CompressibleEulerMulticomponentEquations2D(; gammas,
+                                                                      gas_constants)
+    u = prim2cons(SVector(v1, v2, pres, rho1, rho2), equations_polytropic)
+    @test isapprox(velocity(u, equations_polytropic), SVector(v1, v2))
+    @test isapprox(velocity(u, normal_direction_2d, equations_polytropic), v_normal_2d)
+    for orientation in 1:2
+        @test isapprox(velocity(u, orientation, equations_polytropic),
+                       v_vector[orientation])
+    end
+
+    B1, B2, B3 = pi^3, pi^4, pi^5
+    equations_ideal_mhd_1d = IdealGlmMhdEquations1D(gamma)
+    u = prim2cons(SVector(rho, v1, v2, v3, pres, B1, B2, B3), equations_ideal_mhd_1d)
+    @test isapprox(velocity(u, equations_ideal_mhd_1d), SVector(v1, v2, v3))
+    for orientation in 1:3
+        @test isapprox(velocity(u, orientation, equations_ideal_mhd_1d),
+                       v_vector[orientation])
+    end
+
+    psi = exp(0.1)
+    equations_ideal_mhd_2d = IdealGlmMhdEquations2D(gamma)
+    u = prim2cons(SVector(rho, v1, v2, v3, pres, B1, B2, B3, psi),
+                  equations_ideal_mhd_2d)
+    @test isapprox(velocity(u, equations_ideal_mhd_2d), SVector(v1, v2, v3))
+    @test isapprox(velocity(u, normal_direction_2d, equations_ideal_mhd_2d),
+                   v_normal_2d)
+    for orientation in 1:3
+        @test isapprox(velocity(u, orientation, equations_ideal_mhd_2d),
+                       v_vector[orientation])
+    end
+
+    equations_ideal_mhd_3d = IdealGlmMhdEquations3D(gamma)
+    u = prim2cons(SVector(rho, v1, v2, v3, pres, B1, B2, B3, psi),
+                  equations_ideal_mhd_3d)
+    @test isapprox(velocity(u, equations_ideal_mhd_3d), SVector(v1, v2, v3))
+    @test isapprox(velocity(u, normal_direction_3d, equations_ideal_mhd_3d),
+                   v_normal_3d)
+    for orientation in 1:3
+        @test isapprox(velocity(u, orientation, equations_ideal_mhd_3d),
+                       v_vector[orientation])
+    end
+
+    H, b = exp(pi), exp(pi^2)
+    gravity_constant, H0 = 9.91, 0.1 # Standard numbers + 0.1
+    shallow_water_1d = ShallowWaterEquations1D(; gravity_constant, H0)
+    u = prim2cons(SVector(H, v1, b), shallow_water_1d)
+    @test isapprox(velocity(u, shallow_water_1d), v1)
+
+    shallow_water_2d = ShallowWaterEquations2D(; gravity_constant, H0)
+    u = prim2cons(SVector(H, v1, v2, b), shallow_water_2d)
+    @test isapprox(velocity(u, shallow_water_2d), SVector(v1, v2))
+    @test isapprox(velocity(u, normal_direction_2d, shallow_water_2d), v_normal_2d)
+    for orientation in 1:2
+        @test isapprox(velocity(u, orientation, shallow_water_2d),
+                       v_vector[orientation])
+    end
 end
 end
 

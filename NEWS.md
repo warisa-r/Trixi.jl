@@ -6,13 +6,27 @@ for human readability.
 
 ## Changes when updating to v0.9 from v0.8.x
 
+#### Added
+
+- Boundary conditions are now supported on nonconservative terms ([#2062]).
+
 #### Changed
 
 - We removed the first argument `semi` corresponding to a `Semidiscretization` from the 
   `AnalysisSurfaceIntegral` constructor, as it is no longer needed (see [#1959]).
-  The `AnalysisSurfaceIntegral` now only takes the arguments `boundary_symbols` and `variable`. ([#2069])
+  The `AnalysisSurfaceIntegral` now only takes the arguments `boundary_symbols` and `variable`.
+  ([#2069])
 - In functions `rhs!`, `rhs_parabolic!`  we removed the unused argument `initial_condition`. ([#2037])
   Users should not be affected by this.
+- Nonconservative terms depend only on `normal_direction_average` instead of both 
+  `normal_direction_average` and `normal_direction_ll`, such that the function signature is now 
+  identical with conservative fluxes. This required a change of the `normal_direction` in
+  `flux_nonconservative_powell` ([#2062]).
+
+#### Deprecated
+
+#### Removed
+
 
 ## Changes in the v0.8 lifecycle
 
@@ -49,6 +63,9 @@ for human readability.
 - New time integrator `PairedExplicitRK2`, implementing the second-order paired explicit Runge-Kutta
   method with [Convex.jl](https://github.com/jump-dev/Convex.jl) and [ECOS.jl](https://github.com/jump-dev/ECOS.jl) ([#1908])
 - Add subcell limiting support for `StructuredMesh` ([#1946]).
+- New time integrator `PairedExplicitRK3`, implementing the third-order paired explicit Runge-Kutta
+  method with [Convex.jl](https://github.com/jump-dev/Convex.jl), [ECOS.jl](https://github.com/jump-dev/ECOS.jl),
+  and [NLsolve.jl](https://github.com/JuliaNLSolvers/NLsolve.jl) ([#2008])
 
 ## Changes when updating to v0.7 from v0.6.x
 
