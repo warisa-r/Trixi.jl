@@ -87,14 +87,14 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
     # There are e - 2 free variables for the stability polynomial of the embedded scheme
     b = Variable(num_stage_evals - 2)
 
-    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals)
+    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals-1)
 
-    for j in 1:num_stage_evals
-        fac_j = factorial(j)
+    for j in 1:num_stage_evals-1
+        #fac_j = factorial(j)
         for i in 1:num_eig_vals
-            normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
+            #normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
             # Try first without factorial normalization
-            #normalized_powered_eigvals[i, j] = eig_vals[i]^j
+            normalized_powered_eigvals[i, j] = eig_vals[i]^j
         end
     end
 
@@ -105,7 +105,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
         dt = 0.5 * (dtmax + dtmin)
 
         # Compute stability polynomial for current timestep
-        for k in 1:num_stage_evals
+        for k in 1:num_stage_evals-1
             dt_k = dt^k
             for i in 1:num_eig_vals
                 normalized_powered_eigvals_scaled[i, k] = dt_k *
@@ -116,7 +116,7 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
 
         # Second-order constraint
         # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from other non-zero entries of b
-        constraints = [b > 0,
+        constraints = [b >= 0,
             2 * dot(b, c[(num_stages - num_stage_evals + 2):(num_stages - 1)]) == 1.0]
 
         # Use last optimal values for b in (potentially) next iteration
@@ -126,10 +126,10 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
                                                                   normalized_powered_eigvals_scaled,
                                                                   a, b, c), constraints)
 
-        #=                                                  
+        #=                                               
         solve!(problem,
                # Parameters taken from default values for EiCOS
-               Convex.MOI.OptimizerWithAttributes(ECOS.Optimizer, "b" => 0.99,
+               MOI.OptimizerWithAttributes(Optimizer, "b" => 0.99,
                                            "delta" => 2e-7,
                                            "feastol" => 1e-9,
                                            "abstol" => 1e-9,
@@ -139,14 +139,17 @@ function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
                                            "reltol_inacc" => 5e-5,
                                            "nitref" => 9,
                                            "maxit" => 100,
-                                           "verbose" => 3); silent_solver = false)
+                                           "verbose" => 3); silent_solver = true)
         =#
 
+        
         solve!(problem,
                MOI.OptimizerWithAttributes(Optimizer,
-                                           "tol_feas" => 1e-12);
+                                           "tol_feas" => 1e-4);
                silent_solver = true)
-
+        
+        print("dt: ", dt, "\n")
+        print("Problem value: ", problem.optval, "\n")
         abs_p = problem.optval
 
         if abs_p < 1
