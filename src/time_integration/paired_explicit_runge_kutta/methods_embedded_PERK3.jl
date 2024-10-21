@@ -17,6 +17,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stage_evals - 2)
+    b_unknown = zeros(num_stage_evals - 2)
 
     # Special case of e = 3
     if num_stage_evals == 3
@@ -30,11 +31,18 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
         monomial_coeffs, dt_opt_a = bisect_stability_polynomial(consistency_order,
-                                                              num_eig_vals, num_stages,
+                                                              num_eig_vals, num_stage_evals,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
-                                              num_stages)
+                                              num_stage_evals)
+
+        embedded_monomial_coeffs, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
+                                                                        num_eig_vals, num_stage_evals-1,
+                                                                        dtmax, dteps,
+                                                                        eig_vals; verbose)
+
+        embedded_monomial_coeffs = undo_normalization!(embedded_monomial_coeffs, consistency_order, num_stage_evals-1)
 
         # Solve the nonlinear system of equations from monomial coefficient and
         # Butcher array abscissae c to find Butcher matrix A
@@ -43,19 +51,23 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     num_stage_evals,
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
+
+        println("dt_opt_b = ", dt_opt_b)
+
+        b_unknown = Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown; verbose)
+
+        println("Embedded monomial after normalization: ", embedded_monomial_coeffs)
+        println("This is b_unknown = ",b_unknown)
+        println("dt_opt_a = ", dt_opt_a)
+        
+
+        error("Stability polynomial optimization process is complete.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
     a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
-
-    # Find the optimal b coeffficient from the Butcher tableau and its time step
-    b, dt_opt_b = solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
-                                                 num_stages, num_stage_evals,
-                                                 num_stages - 1, # num_stages_embedded = num_stages - 1	
-                                                 num_stage_evals - 1, # num_stage_evals_embedded = num_stage_evals - 1
-                                                 a_unknown, c, dtmax, dteps)
 
     return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end

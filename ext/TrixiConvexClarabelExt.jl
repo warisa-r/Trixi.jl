@@ -64,7 +64,7 @@ function embedded_scheme_stability_polynomials!(pnoms,
     return maximum(abs(pnoms))
 end
 
-function Trixi.solve_b_butcher_coeffs_unknown(num_eig_vals, eig_vals,
+function solve_b_butcher_coeffs_unknown_new(num_eig_vals, eig_vals,
                                               num_stages, num_stage_evals,
                                               num_stages_embedded,
                                               num_stage_evals_embedded,

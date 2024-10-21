@@ -10,6 +10,9 @@ else
     using ..NLsolve: nlsolve
 end
 
+# Use other necessary libraries for the dot product in finding b_unknown
+using LinearAlgebra: dot
+
 # We use a random initialization of the nonlinear solver.
 # To make the tests reproducible, we need to seed the RNG
 using StableRNGs: StableRNG, rand
@@ -67,6 +70,43 @@ function PairedExplicitRK3_butcher_tableau_objective_function!(c_eq, a_unknown,
     # Third-order consistency condition (Cf. eq. (27) from https://doi.org/10.1016/j.jcp.2022.111470
     c_eq[num_stage_evals - 2] = 1 - 4 * a_coeff[num_stage_evals] -
                                 a_coeff[num_stage_evals - 1]
+end
+
+function EmbeddedPairedExplicitRK3_butcher_tableau_objective_function!(b_eq, x,
+                                                                       num_stages,
+                                                                       num_stage_evals,
+                                                                       embedded_monomial_coeffs,
+                                                                       c, a)
+
+    # Construct a full b coefficient vector
+    b_coeff = [
+        1 - sum(x),
+        zeros(Float64, num_stages - num_stage_evals)...,
+        x...,
+        0
+    ]
+
+    b_eq_count = 0
+
+    #TODO: check the logic of this loop cos b is getting absurdly large
+    for i in 3:num_stage_evals-1
+        sum = 0.0
+        for j in (i + num_stages - num_stage_evals):num_stages-1
+            prod = 1.0
+            for k in (3 + j - i):j
+                prod *= a[k]
+            end
+            sum += prod * b_coeff[j] * c[j - i + 2]
+        end
+        b_eq[i-2] = embedded_monomial_coeffs[i-2] - sum
+        b_eq_count += 1
+    end
+
+    # TODO: there is a more efficient way to compute the dot product for sure...
+    b_eq[num_stage_evals-2] = 0.5 - dot(b_coeff, c)
+    b_eq_count += 1
+
+    println("b_eq_count: ", b_eq_count) # Debugging
 end
 
 # Find the values of the a_{i, i-1} in the Butcher tableau matrix A by solving a system of
@@ -129,6 +169,49 @@ function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_
     end
 
     error("Maximum number of iterations ($max_iter) reached. Cannot find valid sets of coefficients.")
+end
+
+function Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown;
+    verbose, max_iter = 100000)
+
+    # Construct a full a coefficient vector
+    a = zeros(num_stages)
+    num_a_unknown = length(a_unknown)
+
+    for i in 1:num_a_unknown
+        a[num_stages - i + 1] = a_unknown[num_a_unknown - i + 1]
+    end
+
+    # Define the objective_function
+    function embedded_scheme_objective_function!(b_eq, x)
+        return EmbeddedPairedExplicitRK3_butcher_tableau_objective_function!(b_eq, x,
+                                                                     num_stages,
+                                                                     num_stage_evals,
+                                                                     embedded_monomial_coeffs,
+                                                                     c, a)
+    end
+
+    # RealT is determined as the type of the first element in monomial_coeffs to ensure type consistency
+    RealT = typeof(embedded_monomial_coeffs[1])
+
+    # To ensure consistency and reproducibility of results across runs, we use 
+    # a seeded random initial guess.
+    rng = StableRNG(55555)
+
+    # Due to the nature of the nonlinear solver, different initial guesses can lead to 
+    # small numerical differences in the solution.
+
+    # There is e-2 free variables of b of the embedded scheme
+    x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stage_evals - 2)
+
+    sol = nlsolve(embedded_scheme_objective_function!, x0, method = :newton,
+                  ftol = 4.0e-16, # Enforce objective up to machine precision
+                  iterations = 10^4, xtol = 1.0e-13, autodiff = :forward)
+
+    b_unknown = sol.zero # Retrieve solution (root = zero)
+
+        
+    return b_unknown
 end
 end # @muladd
 
