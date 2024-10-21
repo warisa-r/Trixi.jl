@@ -86,19 +86,23 @@ function EmbeddedPairedExplicitRK3_butcher_tableau_objective_function!(b_eq, x,
         0
     ]
 
+    println("Length of b_coeff")
+    println(length(b_coeff)) # Debugging
+
     b_eq_count = 0
 
     #TODO: check the logic of this loop cos b is getting absurdly large
     for i in 3:num_stage_evals-1
         sum = 0.0
+        fac_i = factorial(i)
         for j in (i + num_stages - num_stage_evals):num_stages-1
             prod = 1.0
             for k in (3 + j - i):j
                 prod *= a[k]
             end
-            sum += prod * b_coeff[j] * c[j - i + 2]
+            sum += prod * b_coeff[j] * c[j - i + 2] 
         end
-        b_eq[i-2] = embedded_monomial_coeffs[i-2] - sum
+        b_eq[i-2] = embedded_monomial_coeffs[i-2] - sum * fac_i
         b_eq_count += 1
     end
 
@@ -174,6 +178,8 @@ end
 function Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown;
     verbose, max_iter = 100000)
 
+    verbose = true
+
     # Construct a full a coefficient vector
     a = zeros(num_stages)
     num_a_unknown = length(a_unknown)
@@ -201,17 +207,22 @@ function Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_
     # Due to the nature of the nonlinear solver, different initial guesses can lead to 
     # small numerical differences in the solution.
 
-    # There is e-2 free variables of b of the embedded scheme
-    x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stage_evals - 2)
+    for _ in 1:max_iter
 
-    sol = nlsolve(embedded_scheme_objective_function!, x0, method = :newton,
-                  ftol = 4.0e-16, # Enforce objective up to machine precision
-                  iterations = 10^4, xtol = 1.0e-13, autodiff = :forward)
+        # There is e-2 free variables of b of the embedded scheme
+        x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stage_evals - 2)
 
-    b_unknown = sol.zero # Retrieve solution (root = zero)
+        sol = nlsolve(embedded_scheme_objective_function!, x0, method = :trust_region,
+                    ftol = 4.0e-16, # Enforce objective up to machine precision
+                    iterations = 10^4, xtol = 1.0e-13, autodiff = :forward)
 
-        
-    return b_unknown
+        b_unknown = sol.zero # Retrieve solution (root = zero)
+
+        is_sol_valid = all(x -> !isnan(x) && x >= 0, b_unknown) && (sum(b_unknown) <= 1.0)
+
+        return b_unknown
+
+    end
 end
 end # @muladd
 

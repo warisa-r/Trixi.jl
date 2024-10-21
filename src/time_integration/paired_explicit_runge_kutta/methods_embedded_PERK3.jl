@@ -17,7 +17,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stage_evals - 2)
-    b_unknown = zeros(num_stage_evals - 2)
+    b = zeros(num_stage_evals - 2)
 
     # Special case of e = 3
     if num_stage_evals == 3
@@ -54,14 +54,13 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         println("dt_opt_b = ", dt_opt_b)
 
-        b_unknown = Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown; verbose)
+        b = Trixi.solve_b_butcher_coeffs_unknown!(b, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown; verbose)
 
         println("Embedded monomial after normalization: ", embedded_monomial_coeffs)
-        println("This is b_unknown = ",b_unknown)
         println("dt_opt_a = ", dt_opt_a)
         
 
-        error("Stability polynomial optimization process is complete.")
+        #error("Stability polynomial optimization process is complete.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
