@@ -117,7 +117,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         println("dt_opt_a = ", dt_opt_a)
         
 
-        error("b found.")
+        #error("b found.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
@@ -370,7 +370,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 2:(alg.num_stages - alg.num_stage_evals + 1)
+        for stage in 2:(alg.num_stages - alg.num_stage_evals)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
@@ -384,25 +384,28 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             end
         end
 
-        # k_(s-e+2)
+        # #k_(s-e+1) and k_(s-e+2)
         # Construct current state
-        @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] +
-                                  alg.c[alg.num_stages - alg.num_stage_evals + 2] *
-                                  integrator.k1[i]
-        end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                     integrator.t +
-                     alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.dt)
+        for j in 1:2
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_tmp[i] = integrator.u[i] +
+                                    alg.c[alg.num_stages - alg.num_stage_evals + 2] *
+                                    integrator.k1[i]
+            end
 
-        @threaded for i in eachindex(integrator.du)
-            integrator.k_higher[i] = integrator.du[i] * integrator.dt
-        end
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                        integrator.t +
+                        alg.c[alg.num_stages - alg.num_stage_evals + j] * integrator.dt)
 
-        @threaded for i in eachindex(integrator.u)
-            integrator.u[i] += integrator.k_higher[i] *
-                               alg.b[2]
+            @threaded for i in eachindex(integrator.du)
+                integrator.k_higher[i] = integrator.du[i] * integrator.dt
+            end
+
+            @threaded for i in eachindex(integrator.u)
+                integrator.u[i] += integrator.k_higher[i] *
+                                alg.b[j+1]
+            end
         end
 
         # Higher stages after num_stage_evals where b is non-zero
@@ -427,7 +430,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.u)
                 integrator.u[i] += integrator.k_higher[i] *
-                                   alg.b[stage - alg.num_stages + alg.num_stage_evals]
+                                   alg.b[stage - alg.num_stages + alg.num_stage_evals+1]
             end
         end
 
