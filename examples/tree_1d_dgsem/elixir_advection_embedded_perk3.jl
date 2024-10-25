@@ -62,7 +62,6 @@ ode_algorithm = Trixi.EmbeddedPairedRK3(10, 9, tspan, semi)
 # b values in the Butcher tableau of the ODE algorithm).
 #cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback()
-# I've tried using cfl of 1.5 and the error is very similar.
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
@@ -78,27 +77,3 @@ sol = Trixi.solve(ode, ode_algorithm,
 
 # Print the timer summary
 summary_callback()
-
-ode_algorithm.b
-
-
-# Some function defined so that I can check if the second order condition is met. This will be removed later.
-function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
-    # Construct the b vector
-    b = [
-        b_unknown[1],
-        zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
-        b_unknown[2:end]...,
-        0
-    ]
-    return b
-end
-
-b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1,
-                       ode_algorithm.num_stage_evals - 1)
-println("dot(b, c) = ", dot(b, ode_algorithm.c))
-println("sum(b) = ", sum(b))
-
-println("dt_opt_a = ", ode_algorithm.dt_opt_a)
-println("dt_opt_b = ", ode_algorithm.dt_opt_b)
-println("ratio = ", ode_algorithm.dt_opt_b / ode_algorithm.dt_opt_a * 100)
