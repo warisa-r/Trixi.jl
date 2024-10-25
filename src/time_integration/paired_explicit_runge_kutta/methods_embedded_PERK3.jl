@@ -7,8 +7,8 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
+#=
 function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
-    # Different scheme for c?
 
     A = zeros(num_stage_evals - 1, num_stage_evals - 1)
     b_embedded = zeros(num_stage_evals - 1)
@@ -44,6 +44,19 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
 
     b_embedded = A \ rhs
     return b_embedded
+end
+=#
+
+# Some function defined so that I can check if the second order condition is met. This will be removed later.
+function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
+    # Construct the b vector
+    b = [
+        b_unknown[1],
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded-1)...,
+        b_unknown[2:end]...,
+        0
+    ]
+    return b
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -94,13 +107,17 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         println("dt_opt_b = ", dt_opt_b)
 
         b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+        
+        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
+        println("dot(b, c) = ", dot(b_full, c))
+        println("sum(b) = ", sum(b_full))
         println("b: ", b)
         println("Embedded monomial after normalization: ", embedded_monomial_coeffs)
         println("dt_opt_a = ", dt_opt_a)
         
 
-        #error("b found.")
+        error("b found.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)

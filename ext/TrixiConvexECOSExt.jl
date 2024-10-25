@@ -3,11 +3,11 @@ module TrixiConvexECOSExt
 
 # Required for coefficient optimization in P-ERK scheme integrators
 if isdefined(Base, :get_extension)
-    using Convex: MOI, solve!, Variable, minimize, evaluate
+    using Convex: MOI, solve!, Variable, minimize, evaluate, sumsquares
     using ECOS: Optimizer
 else
     # Until Julia v1.9 is the minimum required version for Trixi.jl, we still support Requires.jl
-    using ..Convex: MOI, solve!, Variable, minimize, evaluate
+    using ..Convex: MOI, solve!, Variable, minimize, evaluate, sumsquares
     using ..ECOS: Optimizer
 end
 
@@ -15,7 +15,7 @@ end
 using LinearAlgebra: eigvals
 
 # Use functions that are to be extended and additional symbols that are not exported
-using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, @muladd
+using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, compute_b_embedded_coeffs, @muladd
 
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
@@ -159,6 +159,59 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
     end
 
     return gamma_opt, dt
+end
+
+function Trixi.compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+
+    A = zeros(num_stage_evals-1, num_stage_evals)
+    rhs = [1, 1/2, embedded_monomial_coeffs...]
+
+    # Define the variables
+    b_embedded = Variable(num_stage_evals)  # the unknown coefficients we want to solve for
+    
+    # Initialize A matrix for the constraints
+    A[1, :] .= 1  # sum(b) = 1 constraint row
+    for i in 1:num_stage_evals-1
+        A[2, i+1] = c[num_stages - num_stage_evals + i]  # second order constraint: dot(b, c) = 1/2
+    end
+
+    # Fill the A matrix with other constraints based on monomial coefficients
+    for i in 3:(num_stage_evals-1)
+        for j in i+1:num_stage_evals
+            A[i, j] = c[num_stages - num_stage_evals + j - 2]
+            for k in 1:i-2
+                A[i, j] *= a_unknown[j - 1 - k]  # recursive dependence on `a_unknown`
+            end
+        end
+    end
+
+    println("A matrix of finding b")
+    display(A)
+
+    # Set up weights to prioritize the first two constraints
+    weights = [2, 2, ones(num_stage_evals-3)...]  # Heavier weight for the first two rows
+    weighted_residual = weights .* (A * b_embedded - rhs)  # Element-wise multiplication for weighting
+
+    # Set up the objective to minimize the weighted norm of the difference
+    problem = minimize(sumsquares(weighted_residual), [b_embedded >= 0])
+
+    solve!(problem, # Parameters taken from default values for EiCOS
+                                MOI.OptimizerWithAttributes(Optimizer, "gamma" => 0.99,
+                                "delta" => 2e-7,
+                                "feastol" => 1e-9,
+                                "abstol" => 1e-9,
+                                "reltol" => 1e-9,
+                                "feastol_inacc" => 1e-7,
+                                "abstol_inacc" => 5e-6,
+                                "reltol_inacc" => 5e-7,
+                                "nitref" => 9,
+                                "maxit" => 1000000,
+                                "verbose" => 3); silent_solver = true)
+    
+
+    ot = problem.optval
+    println("Optimal value of the objective function: ", ot)
+    return evaluate(b_embedded)
 end
 end # @muladd
 

@@ -174,56 +174,6 @@ function Trixi.solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stage_
 
     error("Maximum number of iterations ($max_iter) reached. Cannot find valid sets of coefficients.")
 end
-
-function Trixi.solve_b_butcher_coeffs_unknown!(b_unknown, num_stages, num_stage_evals, embedded_monomial_coeffs, c, a_unknown;
-    verbose, max_iter = 100000)
-
-    verbose = true
-
-    # Construct a full a coefficient vector
-    a = zeros(num_stages)
-    num_a_unknown = length(a_unknown)
-
-    for i in 1:num_a_unknown
-        a[num_stages - i + 1] = a_unknown[num_a_unknown - i + 1]
-    end
-
-    # Define the objective_function
-    function embedded_scheme_objective_function!(b_eq, x)
-        return EmbeddedPairedExplicitRK3_butcher_tableau_objective_function!(b_eq, x,
-                                                                     num_stages,
-                                                                     num_stage_evals,
-                                                                     embedded_monomial_coeffs,
-                                                                     c, a)
-    end
-
-    # RealT is determined as the type of the first element in monomial_coeffs to ensure type consistency
-    RealT = typeof(embedded_monomial_coeffs[1])
-
-    # To ensure consistency and reproducibility of results across runs, we use 
-    # a seeded random initial guess.
-    rng = StableRNG(55555)
-
-    # Due to the nature of the nonlinear solver, different initial guesses can lead to 
-    # small numerical differences in the solution.
-
-    for _ in 1:max_iter
-
-        # There is e-2 free variables of b of the embedded scheme
-        x0 = convert(RealT, 0.1) .* rand(rng, RealT, num_stage_evals - 2)
-
-        sol = nlsolve(embedded_scheme_objective_function!, x0, method = :trust_region,
-                    ftol = 4.0e-16, # Enforce objective up to machine precision
-                    iterations = 10^4, xtol = 1.0e-13, autodiff = :forward)
-
-        b_unknown = sol.zero # Retrieve solution (root = zero)
-
-        is_sol_valid = all(x -> !isnan(x) && x >= 0, b_unknown) && (sum(b_unknown) <= 1.0)
-
-        return b_unknown
-
-    end
-end
 end # @muladd
 
 end # module TrixiNLsolveExt
