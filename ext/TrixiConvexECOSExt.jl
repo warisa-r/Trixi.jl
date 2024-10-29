@@ -15,7 +15,7 @@ end
 using LinearAlgebra: eigvals
 
 # Use functions that are to be extended and additional symbols that are not exported
-using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, @muladd
+using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, solve_b_embedded, @muladd
 
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
@@ -159,6 +159,140 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
     end
 
     return gamma_opt, dt
+end
+
+function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+
+    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
+    b_embedded = zeros(num_stage_evals - 1)
+    rhs = [1, 1/2, embedded_monomial_coeffs...]  # Cast embedded_monomial_coeffs to Float64 if needed
+
+    # sum(b) = 1
+    A[1, :] .= 1
+
+    # The second order constraint: dot(b,c) = 1/2
+    for i in 2:num_stage_evals - 1
+        A[2, i] = c[num_stages - num_stage_evals + i]
+    end
+
+    # Fill the A matrix
+    for i in 3:(num_stage_evals - 1)
+        # z^i
+        for j in i: (num_stage_evals - 1)
+            println("i = ", i, ", j = ", j)
+            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
+            A[i,j] = c[num_stages - num_stage_evals + j - 1]
+            # number of times a_unknown should be multiplied in each power of z
+            for k in 1: i-2
+                # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
+                # j-1 - k + 1 = j - k
+                println("a_unknown at index: ", j - k)
+                A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
+            end
+        end
+        rhs[i] /= factorial(i)
+    end
+
+    A_inv = inv(A)
+
+    b_embedded = A_inv * rhs
+    
+    return b_embedded
+end
+
+#TODO: Add an optimization of the embedded scheme that subject the b solved from the set of gamme to be +
+#      the same as the b from the original scheme. This will be done by using the same optimization as the normal scheme but with cosntraint and the function
+#      that will be used to construct the b vector from the gamma vector.
+function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
+                                           dtmax, dteps, eig_vals, a_unknown, c;
+                                           verbose = false)
+    dtmin = 0.0
+    dt = -1.0
+    abs_p = -1.0
+    consistency_order_embedded = consistency_order - 1
+
+    num_stage_evals_embedded = num_stage_evals -1
+
+    # Construct stability polynomial for each eigenvalue
+    pnoms = ones(Complex{Float64}, num_eig_vals, 1)
+
+    # Init datastructure for monomial coefficients
+    gamma = Variable(num_stage_evals_embedded - consistency_order_embedded)
+
+    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals_embedded)
+
+    for j in 1:num_stage_evals_embedded
+        fac_j = factorial(j)
+        for i in 1:num_eig_vals
+            normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
+        end
+    end
+
+    normalized_powered_eigvals_scaled = similar(normalized_powered_eigvals)
+
+    if verbose
+        println("Start optimization of stability polynomial \n")
+    end
+
+    # Bisection on timestep
+    while dtmax - dtmin > dteps
+        dt = 0.5 * (dtmax + dtmin)
+
+        # Compute stability polynomial for current timestep
+        for k in 1:num_stage_evals_embedded
+            dt_k = dt^k
+            for i in 1:num_eig_vals
+                normalized_powered_eigvals_scaled[i, k] = dt_k *
+                                                          normalized_powered_eigvals[i,
+                                                                                     k]
+            end
+        end
+
+        constraint = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma, a_unknown, c).>= -1e-5
+
+        # Use last optimal values for gamma in (potentially) next iteration
+        problem = minimize(stability_polynomials!(pnoms, consistency_order_embedded,
+                                                  num_stage_evals_embedded,
+                                                  normalized_powered_eigvals_scaled,
+                                                  gamma), constraint)
+
+        solve!(problem,
+               # Parameters taken from default values for EiCOS
+               MOI.OptimizerWithAttributes(Optimizer, "gamma" => 0.99,
+                                           "delta" => 2e-7,
+                                           "feastol" => 1e-9,
+                                           "abstol" => 1e-9,
+                                           "reltol" => 1e-9,
+                                           "feastol_inacc" => 1e-4,
+                                           "abstol_inacc" => 5e-5,
+                                           "reltol_inacc" => 5e-5,
+                                           "nitref" => 9,
+                                           "maxit" => 100,
+                                           "verbose" => 3); silent_solver = true)
+
+        abs_p = problem.optval
+
+        if abs_p < 1
+            dtmin = dt
+        else
+            dtmax = dt
+        end
+    end
+
+    if verbose
+        println("Concluded stability polynomial optimization \n")
+    end
+
+    gamma_opt = evaluate(gamma)
+
+    # Catch case S = 3 (only one opt. variable)
+    if isa(gamma_opt, Number)
+        gamma_opt = [gamma_opt]
+    end
+
+    b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma_opt, a_unknown, c)
+
+    return b_embedded, dt
 end
 end # @muladd
 

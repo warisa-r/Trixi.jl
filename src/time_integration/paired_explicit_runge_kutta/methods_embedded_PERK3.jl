@@ -7,44 +7,8 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
-function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
-    # Different scheme for c?
-
-    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
-    b_embedded = zeros(num_stage_evals - 1)
-    rhs = [1, 1/2, embedded_monomial_coeffs...]
-
-    # sum(b) = 1
-    A[1, :] .= 1
-
-    # The second order constraint: dot(b,c) = 1/2
-    for i in 2:num_stage_evals - 1
-        A[2, i] = c[num_stages - num_stage_evals + i]
-    end
-
-    # Fill the A matrix
-    for i in 3:(num_stage_evals - 1)
-        # z^i
-        for j in i: (num_stage_evals - 1)
-            println("i = ", i, ", j = ", j)
-            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
-            A[i,j] = c[num_stages - num_stage_evals + j - 1]
-            # number of times a_unknown should be multiplied in each power of z
-            for k in 1: i-2
-                # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
-                # j-1 - k + 1 = j - k
-                println("a_unknown at index: ", j - k)
-                A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
-            end
-        end
-        #rhs[i] /= factorial(i)
-    end
-
-    display(A)
-
-    b_embedded = A \ rhs
-    return b_embedded
-end
+# To be overwritten in TrixiConvexECOSExt.jl
+function solve_b_embedded end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
@@ -76,13 +40,6 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
-        embedded_monomial_coeffs, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
-                                                                        num_eig_vals, num_stage_evals-1,
-                                                                        dtmax, dteps,
-                                                                        eig_vals; verbose)
-
-        embedded_monomial_coeffs = undo_normalization!(embedded_monomial_coeffs, consistency_order-1, num_stage_evals-1)
-
         # Solve the nonlinear system of equations from monomial coefficient and
         # Butcher array abscissae c to find Butcher matrix A
         # This function is extended in TrixiNLsolveExt.jl
@@ -91,12 +48,13 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
+        b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
+        dtmax, dteps, eig_vals, a_unknown, c;
+        verbose = true)
+
         println("dt_opt_b = ", dt_opt_b)
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
-
         println("b: ", b)
-        println("Embedded monomial after normalization: ", embedded_monomial_coeffs)
         println("dt_opt_a = ", dt_opt_a)
         
 
