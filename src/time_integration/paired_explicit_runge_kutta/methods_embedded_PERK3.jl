@@ -7,8 +7,57 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
-# To be overwritten in TrixiConvexECOSExt.jl
-function solve_b_embedded end
+#=
+function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+
+    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
+    b_embedded = zeros(num_stage_evals - 1)
+    rhs = [1, 1/2, embedded_monomial_coeffs...]
+
+    # sum(b) = 1
+    A[1, :] .= 1
+
+    # The second order constraint: dot(b,c) = 1/2
+    for i in 2:num_stage_evals - 1
+        A[2, i] = c[num_stages - num_stage_evals + i]
+    end
+
+    # Fill the A matrix
+    for i in 3:(num_stage_evals - 1)
+        # z^i
+        for j in i: (num_stage_evals - 1)
+            println("i = ", i, ", j = ", j)
+            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
+            A[i,j] = c[num_stages - num_stage_evals + j - 1]
+            # number of times a_unknown should be multiplied in each power of z
+            for k in 1: i-2
+                # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
+                # j-1 - k + 1 = j - k
+                println("a_unknown at index: ", j - k)
+                A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
+            end
+        end
+        #rhs[i] /= factorial(i)
+    end
+
+    display(A)
+
+    b_embedded = A \ rhs
+    return b_embedded
+end
+=#
+
+# Some function defined so that I can check if the second order condition is met. This will be removed later.
+function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
+    # Construct the b vector
+    b = [
+        b_unknown[1],
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded-1)...,
+        b_unknown[2:end]...,
+        0
+    ]
+    return b
+end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
@@ -54,6 +103,12 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         println("dt_opt_b = ", dt_opt_b)
 
+        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+        
+        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
+
+        println("dot(b, c) = ", dot(b_full, c))
+        println("sum(b) = ", sum(b_full))
         println("b: ", b)
         println("dt_opt_a = ", dt_opt_a)
         
@@ -311,7 +366,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 2:(alg.num_stages - alg.num_stage_evals + 1)
+        for stage in 2:(alg.num_stages - alg.num_stage_evals)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
@@ -325,25 +380,28 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             end
         end
 
-        # k_(s-e+2)
+        # #k_(s-e+1) and k_(s-e+2)
         # Construct current state
-        @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] +
-                                  alg.c[alg.num_stages - alg.num_stage_evals + 2] *
-                                  integrator.k1[i]
-        end
 
-        integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                     integrator.t +
-                     alg.c[alg.num_stages - alg.num_stage_evals + 2] * integrator.dt)
+        for j in 1:2
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_tmp[i] = integrator.u[i] +
+                                    alg.c[alg.num_stages - alg.num_stage_evals + 2] *
+                                    integrator.k1[i]
+            end
 
-        @threaded for i in eachindex(integrator.du)
-            integrator.k_higher[i] = integrator.du[i] * integrator.dt
-        end
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                        integrator.t +
+                        alg.c[alg.num_stages - alg.num_stage_evals + j] * integrator.dt)
 
-        @threaded for i in eachindex(integrator.u)
-            integrator.u[i] += integrator.k_higher[i] *
-                               alg.b[2]
+            @threaded for i in eachindex(integrator.du)
+                integrator.k_higher[i] = integrator.du[i] * integrator.dt
+            end
+
+            @threaded for i in eachindex(integrator.u)
+                integrator.u[i] += integrator.k_higher[i] *
+                                alg.b[j+1]
+            end
         end
 
         # Higher stages after num_stage_evals where b is non-zero
@@ -368,7 +426,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.u)
                 integrator.u[i] += integrator.k_higher[i] *
-                                   alg.b[stage - alg.num_stages + alg.num_stage_evals]
+                                   alg.b[stage - alg.num_stages + alg.num_stage_evals+1]
             end
         end
 
