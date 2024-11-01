@@ -15,7 +15,7 @@ end
 using LinearAlgebra: eigvals
 
 # Use functions that are to be extended and additional symbols that are not exported
-using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, solve_b_embedded, @muladd
+using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, solve_b_embedded, solve_a_butcher_coeffs_unknown!, @muladd
 
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
@@ -161,29 +161,45 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
     return gamma_opt, dt
 end
 
-function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
-
+function compute_b_embedded_coeffs(num_stage_evals, num_stages, monomial_coeffs, gamma, cS2;verbose)
     A = zeros(num_stage_evals - 1, num_stage_evals - 1)
     b_embedded = zeros(num_stage_evals - 1)
-    rhs = [1, 1/2, embedded_monomial_coeffs...]  # Cast embedded_monomial_coeffs to Float64 if needed
+    rhs = [1, 1 / 2, gamma...]  # last element of embedded_monomial_coeffs is actually c_{S-2}
+    
+    c_temp = []
+    # Linear increasing timestep for remainder
+    for i in 2:(num_stages - 2)
+        push!(c_temp, cS2 * (i - 1) / (num_stages - 3))
+    end
+
+    # Last timesteps as for SSPRK33, see motivation in Section 3.3 of
+    # https://doi.org/10.1016/j.jcp.2024.113223
+    c= [c_temp..., 1.0f0, 0.5f0]
+
+    a_unknown = Variable(num_stages - 2)
+
+    a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages,
+                                                    num_stage_evals,
+                                                    monomial_coeffs, cS2, c; verbose)
 
     # sum(b) = 1
     A[1, :] .= 1
 
     # The second order constraint: dot(b,c) = 1/2
-    for i in 2:num_stage_evals - 1
+    for i in 2:(num_stage_evals - 1)
         A[2, i] = c[num_stages - num_stage_evals + i]
     end
 
     # Fill the A matrix
     for i in 3:(num_stage_evals - 1)
         # z^i
-        for j in i: (num_stage_evals - 1)
+        for j in i:(num_stage_evals - 1)
             println("i = ", i, ", j = ", j)
-            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
-            A[i,j] = c[num_stages - num_stage_evals + j - 1]
+            println("[num_stages - num_stage_evals + j - 1] = ",
+                    num_stages - num_stage_evals + j - 1)
+            A[i, j] = c[num_stages - num_stage_evals + j - 1]
             # number of times a_unknown should be multiplied in each power of z
-            for k in 1: i-2
+            for k in 1:(i - 2)
                 # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
                 # j-1 - k + 1 = j - k
                 println("a_unknown at index: ", j - k)
@@ -196,30 +212,33 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
     A_inv = inv(A)
 
     b_embedded = A_inv * rhs
-    
+
     return b_embedded
 end
 
 #TODO: Add an optimization of the embedded scheme that subject the b solved from the set of gamme to be +
 #      the same as the b from the original scheme. This will be done by using the same optimization as the normal scheme but with cosntraint and the function
 #      that will be used to construct the b vector from the gamma vector.
-function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
-                                           dtmax, dteps, eig_vals, a_unknown, c;
-                                           verbose = false)
+function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals,
+                                num_stages,
+                                dtmax, dteps, eig_vals, monomial_coeffs;
+                                verbose = false)
     dtmin = 0.0
     dt = -1.0
     abs_p = -1.0
     consistency_order_embedded = consistency_order - 1
 
-    num_stage_evals_embedded = num_stage_evals -1
+    num_stage_evals_embedded = num_stage_evals - 1
 
     # Construct stability polynomial for each eigenvalue
     pnoms = ones(Complex{Float64}, num_eig_vals, 1)
 
     # Init datastructure for monomial coefficients
     gamma = Variable(num_stage_evals_embedded - consistency_order_embedded)
+    cS2 = Variable(1) # c also need to be optimized
 
-    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals_embedded)
+    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals,
+                                       num_stage_evals_embedded)
 
     for j in 1:num_stage_evals_embedded
         fac_j = factorial(j)
@@ -248,7 +267,12 @@ function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals
             end
         end
 
-        constraint = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma, a_unknown, c).>= -1e-5
+        # all b and c of the embedded scheme must be positive values. Additionally, c_{S-2} <=  1
+        constraint = [
+            compute_b_embedded_coeffs(num_stage_evals, num_stages, monomial_coeffs, gamma, cS2;verbose) .>= -1e-5,
+            cS2 > 0,
+            cS2 <= 1
+        ]
 
         # Use last optimal values for gamma in (potentially) next iteration
         problem = minimize(stability_polynomials!(pnoms, consistency_order_embedded,
@@ -290,62 +314,17 @@ function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals
         gamma_opt = [gamma_opt]
     end
 
-    b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma_opt, a_unknown, c)
+    c = compute_c_coeffs(num_stages, gamma_opt[num_stage_evals_embedded - consistency_order_embedded + 1])
 
-    return b_embedded, dt
-end
+    a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages,
+                                                num_stage_evals,
+                                                monomial_coeffs, gamma_opt[num_stage_evals_embedded - consistency_order_embedded + 1], c;
+                                                verbose)
 
-function Trixi.compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+    b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma_opt,
+                                           a_unknown, c)
 
-    A = zeros(num_stage_evals-1, num_stage_evals)
-    rhs = [1, 1/2, embedded_monomial_coeffs...]
-
-    # Define the variables
-    b_embedded = Variable(num_stage_evals)  # the unknown coefficients we want to solve for
-    
-    # Initialize A matrix for the constraints
-    A[1, :] .= 1  # sum(b) = 1 constraint row
-    for i in 1:num_stage_evals-1
-        A[2, i+1] = c[num_stages - num_stage_evals + i]  # second order constraint: dot(b, c) = 1/2
-    end
-
-    # Fill the A matrix with other constraints based on monomial coefficients
-    for i in 3:(num_stage_evals-1)
-        for j in i+1:num_stage_evals
-            A[i, j] = c[num_stages - num_stage_evals + j - 2]
-            for k in 1:i-2
-                A[i, j] *= a_unknown[j - 1 - k]  # recursive dependence on `a_unknown`
-            end
-        end
-    end
-
-    println("A matrix of finding b")
-    display(A)
-
-    # Set up weights to prioritize the first two constraints
-    weights = [2, 2, ones(num_stage_evals-3)...]  # Heavier weight for the first two rows
-    weighted_residual = weights .* (A * b_embedded - rhs)  # Element-wise multiplication for weighting
-
-    # Set up the objective to minimize the weighted norm of the difference
-    problem = minimize(sumsquares(weighted_residual), [b_embedded >= 0])
-
-    solve!(problem, # Parameters taken from default values for EiCOS
-                                MOI.OptimizerWithAttributes(Optimizer, "gamma" => 0.99,
-                                "delta" => 2e-7,
-                                "feastol" => 1e-9,
-                                "abstol" => 1e-9,
-                                "reltol" => 1e-9,
-                                "feastol_inacc" => 1e-7,
-                                "abstol_inacc" => 5e-6,
-                                "reltol_inacc" => 5e-7,
-                                "nitref" => 9,
-                                "maxit" => 1000000,
-                                "verbose" => 3); silent_solver = true)
-    
-
-    ot = problem.optval
-    println("Optimal value of the objective function: ", ot)
-    return evaluate(b_embedded)
+    return b_embedded, dt, a_unknown, c
 end
 end # @muladd
 

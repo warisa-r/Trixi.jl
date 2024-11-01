@@ -9,17 +9,15 @@ using DelimitedFiles: readdlm
 
 # Initialize Butcher array abscissae c for PairedExplicitRK3 based on SSPRK33 base method
 function compute_c_coeffs(num_stages, cS2)
-    c = zeros(num_stages)
+    c_temp = []
+    # Linear increasing timestep for remainder
+    for i in 2:(num_stages - 2)
+        push!(c_temp, cS2 * (i - 1) / (num_stages - 3))
+    end
 
     # Last timesteps as for SSPRK33, see motivation in Section 3.3 of
     # https://doi.org/10.1016/j.jcp.2024.113223
-    c[num_stages - 1] = 1.0f0
-    c[num_stages] = 0.5f0
-
-    # Linear increasing timestep for remainder
-    for i in 2:(num_stages - 2)
-        c[i] = cS2 * (i - 1) / (num_stages - 3)
-    end
+    c= [c_temp..., 1.0f0, 0.5f0]
 
     return c
 end
