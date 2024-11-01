@@ -161,6 +161,7 @@ function Trixi.bisect_stability_polynomial(consistency_order, num_eig_vals,
     return gamma_opt, dt
 end
 
+#=
 function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
 
     A = zeros(num_stage_evals - 1, num_stage_evals - 1)
@@ -199,6 +200,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
     
     return b_embedded
 end
+=#
 
 #TODO: Add an optimization of the embedded scheme that subject the b solved from the set of gamme to be +
 #      the same as the b from the original scheme. This will be done by using the same optimization as the normal scheme but with cosntraint and the function
@@ -248,7 +250,7 @@ function Trixi.solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals
             end
         end
 
-        constraint = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma, a_unknown, c).>= -1e-5
+        #constraint = compute_b_embedded_coeffs(num_stage_evals, num_stages, gamma, a_unknown, c).>= -1e-5
 
         # Use last optimal values for gamma in (potentially) next iteration
         problem = minimize(stability_polynomials!(pnoms, consistency_order_embedded,

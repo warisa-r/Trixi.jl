@@ -9,28 +9,28 @@ using DelimitedFiles: readdlm
 
 function solve_b_embedded end
 
-#=
-function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
 
-    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
-    b_embedded = zeros(num_stage_evals - 1)
+function compute_b_embedded_coeffs_new(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+
+    A = zeros(num_stage_evals - 2, num_stage_evals - 2)
+    b_embedded = zeros(num_stage_evals - 2)
     rhs = [1, 1/2, embedded_monomial_coeffs...]
 
     # sum(b) = 1
     A[1, :] .= 1
 
     # The second order constraint: dot(b,c) = 1/2
-    for i in 2:num_stage_evals - 1
-        A[2, i] = c[num_stages - num_stage_evals + i]
+    for i in 2:num_stage_evals - 2
+        A[2, i] = c[num_stages - num_stage_evals + i + 1]
     end
 
     # Fill the A matrix
-    for i in 3:(num_stage_evals - 1)
+    for i in 3:(num_stage_evals - 2)
         # z^i
-        for j in i: (num_stage_evals - 1)
+        for j in i-1: (num_stage_evals - 2)
             println("i = ", i, ", j = ", j)
-            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
-            A[i,j] = c[num_stages - num_stage_evals + j - 1]
+            println("[num_stages - num_stage_evals + j] = ", num_stages - num_stage_evals + j)
+            A[i,j] = c[num_stages - num_stage_evals + j]
             # number of times a_unknown should be multiplied in each power of z
             for k in 1: i-2
                 # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
@@ -39,7 +39,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
                 A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
             end
         end
-        #rhs[i] /= factorial(i)
+        rhs[i] /= factorial(i) # normalize the monomial coefficients
     end
 
     display(A)
@@ -47,14 +47,14 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
     b_embedded = A \ rhs
     return b_embedded
 end
-=#
+
 
 # Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
     b = [
         b_unknown[1],
-        zeros(Float64, num_stages_embedded - num_stage_evals_embedded-1)...,
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded + 1)...,
         b_unknown[2:end]...,
         0
     ]
@@ -99,10 +99,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
-        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
-                                                              num_eig_vals, num_stage_evals-2,
-                                                              dtmax, dteps,
-                                                              eig_vals; verbose)
+        embedded_monomial_coeffs, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
+                                                                         num_eig_vals, num_stage_evals-2,
+                                                                         dtmax, dteps,
+                                                                         eig_vals; verbose)
         #b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
         #dtmax, dteps, eig_vals, a_unknown, c;
         #verbose = true)
@@ -114,9 +114,9 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         percentage_difference = (dt_opt_b / dt_opt_a) * 100
         println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
 
-        error("dt_opt_b found.")
+        #error("dt_opt_b found.")
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+        b = compute_b_embedded_coeffs_new(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
         
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
