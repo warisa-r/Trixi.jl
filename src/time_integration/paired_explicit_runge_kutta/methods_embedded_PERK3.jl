@@ -71,7 +71,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stage_evals - 2)
-    b = zeros(num_stage_evals - 2)
+    b = zeros(num_stage_evals - 1)
 
     # Special case of e = 3
     if num_stage_evals == 3
