@@ -7,6 +7,8 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
+function solve_b_embedded end
+
 #=
 function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
 
@@ -97,11 +99,22 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
-        b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
-        dtmax, dteps, eig_vals, a_unknown, c;
-        verbose = true)
+        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
+                                                              num_eig_vals, num_stage_evals-2,
+                                                              dtmax, dteps,
+                                                              eig_vals; verbose)
+        #b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
+        #dtmax, dteps, eig_vals, a_unknown, c;
+        #verbose = true)
 
         println("dt_opt_b = ", dt_opt_b)
+        println("dt_opt_a = ", dt_opt_a)
+
+        # Calculate and print the percentage difference
+        percentage_difference = (dt_opt_b / dt_opt_a) * 100
+        println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
+
+        error("dt_opt_b found.")
 
         b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
         
@@ -113,7 +126,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         println("dt_opt_a = ", dt_opt_a)
         
 
-        #error("b found.")
+        error("b found.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)

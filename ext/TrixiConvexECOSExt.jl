@@ -16,7 +16,6 @@ using LinearAlgebra: eigvals
 
 # Use functions that are to be extended and additional symbols that are not exported
 using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, solve_b_embedded, @muladd
-using Trixi: Trixi, undo_normalization!, bisect_stability_polynomial, compute_b_embedded_coeffs, @muladd
 
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
