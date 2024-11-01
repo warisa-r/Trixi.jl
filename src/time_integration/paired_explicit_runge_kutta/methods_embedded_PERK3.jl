@@ -54,7 +54,7 @@ function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embe
     # Construct the b vector
     b = [
         b_unknown[1],
-        zeros(Float64, num_stages_embedded - num_stage_evals_embedded-1)...,
+        zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
         b_unknown[2:end]...,
         0
     ]
@@ -71,7 +71,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stage_evals - 2)
-    b = zeros(num_stage_evals - 2)
+    b = zeros(num_stage_evals - 1)
 
     # Special case of e = 3
     if num_stage_evals == 3
@@ -100,7 +100,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     verbose)
 
         monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
-                                                              num_eig_vals, num_stage_evals-2,
+                                                              num_eig_vals, num_stage_evals-1,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
         #b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
