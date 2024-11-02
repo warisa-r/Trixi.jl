@@ -9,6 +9,15 @@ using DelimitedFiles: readdlm
 
 function solve_b_embedded end
 
+function compute_c_coeffs_embedded(num_stages)
+    c = []
+    for i in 1:num_stages
+        push!(c, (i-1) / (num_stages))
+    end
+
+    return c
+end
+
 #=
 function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
 
@@ -103,9 +112,9 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                               num_eig_vals, num_stage_evals-1,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
-        #b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
-        #dtmax, dteps, eig_vals, a_unknown, c;
-        #verbose = true)
+        b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
+        dtmax, dteps, eig_vals, a_unknown, c;
+        verbose = true)
 
         println("dt_opt_b = ", dt_opt_b)
         println("dt_opt_a = ", dt_opt_a)
@@ -114,16 +123,15 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         percentage_difference = (dt_opt_b / dt_opt_a) * 100
         println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
 
-        error("dt_opt_b found.")
+        #error("dt_opt_b found.")
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
+        #b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
         
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
         println("dot(b, c) = ", dot(b_full, c))
         println("sum(b) = ", sum(b_full))
         println("b: ", b)
-        println("dt_opt_a = ", dt_opt_a)
         
 
         error("b found.")
