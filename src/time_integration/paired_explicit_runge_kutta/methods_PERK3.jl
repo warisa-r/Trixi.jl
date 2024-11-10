@@ -61,7 +61,7 @@ function compute_PairedExplicitRK3_butcher_tableau(num_stages, tspan,
         #a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stages,
         #monomial_coeffs, cS2, c;
         #verbose)
-        a_unknown = solve_a_butcher_coeffs_with_JuMP(num_stages, #TODO: include num_stage_evals
+        a_unknown = solve_a_butcher_coeffs_with_JuMP(num_stages, num_stages,
                                                     monomial_coeffs, c;
                                                     verbose)
                                                     
