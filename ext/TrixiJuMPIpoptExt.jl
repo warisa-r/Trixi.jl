@@ -43,9 +43,11 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
     # Add variables for the unknowns (a_unknown coefficients) with non-negativity constraint
     a_unknown = @variable(model, [i in 1:(num_stage_evals - 2)], lower_bound=0.0)
 
-    # Define the objective function directly using the residual function
+    # Dummy function for JuMP to optimize
     @NLobjective(model, Min, 1.0)
 
+    # Start defining the non-linear constraints after our non-linear equations
+    
     # For explicit methods, a_{1,1} = 0 and a_{2,1} = c_2 (Butcher's condition)
     a_coeff = [0, c[2], a_unknown...]
 
