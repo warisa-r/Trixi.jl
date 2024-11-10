@@ -1,6 +1,7 @@
 # Convex and ECOS are imported because they are used for finding the optimal time step and optimal 
 # monomial coefficients in the stability polynomial of P-ERK time integrators.
 using Convex, ECOS
+using JuMP, Ipopt
 
 # NLsolve is imported to solve the system of nonlinear equations to find a coefficients
 # in the Butcher tableau in the third order P-ERK time integrator.
@@ -53,7 +54,7 @@ ode_algorithm = Trixi.PairedExplicitRK3(8, tspan, semi)
 
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 # For non-linear problems, the CFL number should be reduced by a safety factor
-stepsize_callback = StepsizeCallback(cfl = 0.85 * cfl_number)
+stepsize_callback = StepsizeCallback(cfl = 0.5 * cfl_number)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback, save_solution,

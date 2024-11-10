@@ -317,8 +317,13 @@ function __init__()
             @require ECOS="e2685f51-7e38-5353-a97d-a921fd2c8199" begin
                 include("../ext/TrixiConvexECOSExt.jl")
             end
-            @require Clarabel="61c947e1-3e6d-4ee4-985a-eec8c727bd6e" begin
-                include("../ext/TrixiConvexClarabelExt.jl")
+        end
+    end
+
+    @static if !isdefined(Base, :get_extension)
+        @require JuMP="4076af6c-e467-56ae-b986-b466b2749572" begin
+            @require Ipopt="b6b21f68-93f8-5de0-b562-5493be1d77c9" begin
+                include("../ext/TrixiJuMPIpoptExt.jl")
             end
         end
     end

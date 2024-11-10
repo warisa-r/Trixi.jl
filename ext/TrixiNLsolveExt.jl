@@ -72,47 +72,6 @@ function PairedExplicitRK3_butcher_tableau_objective_function!(c_eq, a_unknown,
                                 a_coeff[num_stage_evals - 1]
 end
 
-function EmbeddedPairedExplicitRK3_butcher_tableau_objective_function!(b_eq, x,
-                                                                       num_stages,
-                                                                       num_stage_evals,
-                                                                       embedded_monomial_coeffs,
-                                                                       c, a)
-
-    # Construct a full b coefficient vector
-    b_coeff = [
-        1 - sum(x),
-        zeros(Float64, num_stages - num_stage_evals)...,
-        x...,
-        0
-    ]
-
-    println("Length of b_coeff")
-    println(length(b_coeff)) # Debugging
-
-    b_eq_count = 0
-
-    #TODO: check the logic of this loop cos b is getting absurdly large
-    for i in 3:num_stage_evals-1
-        sum = 0.0
-        fac_i = factorial(i)
-        for j in (i + num_stages - num_stage_evals):num_stages-1
-            prod = 1.0
-            for k in (3 + j - i):j
-                prod *= a[k]
-            end
-            sum += prod * b_coeff[j] * c[j - i + 2] 
-        end
-        b_eq[i-2] = embedded_monomial_coeffs[i-2] - sum * fac_i
-        b_eq_count += 1
-    end
-
-    # TODO: there is a more efficient way to compute the dot product for sure...
-    b_eq[num_stage_evals-2] = 0.5 - dot(b_coeff, c)
-    b_eq_count += 1
-
-    println("b_eq_count: ", b_eq_count) # Debugging
-end
-
 # Find the values of the a_{i, i-1} in the Butcher tableau matrix A by solving a system of
 # non-linear equations that arise from the relation of the stability polynomial to the Butcher tableau.
 # For details, see Proposition 3.2, Equation (3.3) from 

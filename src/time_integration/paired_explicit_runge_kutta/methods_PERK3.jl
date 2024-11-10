@@ -7,6 +7,8 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
+function solve_a_butcher_coeffs_with_JuMP end
+
 # Initialize Butcher array abscissae c for PairedExplicitRK3 based on SSPRK33 base method
 function compute_c_coeffs(num_stages, cS2)
     c = zeros(num_stages)
@@ -56,9 +58,13 @@ function compute_PairedExplicitRK3_butcher_tableau(num_stages, tspan,
         # Solve the nonlinear system of equations from monomial coefficient and
         # Butcher array abscissae c to find Butcher matrix A
         # This function is extended in TrixiNLsolveExt.jl
-        a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stages,
-                                                    monomial_coeffs, cS2, c;
+        #a_unknown = solve_a_butcher_coeffs_unknown!(a_unknown, num_stages, num_stages,
+        #monomial_coeffs, cS2, c;
+        #verbose)
+        a_unknown = solve_a_butcher_coeffs_with_JuMP(num_stages, #TODO: include num_stage_evals
+                                                    monomial_coeffs, c;
                                                     verbose)
+                                                    
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stages - 2, 2)
