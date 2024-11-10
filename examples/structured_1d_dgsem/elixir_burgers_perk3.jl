@@ -54,7 +54,7 @@ ode_algorithm = Trixi.PairedExplicitRK3(8, tspan, semi)
 
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 # For non-linear problems, the CFL number should be reduced by a safety factor
-stepsize_callback = StepsizeCallback(cfl = 0.5 * cfl_number)
+stepsize_callback = StepsizeCallback(cfl = 0.85 * cfl_number)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback, save_solution,
