@@ -17,4 +17,5 @@ include("polynomial_optimizer.jl")
 # extension or by the NLsolve-specific code loaded by Requires.jl
 function solve_a_butcher_coeffs_unknown! end
 function optimize_c_embedded_scheme end
+function optimize_stability_polynomial_Ipopt end
 end # @muladd

@@ -49,21 +49,29 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
-        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
+        monomial_coeffs_embedded_convex, dt_opt_b_convex = bisect_stability_polynomial(consistency_order-1,
                                                               num_eig_vals, num_stage_evals-1,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
-        a_unknown, b_embedded, c = optimize_c_embedded_scheme(num_stages, num_stage_evals, monomial_coeffs,
-        monomial_coeffs_embedded; verbose)
 
-        println("dt_opt_b = ", dt_opt_b)
+        monomial_coeffs_embedded_Ipopt, dt_opt_b_Ipopt = optimize_stability_polynomial_Ipopt(consistency_order-1,
+                                                              num_eig_vals, num_stage_evals-1,
+                                                              dtmax, dteps,
+                                                              eig_vals; verbose)
+        
+
+        println("dt_opt_b_convex = ", dt_opt_b_convex)
+        println("dt_opt_b_Ipopt = ", dt_opt_b_Ipopt)
         println("dt_opt_a = ", dt_opt_a)
 
         # Calculate and print the percentage difference
-        percentage_difference = (dt_opt_b / dt_opt_a) * 100
-        println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
+        percentage_difference = (dt_opt_b_Ipopt / dt_opt_a) * 100
+        println("Percentage difference (dt_opt_b_Ipopt / dt_opt_a * 100) = ", percentage_difference)
 
-        #error("dt_opt_b found.")
+        println("monomial_coeffs_embedded_convex = ", monomial_coeffs_embedded_convex)
+        println("monomial_coeffs_embedded_Ipopt = ", monomial_coeffs_embedded_Ipopt)
+
+        error("dt_opt_b found.")
 
         #b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
         

@@ -201,5 +201,72 @@ function Trixi.optimize_c_embedded_scheme(num_stages, num_stage_evals, monomial_
 
     error("Tough luck. No c. Oops")
 end
+
+function Trixi.optimize_stability_polynomial_Ipopt(consistency_order, num_eig_vals, num_stage_evals, dtmax, dteps, eig_vals; verbose = false)
+    # Create JuMP model with Ipopt optimizer
+    model = Model(Ipopt.Optimizer)
+
+    # Define gamma as decision variables
+    @variable(model, gamma[1:num_stage_evals - consistency_order])
+
+    # Initialize pnoms for the stability polynomial
+    pnoms = ones(Complex{Float64}, num_eig_vals)
+    normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals)
+
+    # Calculate the normalized powered eigenvalues
+    for j in 1:num_stage_evals
+        fac_j = factorial(j)
+        for i in 1:num_eig_vals
+            normalized_powered_eigvals[i, j] = eig_vals[i]^j / fac_j
+        end
+    end
+
+    normalized_powered_eigvals_scaled = similar(normalized_powered_eigvals)
+
+    function stability_polynomial(gamma...)
+        # Convert splatted arguments into an array
+        gamma = collect(gamma)
+    
+        # Initialize pnoms for the stability polynomial
+        pnoms .= 1.0  # Reset pnoms
+    
+        # Compute stability polynomial for each timestep
+        for k in 1:num_stage_evals
+            dt_k = (dtmax / 2)^k  # Use a fixed timestep
+            for i in 1:num_eig_vals
+                normalized_powered_eigvals_scaled[i, k] = dt_k * normalized_powered_eigvals[i, k]
+            end
+        end
+    
+        # Calculate the polynomial
+        for k in (consistency_order + 1):num_stage_evals
+            pnoms .= pnoms .+ gamma[k - consistency_order] * normalized_powered_eigvals_scaled[:, k]
+        end
+    
+        # We only need the maximum absolute value of the polynomial for optimization
+        return maximum(abs.(pnoms))
+    end
+
+    # Register the custom function in JuMP
+    register(model, :stability_polynomial, 1, stability_polynomial, autodiff=true)
+
+    # Define the objective function for JuMP model
+    @NLobjective(model, Min, stability_polynomial(gamma...))
+
+    # Set Ipopt solver options
+    set_optimizer_attribute(model, "tol", 1e-9)
+    set_optimizer_attribute(model, "print_level", 0)
+    set_optimizer_attribute(model, "max_iter", 100)
+
+    # Solve the optimization problem
+    optimize!(model)
+
+    # Retrieve the optimized gamma values
+    gamma_opt = value(gamma)
+
+    # Return the optimal gamma and the corresponding timestep
+    dt = 0.5 * (dtmax + 0.0)  # midpoint of the timestep range as an approximation
+    return gamma_opt, dt
+end
 end
 end
