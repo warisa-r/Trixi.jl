@@ -82,9 +82,9 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
     term2 = a_coeff[num_stage_evals - 1]
     @NLconstraint(model, 1 - term1 - term2 == 0.0)
 
-    # Add nonlinear constraints
+    # Add nonlinear constraints ensuring that every a_unknown is non-negative
     for i in 1:(num_stage_evals - 2)
-        @NLconstraint(model, a_unknown[i] >= 0.0)  # Ensure a_unknown is non-negative
+        @NLconstraint(model, a_unknown[i] >= 0.0)
     end
 
     # Adding condition involving c and a_unknown (ensuring c[i] - a_unknown_value >= 0.0)
