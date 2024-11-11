@@ -88,8 +88,8 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
     end
 
     # Adding condition involving c and a_unknown (ensuring c[i] - a_unknown_value >= 0.0)
-    for i in (num_stage_evals - num_stages + 3):(num_stage_evals - 2)
-        @NLconstraint(model, c[i] - a_unknown[i - (num_stage_evals - num_stages + 2)] >= 0.0)
+    for i in (num_stages - num_stage_evals + 3):(num_stage_evals - 2)
+        @NLconstraint(model, c[i] - a_unknown[i - num_stages + num_stage_evals - 2] >= 0.0)
     end
 
     # Iterative attempts with different initial guesses
