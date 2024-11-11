@@ -47,7 +47,7 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
     @NLobjective(model, Min, 1.0)
 
     # Start defining the non-linear constraints after our non-linear equations
-    
+
     # For explicit methods, a_{1,1} = 0 and a_{2,1} = c_2 (Butcher's condition)
     a_coeff = [0, c[2], a_unknown...]
 
@@ -64,7 +64,7 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
         term1 *= c[num_stages - 2 - i] * 1 / 6 # 1 / 6 = b_{S-1}
         term2 *= c[num_stages - 1 - i] * 2 / 3 # 2 / 3 = b_S
 
-        @NLconstraint(model, monomial_coeffs[i] - (term1 + term2) == 0.0)
+        @NLconstraint(model, monomial_coeffs[i] - (term1 + term2)==0.0)
     end
 
     # Highest coefficient: Only one term present
@@ -75,21 +75,22 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
     end
     term2 *= c[num_stages - 1 - i] * 2 / 3 # 2 / 3 = b_S
 
-    @NLconstraint(model, monomial_coeffs[i] - term2 == 0.0)
+    @NLconstraint(model, monomial_coeffs[i] - term2==0.0)
 
     # Third-order consistency condition
     term1 = 4 * a_coeff[num_stage_evals] # Have to seperate this into two terms. Otherwise, JuMP throws an error with muladd.
     term2 = a_coeff[num_stage_evals - 1]
-    @NLconstraint(model, 1 - term1 - term2 == 0.0)
+    @NLconstraint(model, 1 - term1 - term2==0.0)
 
     # Add nonlinear constraints ensuring that every a_unknown is non-negative
     for i in 1:(num_stage_evals - 2)
-        @NLconstraint(model, a_unknown[i] >= 0.0)
+        @NLconstraint(model, a_unknown[i]>=0.0)
     end
 
     # Adding condition involving c and a_unknown (ensuring c[i] - a_unknown_value >= 0.0)
-    for i in (num_stage_evals - num_stages + 3):(num_stage_evals - 2)
-        @NLconstraint(model, c[i] - a_unknown[i - (num_stage_evals - num_stages + 2)] >= 0.0)
+    for i in (num_stages - num_stage_evals + 3):(num_stage_evals - 2)
+        @NLconstraint(model,
+                      c[i] - a_unknown[i - (num_stage_evals - num_stages + 2)]>=0.0)
     end
 
     # Iterative attempts with different initial guesses
@@ -112,11 +113,136 @@ function Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
             if verbose
                 println("Solution found after $attempt attempts.")
             end
-            return value.(a_unknown)
+            return value.(a_unknown), attempt
         end
     end
 
-    error("Unable to find a valid solution after $max_iter attempts.")
+    return fill(-1, N), max_iter # Instead of popping an error, gives this as a return value
+end
+
+function compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                   monomial_coeffs_embedded, a_unknown, c)
+    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
+    b_embedded = zeros(num_stage_evals - 1)
+    rhs = [1, 1 / 2, monomial_coeffs_embedded...]
+
+    # sum(b) = 1
+    A[1, :] .= 1
+
+    # The second order constraint: dot(b,c) = 1/2
+    for i in 2:(num_stage_evals - 1)
+        A[2, i] = c[num_stages - num_stage_evals + i]
+    end
+
+    # Fill the A matrix
+    for i in 3:(num_stage_evals - 1)
+        # z^i
+        for j in i:(num_stage_evals - 1)
+            #println("i = ", i, ", j = ", j)
+            #println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
+            A[i, j] = c[num_stages - num_stage_evals + j - 1]
+            # number of times a_unknown should be multiplied in each power of z
+            for k in 1:(i - 2)
+                # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
+                # j-1 - k + 1 = j - k
+                #println("a_unknown at index: ", j - k)
+                A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
+            end
+        end
+        #rhs[i] /= factorial(i) # The monomial coefficient has already been normalized.
+    end
+
+    #display(A)
+
+    b_embedded = A \ rhs
+    return b_embedded
+end
+
+function Trixi.optimize_c_embedded_scheme(num_stages, num_stage_evals, monomial_coeffs,
+                                    monomial_coeffs_embedded; verbose = false) # The monomial coefficients must be normalized before passing to this function.
+    # Define the model
+    model = Model(Ipopt.Optimizer)
+
+    verbose = true # See what happens first. Remove this laters
+
+    if !verbose
+        # Set Ipopt options to make it silent
+        set_optimizer_attribute(model, "print_level", 0)
+        set_optimizer_attribute(model, "sb", "yes")
+    end
+
+    # Set free c as the variable to be optimized. There are s-2 free cs as the two last entries of the coefficients
+    # are fixed.
+    c_free = @variable(model, [i in 1:(num_stages - 2)], lower_bound=0.0,
+                       upper_bound=1.0)
+
+    # Dummy objective (Min, 1) / or maybe later I can try RELU or softplus or something
+    #TODO: Or maybe minimize the number of iterations from a_unknown also works.
+    @NLobjective(model, Min, 1.0)
+
+    # Define full c vector
+    c = [c_free..., 1.0f0, 0.5f0]
+
+    # Set the NLconstraint that c must be between 0 and 1.
+    for i in 1:(num_stage_evals - 2)
+        @NLconstraint(model, 0.0<=c_free[i]<=1.0)
+    end
+
+    # Set the NLconstraint that a_unknown solved must be positive and set the maximum iteration of the solver for a_unknown
+    # to be lower so we don't waste computational resources on set of bad abscisscae c.
+    # Problematic error of MOI.Variable index.
+    #TODO: move the entire a_solve to this function optimize once.
+    a_unknown, attempts = Trixi.solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
+                                                           monomial_coeffs, c;
+                                                           verbose,
+                                                           max_iter = 100)
+
+    # JuMP constraints are scalar. We therefore need to loop over each member of a_unknown to add the constraint.
+    for i in 1:length(a_unknown)
+        @NLconstraint(model, a_unknown[i]>=0.0)
+    end
+
+    # Set the NLconstraint that b must be positive.
+    b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                           monomial_coeffs_embedded, a_unknown, c)
+
+    for i in 1:(num_stage_evals - 1)
+        @NLconstraint(model, b_embedded[i]>=0.0)
+    end
+
+    rng = StableRNG(555)  # Use Stable RNG for reproducibility
+
+    # Optimize and find c
+    for attempt in 1:max_iter
+        if verbose
+            println("Attempt $attempt with a new initial guess")
+        end
+
+        # Set random initial guess
+        for i in 1:length(c_free)
+            set_start_value(c_free[i], rand(rng) * 0.1)
+        end
+
+        # Solve the model
+        optimize!(model)
+
+        status = termination_status(model)
+        if status == LOCALLY_SOLVED || status == OPTIMAL
+            if verbose
+                println("Solution found after $attempt attempts.")
+            end
+            c = [value(c_free)..., 1.0f0, 0.5f0]
+            a_unknown = solve_a_butcher_coeffs_with_JuMP(num_stages, num_stage_evals,
+                                                         monomial_coeffs, c;
+                                                         verbose)
+            b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                                   monomial_coeffs_embedded, a_unknown,
+                                                   c)
+            return a_unknown, b_embedded, c
+        end
+    end
+
+    error("Tough luck. No c. Oops")
 end
 end
 end

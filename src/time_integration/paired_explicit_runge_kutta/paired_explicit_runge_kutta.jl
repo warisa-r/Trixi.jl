@@ -16,5 +16,6 @@ include("polynomial_optimizer.jl")
 # such that hey can be exported from Trixi.jl and extended in the TrixiConvexECOSExt package
 # extension or by the NLsolve-specific code loaded by Requires.jl
 function solve_a_butcher_coeffs_unknown! end
-function compute_b_embedded_coeffs end
+function solve_a_butcher_coeffs_with_JuMP end #TODO: make this exclusive for embedded scheme? If the next function works.
+function optimize_c_embedded_scheme end
 end # @muladd

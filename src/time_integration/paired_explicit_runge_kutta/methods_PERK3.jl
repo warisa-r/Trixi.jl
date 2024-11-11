@@ -7,8 +7,6 @@ using DelimitedFiles: readdlm
 @muladd begin
 #! format: noindent
 
-function solve_a_butcher_coeffs_with_JuMP end
-
 # Initialize Butcher array abscissae c for PairedExplicitRK3 based on SSPRK33 base method
 function compute_c_coeffs(num_stages, cS2)
     c = zeros(num_stages)
