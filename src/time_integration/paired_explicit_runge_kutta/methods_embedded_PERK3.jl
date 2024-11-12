@@ -131,10 +131,11 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     end
 
     # Fill A-matrix in P-ERK style
-    a_matrix = zeros(num_stage_evals - 2, 2)
-    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
-    a_matrix[:, 1] -= a_unknown
-    a_matrix[:, 2] = a_unknown
+    a_matrix = zeros(num_stages - 2, 2)
+    #a_matrix = zeros(num_stage_evals - 2, 2)
+    a_matrix[(num_stages - num_stage_evals + 1):end, 1] = c[(num_stages - num_stage_evals + 3):end]
+    a_matrix[(num_stages - num_stage_evals + 1):end, 1] -= a_unknown
+    a_matrix[(num_stages - num_stage_evals + 1):end, 2] = a_unknown
 
     return a_matrix, b_full, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
@@ -389,6 +390,21 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             integrator.k1[i] = integrator.du[i] * integrator.dt
             # Add the contribution of the first stage (b_1 in general non-zero)
             integrator.u[i] += alg.b[1] * integrator.k1[i]
+        end
+
+        # Higher order stages
+        for stage in 2:alg.num_stages - alg.num_stage_evals + 1
+            # Construct current state
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_tmp[i] = integrator.u_old[i] + alg.c[stage] * integrator.k1[i]
+            end
+
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                         integrator.t + alg.c[stage] * integrator.dt)
+
+            @threaded for i in eachindex(integrator.du)
+                integrator.k_higher[i] = integrator.du[i] * integrator.dt
+            end
         end
 
         # This is the first stage after stage 1 for which we need to evaluate `k_higher`
