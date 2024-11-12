@@ -6,19 +6,6 @@ using DelimitedFiles: readdlm
 
 @muladd begin
 #! format: noindent
-
-function solve_b_embedded end
-
-function compute_c_coeffs_embedded(num_stages)
-    c = []
-    for i in 1:num_stages
-        push!(c, (i-1) / (num_stages))
-    end
-
-    return c
-end
-
-#=
 function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
 
     A = zeros(num_stage_evals - 1, num_stage_evals - 1)
@@ -56,7 +43,6 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomia
     b_embedded = A \ rhs
     return b_embedded
 end
-=#
 
 # Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
@@ -112,9 +98,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                               num_eig_vals, num_stage_evals-1,
                                                               dtmax, dteps,
                                                               eig_vals; verbose)
-        b, dt_opt_b = solve_b_embedded(consistency_order, num_eig_vals, num_stage_evals, num_stages,
-        dtmax, dteps, eig_vals, a_unknown, c;
-        verbose = true)
+        monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded, consistency_order-1,
+                                                        num_stage_evals-1)
+
+        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, monomial_coeffs_embedded, a_unknown, c)
 
         println("dt_opt_b = ", dt_opt_b)
         println("dt_opt_a = ", dt_opt_a)
@@ -124,8 +111,6 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
 
         #error("dt_opt_b found.")
-
-        #b = compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
         
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
@@ -375,95 +360,54 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
     end
 
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-        # k1
+        # Set `u_old` to incoming `u`    
+        @threaded for i in eachindex(integrator.du)
+          integrator.u_old[i] = integrator.u[i]
+        end
+
+        # k1 is in general required, as we use b_1 to satisfy the first-order cons. cond.
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
         @threaded for i in eachindex(integrator.du)
             integrator.k1[i] = integrator.du[i] * integrator.dt
-        end
-
-        @threaded for i in eachindex(integrator.u)
-            # add the contribution of the first stage
+            # Add the contribution of the first stage (b_1 in general non-zero)
             integrator.u[i] += alg.b[1] * integrator.k1[i]
         end
 
-        # Higher stages where the weight of b in the butcher tableau is zero
-        for stage in 2:(alg.num_stages - alg.num_stage_evals)
-            # Construct current state
-            @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u[i] + alg.c[stage] * integrator.k1[i]
-            end
-
-            integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                         integrator.t + alg.c[stage] * integrator.dt)
-
-            @threaded for i in eachindex(integrator.du)
-                integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            end
-        end
-
-        # #k_(s-e+1) and k_(s-e+2)
+        # This is the first stage after stage 1 for which we need to evaluate `k_higher`
+        stage = alg.num_stages - alg.num_stage_evals + 2
         # Construct current state
-
-        for j in 1:2
-            @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u[i] +
-                                    alg.c[alg.num_stages - alg.num_stage_evals + 2] *
-                                    integrator.k1[i]
-            end
-
-            integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                        integrator.t +
-                        alg.c[alg.num_stages - alg.num_stage_evals + j] * integrator.dt)
-
-            @threaded for i in eachindex(integrator.du)
-                integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            end
-
-            @threaded for i in eachindex(integrator.u)
-                integrator.u[i] += integrator.k_higher[i] *
-                                alg.b[j+1]
-            end
-        end
-
-        # Higher stages after num_stage_evals where b is non-zero
-        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages - 1)
-            # Construct current state
-            @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u[i] +
-                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
-                                                   1] *
-                                      integrator.k1[i] +
-                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
-                                                   2] *
-                                      integrator.k_higher[i]
-            end
-
-            integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                         integrator.t + alg.c[stage] * integrator.dt)
-
-            @threaded for i in eachindex(integrator.du)
-                integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            end
-
-            @threaded for i in eachindex(integrator.u)
-                integrator.u[i] += integrator.k_higher[i] *
-                                   alg.b[stage - alg.num_stages + alg.num_stage_evals+1]
-            end
-        end
-
-        
-        # Last stage
         @threaded for i in eachindex(integrator.du)
-            integrator.u_tmp[i] = integrator.u[i] +
-                                  alg.a_matrix[alg.num_stage_evals - 2, 1] *
-                                  integrator.k1[i] +
-                                  alg.a_matrix[alg.num_stage_evals - 2, 2] *
-                                  integrator.k_higher[i]
+            integrator.u_tmp[i] = integrator.u_old[i] + alg.c[stage] * integrator.k1[i]
         end
-        
 
         integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                     integrator.t + alg.c[alg.num_stages] * integrator.dt)
+                     integrator.t + alg.c[stage] * integrator.dt)
+
+        @threaded for i in eachindex(integrator.du)
+            integrator.k_higher[i] = integrator.du[i] * integrator.dt
+            integrator.u[i] += alg.b[stage] * integrator.k_higher[i]
+        end
+
+        # Non-reducible stages
+        for stage in (alg.num_stages - alg.num_stage_evals + 3):alg.num_stages
+            # Construct current state
+            @threaded for i in eachindex(integrator.du)
+              integrator.u_tmp[i] = integrator.u_old[i] +
+                                    alg.a_matrix[stage - 2, 1] *
+                                    integrator.k1[i] +
+                                    alg.a_matrix[stage - 2, 2] *
+                                    integrator.k_higher[i]
+            end
+
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                         integrator.t + alg.c[stage] * integrator.dt)
+
+            @threaded for i in eachindex(integrator.du)
+                integrator.k_higher[i] = integrator.du[i] * integrator.dt
+                integrator.u[i] += alg.b[stage] * integrator.k_higher[i]
+            end
+        end
+        
     end # PairedExplicitRK step timer
 
     integrator.iter += 1
@@ -484,6 +428,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         terminate!(integrator)
     end
 end
+
 
 # used for AMR (Adaptive Mesh Refinement)
 function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
