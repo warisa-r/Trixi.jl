@@ -61,7 +61,7 @@ ode_algorithm = Trixi.EmbeddedPairedRK3(10, 8, tspan, semi)
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
 #cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
-stepsize_callback = StepsizeCallback(cfl = 2.1)
+stepsize_callback = StepsizeCallback(cfl = 2.0)
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,

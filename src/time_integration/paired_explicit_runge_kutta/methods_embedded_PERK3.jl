@@ -51,7 +51,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
     return b_embedded
 end
 
-# Some function defined so that I can check if the second order condition is met. This will be removed later. Maybe not that later.
+# Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
     b = [
@@ -134,7 +134,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[(num_stages - num_stage_evals + 1):end, 1] -= a_unknown
     a_matrix[(num_stages - num_stage_evals + 1):end, 2] = a_unknown
 
-    return a_matrix, b_full, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
+    return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -417,11 +417,11 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            integrator.u[i] += alg.b[stage] * integrator.k_higher[i]
+            integrator.u[i] += alg.b[2] * integrator.k_higher[i]
         end
 
         # Non-reducible stages
-        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages)
+        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages-1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u_old[i] +
@@ -436,8 +436,24 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
-                integrator.u[i] += alg.b[stage] * integrator.k_higher[i]
+                integrator.u[i] += alg.b[stage - alg.num_stages + alg.num_stage_evals] * integrator.k_higher[i]
             end
+        end
+
+        # Construct current state
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_tmp[i] = integrator.u_old[i] +
+                                  alg.a_matrix[alg.num_stages- 2, 1] *
+                                  integrator.k1[i] +
+                                  alg.a_matrix[alg.num_stages - 2, 2] *
+                                  integrator.k_higher[i]
+        end
+
+        integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                     integrator.t + alg.c[alg.num_stages] * integrator.dt)
+
+        @threaded for i in eachindex(integrator.du)
+            integrator.k_higher[i] = integrator.du[i] * integrator.dt
         end
     end # PairedExplicitRK step timer
 
