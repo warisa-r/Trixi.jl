@@ -47,11 +47,10 @@ save_solution = SaveSolutionCallback(interval = 100,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 6 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 7, tspan, semi)
-cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+ode_algorithm = Trixi.EmbeddedPairedRK3(10, 10, tspan, semi)
+#cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 
-stepsize_callback = StepsizeCallback(cfl = 0.5) # Warisa: This number is extremely small in contrast the other one from optimizing A
-# I've tried using cfl of 0.5 and the error is very similar.
+stepsize_callback = StepsizeCallback(cfl = 1.8)
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
@@ -66,22 +65,3 @@ sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
                   save_everystep = false, callback = callbacks);
 summary_callback() # print the timer summary
-
-# Some function defined so that I can check if the second order condition is met. This will be removed later.
-function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
-    # Construct the b vector
-    b = [
-        1 - sum(b_unknown),
-        zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
-        b_unknown...,
-        0
-    ]
-    return b
-end
-
-b = construct_b_vector(ode_algorithm.b, ode_algorithm.num_stages - 1,
-                       ode_algorithm.num_stage_evals - 1)
-println("dot(b, c) = ", dot(b, ode_algorithm.c))
-println("sum(b) = ", sum(b))
-
-println("cfl_number = ", cfl_number)

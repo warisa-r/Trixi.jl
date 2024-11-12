@@ -129,6 +129,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         #error("b found.")
     end
+
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
     a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
