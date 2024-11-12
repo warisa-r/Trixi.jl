@@ -6,29 +6,30 @@ using DelimitedFiles: readdlm
 
 @muladd begin
 #! format: noindent
-function compute_b_embedded_coeffs(num_stage_evals, num_stages, embedded_monomial_coeffs, a_unknown, c)
-
+function compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                   embedded_monomial_coeffs, a_unknown, c)
     A = zeros(num_stage_evals - 1, num_stage_evals - 1)
     b_embedded = zeros(num_stage_evals - 1)
-    rhs = [1, 1/2, embedded_monomial_coeffs...]
+    rhs = [1, 1 / 2, embedded_monomial_coeffs...]
 
     # sum(b) = 1
     A[1, :] .= 1
 
     # The second order constraint: dot(b,c) = 1/2
-    for i in 2:num_stage_evals - 1
+    for i in 2:(num_stage_evals - 1)
         A[2, i] = c[num_stages - num_stage_evals + i]
     end
 
     # Fill the A matrix
     for i in 3:(num_stage_evals - 1)
         # z^i
-        for j in i: (num_stage_evals - 1)
+        for j in i:(num_stage_evals - 1)
             println("i = ", i, ", j = ", j)
-            println("[num_stages - num_stage_evals + j - 1] = ", num_stages - num_stage_evals + j - 1)
-            A[i,j] = c[num_stages - num_stage_evals + j - 1]
+            println("[num_stages - num_stage_evals + j - 1] = ",
+                    num_stages - num_stage_evals + j - 1)
+            A[i, j] = c[num_stages - num_stage_evals + j - 1]
             # number of times a_unknown should be multiplied in each power of z
-            for k in 1: i-2
+            for k in 1:(i - 2)
                 # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
                 # j-1 - k + 1 = j - k
                 println("a_unknown at index: ", j - k)
@@ -80,9 +81,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
         monomial_coeffs, dt_opt_a = bisect_stability_polynomial(consistency_order,
-                                                              num_eig_vals, num_stage_evals,
-                                                              dtmax, dteps,
-                                                              eig_vals; verbose)
+                                                                num_eig_vals,
+                                                                num_stage_evals,
+                                                                dtmax, dteps,
+                                                                eig_vals; verbose)
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
@@ -94,32 +96,38 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
-        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order-1,
-                                                              num_eig_vals, num_stage_evals-1,
-                                                              dtmax, dteps,
-                                                              eig_vals; verbose)
-        monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded, consistency_order-1,
-                                                        num_stage_evals-1)
+        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order -
+                                                                         1,
+                                                                         num_eig_vals,
+                                                                         num_stage_evals -
+                                                                         1,
+                                                                         dtmax, dteps,
+                                                                         eig_vals;
+                                                                         verbose)
+        monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
+                                                       consistency_order - 1,
+                                                       num_stage_evals - 1)
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages, monomial_coeffs_embedded, a_unknown, c)
+        b = compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                      monomial_coeffs_embedded, a_unknown, c)
 
         println("dt_opt_b = ", dt_opt_b)
         println("dt_opt_a = ", dt_opt_a)
 
         # Calculate and print the percentage difference
         percentage_difference = (dt_opt_b / dt_opt_a) * 100
-        println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ", percentage_difference)
+        println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ",
+                percentage_difference)
 
         #error("dt_opt_b found.")
-        
+
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
         println("dot(b, c) = ", dot(b_full, c))
         println("sum(b) = ", sum(b_full))
         println("b: ", b)
-        
 
-        error("b found.")
+        #error("b found.")
     end
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stage_evals - 2, 2)
@@ -127,7 +135,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
+    return a_matrix, b_full, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -226,7 +234,8 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a, dt_opt_b)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a,
+                             dt_opt_b)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
@@ -243,11 +252,13 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
     a_matrix, b, c, dt_opt_a, dt_opt_b = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                                       num_stage_evals,
-                                                                       tspan,
-                                                                       eig_vals;
-                                                                       verbose, cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a, dt_opt_b)
+                                                                                   num_stage_evals,
+                                                                                   tspan,
+                                                                                   eig_vals;
+                                                                                   verbose,
+                                                                                   cS2)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a,
+                             dt_opt_b)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
@@ -276,10 +287,12 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     # PairedExplicitRK stages:
     k1::uType
     k_higher::uType
+    # Extra register for saving u
+    u_old::uType
 end
 
 function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
-              dt, callback = nothing, kwargs...)
+              dt, callback::Union{CallbackSet, Nothing} = nothing, kwargs...)
     u0 = copy(ode.u0)
     du = zero(u0)
     u_tmp = zero(u0)
@@ -287,6 +300,9 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
     # PairedExplicitRK stages
     k1 = zero(u0)
     k_higher = zero(u0)
+
+    # Required for embedded, i.e., populated PERK method
+    u_old = zero(u0)
 
     t0 = first(ode.tspan)
     tdir = sign(ode.tspan[end] - ode.tspan[1])
@@ -299,7 +315,8 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
                                                                      ode.tspan;
                                                                      kwargs...),
                                              false, true, false,
-                                             k1, k_higher)
+                                             k1, k_higher,
+                                             u_old)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -362,7 +379,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
         # Set `u_old` to incoming `u`    
         @threaded for i in eachindex(integrator.du)
-          integrator.u_old[i] = integrator.u[i]
+            integrator.u_old[i] = integrator.u[i]
         end
 
         # k1 is in general required, as we use b_1 to satisfy the first-order cons. cond.
@@ -389,14 +406,14 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Non-reducible stages
-        for stage in (alg.num_stages - alg.num_stage_evals + 3):alg.num_stages
+        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
-              integrator.u_tmp[i] = integrator.u_old[i] +
-                                    alg.a_matrix[stage - 2, 1] *
-                                    integrator.k1[i] +
-                                    alg.a_matrix[stage - 2, 2] *
-                                    integrator.k_higher[i]
+                integrator.u_tmp[i] = integrator.u_old[i] +
+                                      alg.a_matrix[stage - 2, 1] *
+                                      integrator.k1[i] +
+                                      alg.a_matrix[stage - 2, 2] *
+                                      integrator.k_higher[i]
             end
 
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
@@ -407,7 +424,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
                 integrator.u[i] += alg.b[stage] * integrator.k_higher[i]
             end
         end
-        
     end # PairedExplicitRK step timer
 
     integrator.iter += 1
@@ -428,7 +444,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         terminate!(integrator)
     end
 end
-
 
 # used for AMR (Adaptive Mesh Refinement)
 function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
