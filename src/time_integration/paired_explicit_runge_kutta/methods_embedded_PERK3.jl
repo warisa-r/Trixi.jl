@@ -24,24 +24,63 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
     for i in 3:(num_stage_evals - 1)
         # z^i
         for j in i:(num_stage_evals - 1)
-            println("i = ", i, ", j = ", j)
-            println("[num_stages - num_stage_evals + j - 1] = ",
-                    num_stages - num_stage_evals + j - 1)
             A[i, j] = c[num_stages - num_stage_evals + j - 1]
             # number of times a_unknown should be multiplied in each power of z
             for k in 1:(i - 2)
                 # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
-                # j-1 - k + 1 = j - k
-                println("a_unknown at index: ", j - k)
+                # j - 1 - k + 1 = j - k
                 A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
             end
         end
-        #rhs[i] /= factorial(i)
     end
 
-    display(A)
-
     b_embedded = A \ rhs
+    return b_embedded
+end
+
+function compute_b_embedded_coeffs_matrix_free(num_stage_evals, num_stages,
+                                   embedded_monomial_coeffs, a_unknown, c)
+    b_embedded = zeros(num_stage_evals - 1)
+    rhs = [1, 1 / 2, embedded_monomial_coeffs...]
+
+    # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
+    # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
+    for i in (num_stage_evals - 1):-1:1 # i here represents the degree of stability polynomial we are going through
+        # Initialize b_embedded[i] with rhs[i]
+        b_embedded[i] = rhs[i]
+
+        # Subtract the contributions of the upper triangular part -> For the first i, this loop won't be active.
+        for j in (i + 1):(num_stage_evals - 1)
+            # Compute the equivalent of A[i, j] without creating the matrix
+            if i == 1
+                aij = 1
+            elseif i == 2
+                aij = c[num_stages - num_stage_evals + j]
+            else
+                aij = c[num_stages - num_stage_evals + j - 1]
+            end
+            for k in 1:(i - 2) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
+                aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
+            end
+
+            # Update b_embedded[i] with the computed value
+            b_embedded[i] -= aij * b_embedded[j]
+        end
+
+        # Divide by the diagonal element A[i, i], which is 1 for sum(b) = 1
+        if i == 2
+            b_embedded[i] /= c[num_stages - num_stage_evals + i]
+        elseif i > 2
+            # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
+            b_embedded[i] /= c[num_stages - num_stage_evals + i - 1]
+            if i > 2
+                for k in 1:(i - 2)
+                    b_embedded[i] /= a_unknown[i - k]
+                end
+            end
+        end
+    end
+
     return b_embedded
 end
 
@@ -108,26 +147,15 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages,
+        bullshit = compute_b_embedded_coeffs_matrix_free(num_stage_evals, num_stages,
                                       monomial_coeffs_embedded, a_unknown, c)
 
-        println("dt_opt_b = ", dt_opt_b)
-        println("dt_opt_a = ", dt_opt_a)
+        println("b_embedded_without_matrx: ", bullshit)
+        println("b_embedded_with_matrx: ", compute_b_embedded_coeffs(num_stage_evals, num_stages,
+                                      monomial_coeffs_embedded, a_unknown, c))
 
-        # Calculate and print the percentage difference
-        percentage_difference = (dt_opt_b / dt_opt_a) * 100
-        println("Percentage difference (dt_opt_b / dt_opt_a * 100) = ",
-                percentage_difference)
-
-        #error("dt_opt_b found.")
-
+        error("b found")
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
-
-        println("dot(b, c) = ", dot(b_full, c))
-        println("sum(b) = ", sum(b_full))
-        println("b: ", b)
-
-        #error("b found.")
     end
 
     # Fill A-matrix in P-ERK style
@@ -393,10 +421,11 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Higher order stages
-        for stage in 2:alg.num_stages - alg.num_stage_evals + 1
+        for stage in 2:(alg.num_stages - alg.num_stage_evals + 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u_old[i] + alg.c[stage] * integrator.k1[i]
+                integrator.u_tmp[i] = integrator.u_old[i] +
+                                      alg.c[stage] * integrator.k1[i]
             end
 
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
