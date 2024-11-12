@@ -14,7 +14,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
     for i in (num_stage_evals - 1):-1:3 # i here represents the degree of stability polynomial we are going through
         # Initialize b_embedded[i]
-        b_embedded[i] = embedded_monomial_coeffs[i-2]
+        b_embedded[i] = embedded_monomial_coeffs[i - 2]
 
         # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
@@ -36,10 +36,10 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
     end
 
     # The second order constraint or i = 2
-    b_embedded[2] = 1/2
+    b_embedded[2] = 1 / 2
     for j in 3:(num_stage_evals - 1)
         b_embedded[2] -= c[num_stages - num_stage_evals + j] * b_embedded[j]
-    end  
+    end
     b_embedded[2] /= c[num_stages - num_stage_evals + 2]
 
     b_embedded[1] = 1
@@ -117,7 +117,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         b = compute_b_embedded_coeffs(num_stage_evals, num_stages,
                                       monomial_coeffs_embedded, a_unknown, c)
 
-        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1) #TODO: we don't need a full b vector. Modify the integrator to work with the reduced b vector
+        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
         println("Sum of b_full: ", sum(b_full))
         println("Dot product of b_full and c: ", dot(b_full, c))
@@ -128,11 +128,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     end
 
     # Fill A-matrix in P-ERK style
-    a_matrix = zeros(num_stages - 2, 2)
-    #a_matrix = zeros(num_stage_evals - 2, 2) #TODO: Modify the integrator so that it works with this dimension of A-matrix as well
-    a_matrix[(num_stages - num_stage_evals + 1):end, 1] = c[(num_stages - num_stage_evals + 3):end]
-    a_matrix[(num_stages - num_stage_evals + 1):end, 1] -= a_unknown
-    a_matrix[(num_stages - num_stage_evals + 1):end, 2] = a_unknown
+    a_matrix = zeros(num_stage_evals - 2, 2)
+    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
+    a_matrix[:, 1] -= a_unknown
+    a_matrix[:, 2] = a_unknown
 
     return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
 end
@@ -421,13 +420,15 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         end
 
         # Non-reducible stages
-        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages-1)
+        for stage in (alg.num_stages - alg.num_stage_evals + 3):(alg.num_stages - 1)
             # Construct current state
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u_old[i] +
-                                      alg.a_matrix[stage - 2, 1] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
+                                                   1] *
                                       integrator.k1[i] +
-                                      alg.a_matrix[stage - 2, 2] *
+                                      alg.a_matrix[stage - alg.num_stages + alg.num_stage_evals - 2,
+                                                   2] *
                                       integrator.k_higher[i]
             end
 
@@ -436,16 +437,17 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
-                integrator.u[i] += alg.b[stage - alg.num_stages + alg.num_stage_evals] * integrator.k_higher[i]
+                integrator.u[i] += alg.b[stage - alg.num_stages + alg.num_stage_evals] *
+                                   integrator.k_higher[i]
             end
         end
 
         # Construct current state
         @threaded for i in eachindex(integrator.du)
             integrator.u_tmp[i] = integrator.u_old[i] +
-                                  alg.a_matrix[alg.num_stages- 2, 1] *
+                                  alg.a_matrix[alg.num_stage_evals - 2, 1] *
                                   integrator.k1[i] +
-                                  alg.a_matrix[alg.num_stages - 2, 2] *
+                                  alg.a_matrix[alg.num_stage_evals - 2, 2] *
                                   integrator.k_higher[i]
         end
 
