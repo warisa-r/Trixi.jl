@@ -8,57 +8,18 @@ using DelimitedFiles: readdlm
 #! format: noindent
 function compute_b_embedded_coeffs(num_stage_evals, num_stages,
                                    embedded_monomial_coeffs, a_unknown, c)
-    A = zeros(num_stage_evals - 1, num_stage_evals - 1)
     b_embedded = zeros(num_stage_evals - 1)
-    rhs = [1, 1 / 2, embedded_monomial_coeffs...]
-
-    # sum(b) = 1
-    A[1, :] .= 1
-
-    # The second order constraint: dot(b,c) = 1/2
-    for i in 2:(num_stage_evals - 1)
-        A[2, i] = c[num_stages - num_stage_evals + i]
-    end
-
-    # Fill the A matrix
-    for i in 3:(num_stage_evals - 1)
-        # z^i
-        for j in i:(num_stage_evals - 1)
-            A[i, j] = c[num_stages - num_stage_evals + j - 1]
-            # number of times a_unknown should be multiplied in each power of z
-            for k in 1:(i - 2)
-                # so we want to get from a[k] * ... i-2 times (1 time is already accounted for by c-coeff)
-                # j - 1 - k + 1 = j - k
-                A[i, j] *= a_unknown[j - k] # a[k] is in the same stage as b[k-1] -> since we also store b_1
-            end
-        end
-    end
-
-    b_embedded = A \ rhs
-    return b_embedded
-end
-
-function compute_b_embedded_coeffs_matrix_free(num_stage_evals, num_stages,
-                                   embedded_monomial_coeffs, a_unknown, c)
-    b_embedded = zeros(num_stage_evals - 1)
-    rhs = [1, 1 / 2, embedded_monomial_coeffs...]
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
-    for i in (num_stage_evals - 1):-1:1 # i here represents the degree of stability polynomial we are going through
-        # Initialize b_embedded[i] with rhs[i]
-        b_embedded[i] = rhs[i]
+    for i in (num_stage_evals - 1):-1:3 # i here represents the degree of stability polynomial we are going through
+        # Initialize b_embedded[i]
+        b_embedded[i] = embedded_monomial_coeffs[i-2]
 
-        # Subtract the contributions of the upper triangular part -> For the first i, this loop won't be active.
+        # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
-            if i == 1
-                aij = 1
-            elseif i == 2
-                aij = c[num_stages - num_stage_evals + j]
-            else
-                aij = c[num_stages - num_stage_evals + j - 1]
-            end
+            aij = c[num_stages - num_stage_evals + j - 1]
             for k in 1:(i - 2) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
             end
@@ -67,24 +28,30 @@ function compute_b_embedded_coeffs_matrix_free(num_stage_evals, num_stages,
             b_embedded[i] -= aij * b_embedded[j]
         end
 
-        # Divide by the diagonal element A[i, i], which is 1 for sum(b) = 1
-        if i == 2
-            b_embedded[i] /= c[num_stages - num_stage_evals + i]
-        elseif i > 2
-            # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
-            b_embedded[i] /= c[num_stages - num_stage_evals + i - 1]
-            if i > 2
-                for k in 1:(i - 2)
-                    b_embedded[i] /= a_unknown[i - k]
-                end
-            end
+        # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
+        b_embedded[i] /= c[num_stages - num_stage_evals + i - 1]
+        for k in 1:(i - 2)
+            b_embedded[i] /= a_unknown[i - k]
         end
+    end
+
+    # The second order constraint or i = 2
+    b_embedded[2] = 1/2
+    for j in 3:(num_stage_evals - 1)
+        b_embedded[2] -= c[num_stages - num_stage_evals + j] * b_embedded[j]
+    end  
+    b_embedded[2] /= c[num_stages - num_stage_evals + 2]
+
+    b_embedded[1] = 1
+    # The first order constraint or i = 1
+    for j in 2:(num_stage_evals - 1)
+        b_embedded[1] -= b_embedded[j]
     end
 
     return b_embedded
 end
 
-# Some function defined so that I can check if the second order condition is met. This will be removed later.
+# Some function defined so that I can check if the second order condition is met. This will be removed later. Maybe not that later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
     b = [
@@ -147,20 +114,22 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
-        bullshit = compute_b_embedded_coeffs_matrix_free(num_stage_evals, num_stages,
+        b = compute_b_embedded_coeffs(num_stage_evals, num_stages,
                                       monomial_coeffs_embedded, a_unknown, c)
 
-        println("b_embedded_without_matrx: ", bullshit)
-        println("b_embedded_with_matrx: ", compute_b_embedded_coeffs(num_stage_evals, num_stages,
-                                      monomial_coeffs_embedded, a_unknown, c))
+        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1) #TODO: we don't need a full b vector. Modify the integrator to work with the reduced b vector
 
-        error("b found")
-        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
+        println("Sum of b_full: ", sum(b_full))
+        println("Dot product of b_full and c: ", dot(b_full, c))
+
+        # Calculate and print the percentage of dt_opt_b / dt_opt_a
+        percentage_dt_opt = (dt_opt_b / dt_opt_a) * 100
+        println("Percentage of dt_opt_b / dt_opt_a: ", percentage_dt_opt, "%")
     end
 
     # Fill A-matrix in P-ERK style
     a_matrix = zeros(num_stages - 2, 2)
-    #a_matrix = zeros(num_stage_evals - 2, 2)
+    #a_matrix = zeros(num_stage_evals - 2, 2) #TODO: Modify the integrator so that it works with this dimension of A-matrix as well
     a_matrix[(num_stages - num_stage_evals + 1):end, 1] = c[(num_stages - num_stage_evals + 3):end]
     a_matrix[(num_stages - num_stage_evals + 1):end, 1] -= a_unknown
     a_matrix[(num_stages - num_stage_evals + 1):end, 2] = a_unknown
