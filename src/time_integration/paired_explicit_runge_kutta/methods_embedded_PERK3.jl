@@ -459,7 +459,9 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             @threaded for i in eachindex(integrator.u)
                 # Note that 'k_higher' carries the values of K_{S-1}
                 # and that we construct 'K_S' "in-place" from 'integrator.du'
-                integrator.u[i] = integrator.u_e[i]
+                #TODO: Calculate original u[i] of PERK3 with the help of k1 and k_higher
+                integrator.u[i] = integrator.u_old[i] + (integrator.k1[i] + integrator.k_higher[i] +
+                4.0 * integrator.du[i] * integrator.dt) / 6.0
             end
         end
     end # PairedExplicitRK step timer
