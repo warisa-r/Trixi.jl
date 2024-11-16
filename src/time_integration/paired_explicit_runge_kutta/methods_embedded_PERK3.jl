@@ -53,14 +53,14 @@ end
 
 # Some function defined so that I can check if the second order condition is met. This function is used to check if the consistency condition is fulfilled.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
-    # Construct the b vector
-    b = [
+    # Construct the b_embedded vector
+    b_embedded = [
         b_unknown[1],
         zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
         b_unknown[2:end]...,
         0
     ]
-    return b
+    return b_embedded
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -73,7 +73,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
     # Initialize the array of our solution
     a_unknown = zeros(num_stage_evals - 2)
-    b = zeros(num_stage_evals - 1)
+    b_embedded = zeros(num_stage_evals - 1)
 
     # Special case of e = 3
     if num_stage_evals == 3
@@ -86,7 +86,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
-        monomial_coeffs, dt_opt_a = bisect_stability_polynomial(consistency_order,
+        monomial_coeffs, dt_opt = bisect_stability_polynomial(consistency_order,
                                                                 num_eig_vals,
                                                                 num_stage_evals,
                                                                 dtmax, dteps,
@@ -102,7 +102,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
-        monomial_coeffs_embedded, dt_opt_b = bisect_stability_polynomial(consistency_order -
+        monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
                                                                          1,
                                                                          num_eig_vals,
                                                                          num_stage_evals -
@@ -114,18 +114,8 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
-        b = compute_b_embedded_coeffs(num_stage_evals, num_stages,
+        b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
                                       monomial_coeffs_embedded, a_unknown, c)
-
-        b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
-
-        # Check consistency conditions.
-        println("Sum of b_full: ", sum(b_full))
-        println("Dot product of b_full and c: ", dot(b_full, c))
-
-        # Calculate and print the percentage of dt_opt_b / dt_opt_a
-        percentage_dt_opt = (dt_opt_b / dt_opt_a) * 100
-        println("Percentage of dt_opt_b / dt_opt_a: ", percentage_dt_opt, "%")
     end
 
     # Fill A-matrix in P-ERK style
@@ -134,7 +124,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    return a_matrix, b, c, dt_opt_a, dt_opt_b # Return the optimal time step from the b coefficients for testing purposes
+    return a_matrix, b_embedded, c, dt_opt, dt_opt_embedded # Return the optimal time step from the b_embedded coefficients for testing purposes
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -152,7 +142,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
     a_matrix = zeros(coeffs_max, 2)
     a_matrix[:, 1] = c[3:end]
 
-    b = zeros(coeffs_max)
+    b_embedded = zeros(coeffs_max)
 
     path_a_coeffs = joinpath(base_path_coeffs,
                              "a_" * string(num_stages) * "_" * string(num_stage_evals) *
@@ -172,11 +162,11 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
     a_matrix[:, 2] = a_coeffs
 
     @assert isfile(path_b_coeffs) "Couldn't find file $path_b_coeffs"
-    b = readdlm(path_b_coeffs, Float64)
-    num_b_coeffs = size(b, 1)
+    b_embedded = readdlm(path_b_coeffs, Float64)
+    num_b_coeffs = size(b_embedded, 1)
     @assert num_b_coeffs == coeffs_max
 
-    return a_matrix, b, c
+    return a_matrix, b_embedded, c
 end
 
 @doc raw"""
@@ -190,7 +180,7 @@ end
     Parameters:
     - `num_stages` (`Int`): Number of stages in the paired explicit Runge-Kutta (P-ERK) method.
     - `base_path_coeffs` (`AbstractString`): Path to a file containing some coefficients in the A-matrix and a file containing 
-      in some coefficients in the b vector of the Butcher tableau of the Runge Kutta method.
+      in some coefficients in the b_embedded vector of the Butcher tableau of the Runge Kutta method.
       The matrix should be stored in a text file at `joinpath(base_path_a_coeffs, "a_$(num_stages).txt")` and separated by line breaks.
     - `dt_opt` (`Float64`): Optimal time step size for the simulation setup.
     - `tspan`: Time span of the simulation.
@@ -218,23 +208,23 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     const num_stage_evals::Int # e
 
     a_matrix::Matrix{Float64}
-    b::Vector{Float64}
+    b_embedded::Vector{Float64}
     c::Vector{Float64}
-    dt_opt_a::Float64
-    dt_opt_b::Float64
+    dt_opt::Float64
+    dt_opt_embedded::Float64
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
-                           base_path_coeffs::AbstractString, dt_opt_a, dt_opt_b;
+                           base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
                            cS2 = 1.0f0)
-    a_matrix, b, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a,
-                             dt_opt_b)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+                             dt_opt_embedded)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
@@ -250,14 +240,14 @@ end
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, b, c, dt_opt_a, dt_opt_b = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                                    num_stage_evals,
                                                                                    tspan,
                                                                                    eig_vals;
                                                                                    verbose,
                                                                                    cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b, c, dt_opt_a,
-                             dt_opt_b)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+                             dt_opt_embedded)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
@@ -386,7 +376,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         @threaded for i in eachindex(integrator.du)
             integrator.k1[i] = integrator.du[i] * integrator.dt
             # Add the contribution of the first stage (b_1 in general non-zero)
-            integrator.u[i] += alg.b[1] * integrator.k1[i]
+            integrator.u[i] += alg.b_embedded[1] * integrator.k1[i]
         end
 
         # Higher order stages
@@ -417,7 +407,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            integrator.u[i] += alg.b[2] * integrator.k_higher[i]
+            integrator.u[i] += alg.b_embedded[2] * integrator.k_higher[i]
         end
 
         # Non-reducible stages
@@ -438,7 +428,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
-                integrator.u[i] += alg.b[stage - alg.num_stages + alg.num_stage_evals] *
+                integrator.u[i] += alg.b_embedded[stage - alg.num_stages + alg.num_stage_evals] *
                                    integrator.k_higher[i]
             end
         end
