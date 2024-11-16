@@ -287,6 +287,8 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     k_higher::uType
     # Extra register for saving u
     u_old::uType
+    # Storage for embedded method
+    u_e::uType
 end
 
 function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
@@ -294,6 +296,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
     u0 = copy(ode.u0)
     du = zero(u0)
     u_tmp = zero(u0)
+    u_e = zero(u0)
 
     # PairedExplicitRK stages
     k1 = zero(u0)
@@ -314,7 +317,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
                                                                      kwargs...),
                                              false, true, false,
                                              k1, k_higher,
-                                             u_old)
+                                             u_old, u_e)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -385,7 +388,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         @threaded for i in eachindex(integrator.du)
             integrator.k1[i] = integrator.du[i] * integrator.dt
             # Add the contribution of the first stage (b_1 in general non-zero)
-            integrator.u[i] += alg.b_embedded[1] * integrator.k1[i]
+            integrator.u_e[i] = integrator.u_old[i] + alg.b_embedded[1] * integrator.k1[i]
         end
 
         # Higher order stages
@@ -416,7 +419,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            integrator.u[i] += alg.b_embedded[2] * integrator.k_higher[i]
+            integrator.u_e[i] += alg.b_embedded[2] * integrator.k_higher[i]
         end
 
         # Non-reducible stages
@@ -437,8 +440,26 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
-                integrator.u[i] += alg.b_embedded[stage - alg.num_stages + alg.num_stage_evals] *
+                integrator.u_e[i] += alg.b_embedded[stage - alg.num_stages + alg.num_stage_evals] *
                                    integrator.k_higher[i]
+            end
+
+            # Last stage
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_tmp[i] = integrator.u_old[i] +
+                                    alg.a_matrix[alg.num_stage_evals - 2, 1] *
+                                    integrator.k1[i] +
+                                    alg.a_matrix[alg.num_stage_evals - 2, 2] *
+                                    integrator.k_higher[i]
+            end
+
+            integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                        integrator.t + alg.c[alg.num_stages] * integrator.dt)
+
+            @threaded for i in eachindex(integrator.u)
+                # Note that 'k_higher' carries the values of K_{S-1}
+                # and that we construct 'K_S' "in-place" from 'integrator.du'
+                integrator.u[i] = integrator.u_e[i]
             end
         end
     end # PairedExplicitRK step timer
