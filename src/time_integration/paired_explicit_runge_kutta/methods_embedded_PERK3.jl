@@ -51,7 +51,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
     return b_embedded
 end
 
-# Some function defined so that I can check if the second order condition is met. This will be removed later.
+# Some function defined so that I can check if the second order condition is met. This function is used to check if the consistency condition is fulfilled.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b vector
     b = [
@@ -119,6 +119,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
 
         b_full = construct_b_vector(b, num_stages - 1, num_stage_evals - 1)
 
+        # Check consistency conditions.
         println("Sum of b_full: ", sum(b_full))
         println("Dot product of b_full and c: ", dot(b_full, c))
 
