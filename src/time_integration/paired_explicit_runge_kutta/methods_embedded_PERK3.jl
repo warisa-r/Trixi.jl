@@ -133,7 +133,7 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
     a_matrix[:, 1] -= a_unknown
     a_matrix[:, 2] = a_unknown
 
-    return a_matrix, b_embedded, c, dt_opt, dt_opt_embedded # Return the optimal time step from the b_embedded coefficients for testing purposes
+    return a_matrix, b_embedded, c, dt_opt, dt_opt_embedded
 end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
@@ -221,42 +221,44 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     c::Vector{Float64}
     dt_opt::Float64
     dt_opt_embedded::Float64
+    abs_tol::Float64
+    rel_tol::Float64
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
-                           cS2 = 1.0f0)
+                           cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
     a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
-                             dt_opt_embedded)
+                             dt_opt_embedded, abs_tol, rel_tol)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            semi::AbstractSemidiscretization;
-                           verbose = false, cS2 = 1.0f0)
+                           verbose = false, cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2, abs_tol, rel_tol)
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
-                           verbose = false, cS2 = 1.0f0)
+                           verbose = false, cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
     a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                                    num_stage_evals,
                                                                                    tspan,
                                                                                    eig_vals;
                                                                                    verbose,
-                                                                                   cS2)
+                                                                                   cS2, abs_tol, rel_tol)
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
-                             dt_opt_embedded)
+                             dt_opt_embedded, abs_tol, rel_tol)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
@@ -287,8 +289,10 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     k_higher::uType
     # Extra register for saving u
     u_old::uType
-    # Storage for embedded method
+    # Storage for embedded method's u
     u_e::uType
+    rejected_timesteps::Int # This is probably what we want to know as a criteria of choosing stepsize controllers
+    EEst::Float64 # The estimated local truncation error
 end
 
 function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
@@ -308,6 +312,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
     t0 = first(ode.tspan)
     tdir = sign(ode.tspan[end] - ode.tspan[1])
     iter = 0
+    EEst = 0.0
 
     integrator = EmbeddedPairedRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
                                              ode.p,
@@ -317,7 +322,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
                                                                      kwargs...),
                                              false, true, false,
                                              k1, k_higher,
-                                             u_old, u_e)
+                                             u_old, u_e, EEst)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -349,6 +354,11 @@ function solve!(integrator::EmbeddedPairedRK3Integrator)
     integrator.finalstep = false
 
     @trixi_timeit timer() "main loop" while !integrator.finalstep
+        # Look at https://github.com/SciML/OrdinaryDiffEq.jl/blob/d76335281c540ee5a6d1bd8bb634713e004f62ee/src/integrators/controllers.jl#L174
+        # for the original implementation of the adaptive time stepping and time step controller
+        # TODO: adapt the logic here https://github.com/SciML/OrdinaryDiffEq.jl/blob/master/lib/OrdinaryDiffEqCore/src/integrators/integrator_utils.jl#L209
+        # Maybe here...
+        # Maybe do sth like step! first. Call the controller. Check if the step is accepted. If not, reset the value back to u_old
         step!(integrator)
     end # "main loop" timer
 
@@ -377,6 +387,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         terminate!(integrator)
     end
 
+    # TODO: This function should probably be moved to another function called `proposed_dt` or similar
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
         # Set `u_old` to incoming `u`    
         @threaded for i in eachindex(integrator.du)
@@ -468,7 +479,9 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
     
 
     integrator.iter += 1
-    integrator.t += integrator.dt
+    # Update the local estimated local truncation error
+    integrator.EEst = 0.0
+    integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.
 
     # handle callbacks
     if callbacks isa CallbackSet
