@@ -221,36 +221,34 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     c::Vector{Float64}
     dt_opt::Float64
     dt_opt_embedded::Float64
-    abs_tol::Float64 # User-specified absolute tolerance # Should be in integrator.opts instead......... ahhhhhhhhhhhhhhhhhhhhhh
-    rel_tol::Float64 # User-specified relative tolerance
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
-                           cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
+                           cS2 = 1.0f0)
     a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                num_stage_evals,
                                                                base_path_coeffs;
                                                                cS2)
 
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
-                             dt_opt_embedded, abs_tol, rel_tol)
+                             dt_opt_embedded)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            semi::AbstractSemidiscretization;
-                           verbose = false, cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
+                           verbose = false, cS2 = 1.0f0)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2, abs_tol, rel_tol)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
 function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
-                           verbose = false, cS2 = 1.0f0, abs_tol = 1e-4, rel_tol = 1e-4)
+                           verbose = false, cS2 = 1.0f0)
     a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
                                                                                    num_stage_evals,
                                                                                    tspan,
@@ -258,7 +256,7 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                                                                                    verbose,
                                                                                    cS2)
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
-                             dt_opt_embedded, abs_tol, rel_tol)
+                             dt_opt_embedded)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
@@ -371,7 +369,7 @@ end
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
 function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
                dt, callback = nothing, controller, abstol = 1e-4, reltol = 1e-4, kwargs...)
-    # TODO: If the algorithm to determine the stepsize is error-basesd then we should throw an error when user input StepsizeCallback?
+    # TODO: If the algorithm to determine the stepsize is error-based then we should throw an error when user input StepsizeCallback?
     integrator = init(ode, alg, dt = alg.dt_opt, callback = callback, controller= controller, abstol = abstol, reltol = reltol; kwargs...)
 
     # Start actual solve
@@ -437,7 +435,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
     # TODO: This function should probably be moved to another function called `proposed_dt` or similar
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-        # Set `u_old` to incoming `u`
+        # Set `u_old` to incoming `u` -> We put this in the main loop instead
         #=    
         @threaded for i in eachindex(integrator.du)
             integrator.u_old[i] = integrator.u[i]
@@ -527,7 +525,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
     end # PairedExplicitRK step timer
     
     # Compute the estimated local truncation error
-    integrator.EEst = norm((integrator.u - integrator.u_e) ./ (alg.abs_tol .+ alg.rel_tol .* max.(
+    integrator.EEst = norm((integrator.u - integrator.u_e) ./ (integrator.opts.abstol .+ integrator.opts.reltol .* max.(
         abs.(integrator.u), 
         abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
 
