@@ -63,17 +63,18 @@ ode_algorithm = Trixi.EmbeddedPairedRK3(10, 8, tspan, semi)
 #cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = 2.0)
 
+controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
+
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
                         save_solution,
-                        analysis_callback,
-                        stepsize_callback)
+                        analysis_callback)
 
 ###############################################################################
 # run the simulation
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
-                  save_everystep = false, callback = callbacks);
+                  save_everystep = false, callback = callbacks, controller = controller);
 
 # Print the timer summary
 summary_callback()

@@ -5,6 +5,7 @@
 @muladd begin
 #! format: noindent
 
+include("controllers.jl")
 # Basic implementation of the second-order paired explicit Runge-Kutta (PERK) method
 include("methods_PERK2.jl")
 include("methods_PERK3.jl")

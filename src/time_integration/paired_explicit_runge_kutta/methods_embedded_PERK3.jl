@@ -221,8 +221,8 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     c::Vector{Float64}
     dt_opt::Float64
     dt_opt_embedded::Float64
-    abs_tol::Float64
-    rel_tol::Float64
+    abs_tol::Float64 # User-specified absolute tolerance # Should be in integrator.opts instead......... ahhhhhhhhhhhhhhhhhhhhhh
+    rel_tol::Float64 # User-specified relative tolerance
 end # struct EmbeddedPairedRK3
 
 # Constructor for previously computed A Coeffs
@@ -256,10 +256,38 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                                                                                    tspan,
                                                                                    eig_vals;
                                                                                    verbose,
-                                                                                   cS2, abs_tol, rel_tol)
+                                                                                   cS2)
     return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
                              dt_opt_embedded, abs_tol, rel_tol)
 end
+
+# This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
+mutable struct EmbeddedPairedExplicitRKOptions{Callback, TStops}
+    callback::Callback # callbacks; used in Trixi
+    adaptive::Bool # whether the algorithm is adaptive
+    dtmax::Float64 # ignored
+    maxiters::Int # maximal number of time steps
+    #qsteady_max::Float64
+    #qsteady_min::Float64
+    controller::AbstractController # When we find out what kind of controller is the best, make it an option
+    abstol::Float64 # User-specified absolute tolerance
+    reltol::Float64 # User-specified relative tolerance
+    tstops::TStops # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
+end
+
+function EmbeddedPairedExplicitRKOptions(callback, tspan , controller, abstol, reltol; maxiters = typemax(Int), kwargs...)
+    tstops_internal = BinaryHeap{eltype(tspan)}(FasterForward())
+    # We add last(tspan) to make sure that the time integration stops at the end time
+    push!(tstops_internal, last(tspan))
+    # We add 2 * last(tspan) because add_tstop!(integrator, t) is only called by DiffEqCallbacks.jl if tstops contains a time that is larger than t
+    # (https://github.com/SciML/DiffEqCallbacks.jl/blob/025dfe99029bd0f30a2e027582744528eb92cd24/src/iterative_and_periodic.jl#L92)
+    push!(tstops_internal, 2 * last(tspan))
+    EmbeddedPairedExplicitRKOptions{typeof(callback), typeof(tstops_internal)}(callback,
+                                                                       true, Inf,
+                                                                       maxiters, controller, abstol, reltol,
+                                                                       tstops_internal)
+end
+
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
@@ -283,6 +311,8 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     opts::PairedExplicitRKOptions
     finalstep::Bool # added for convenience
     dtchangeable::Bool
+    EEst::Float64 # The estimated local truncation error
+    qold::Float64 # Temporary time step factor
     force_stepfail::Bool
     # PairedExplicitRK stages:
     k1::uType
@@ -291,12 +321,11 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     u_old::uType
     # Storage for embedded method's u
     u_e::uType
-    rejected_timesteps::Int # This is probably what we want to know as a criteria of choosing stepsize controllers
-    EEst::Float64 # The estimated local truncation error
+    nreject::Int # This is probably what we want to know as a criteria of choosing stepsize controllers -> Should actually be in .stats like OrDiffEq
 end
 
 function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
-              dt, callback::Union{CallbackSet, Nothing} = nothing, kwargs...)
+              dt, callback::Union{CallbackSet, Nothing} = nothing, controller, abstol, reltol, kwargs...)
     u0 = copy(ode.u0)
     du = zero(u0)
     u_tmp = zero(u0)
@@ -317,12 +346,12 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
     integrator = EmbeddedPairedRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
                                              ode.p,
                                              (prob = ode,), ode.f, alg,
-                                             PairedExplicitRKOptions(callback,
-                                                                     ode.tspan;
+                                             EmbeddedPairedExplicitRKOptions(callback,
+                                                                     ode.tspan, controller, abstol, reltol,;
                                                                      kwargs...),
-                                             false, true, false,
+                                             false, true, EEst, 1.0, false,
                                              k1, k_higher,
-                                             u_old, u_e, EEst)
+                                             u_old, u_e, 0)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -341,8 +370,9 @@ end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
 function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
-               dt, callback = nothing, kwargs...)
-    integrator = init(ode, alg, dt = dt, callback = callback; kwargs...)
+               dt, callback = nothing, controller, abstol = 1e-4, reltol = 1e-4, kwargs...)
+    # TODO: If the algorithm to determine the stepsize is error-basesd then we should throw an error when user input StepsizeCallback?
+    integrator = init(ode, alg, dt = alg.dt_opt, callback = callback, controller= controller, abstol = abstol, reltol = reltol; kwargs...)
 
     # Start actual solve
     solve!(integrator)
@@ -350,6 +380,8 @@ end
 
 function solve!(integrator::EmbeddedPairedRK3Integrator)
     @unpack prob = integrator.sol
+    @unpack alg = integrator
+    @unpack controller = integrator.opts
 
     integrator.finalstep = false
 
@@ -357,10 +389,26 @@ function solve!(integrator::EmbeddedPairedRK3Integrator)
         # Look at https://github.com/SciML/OrdinaryDiffEq.jl/blob/d76335281c540ee5a6d1bd8bb634713e004f62ee/src/integrators/controllers.jl#L174
         # for the original implementation of the adaptive time stepping and time step controller
         # TODO: adapt the logic here https://github.com/SciML/OrdinaryDiffEq.jl/blob/master/lib/OrdinaryDiffEqCore/src/integrators/integrator_utils.jl#L209
-        # Maybe here...
         # Maybe do sth like step! first. Call the controller. Check if the step is accepted. If not, reset the value back to u_old
+        t_old = integrator.t
+        # Save the value of the current u right now in u_old
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_old[i] = integrator.u[i]
+        end
+
         step!(integrator)
+
+        dt_factor = stepsize_controller!(integrator, controller, alg) # Then no need for dt_factor then! Since q_old is already set to dt_factor
+
+        if accept_step_controller(integrator, controller)
+            dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
+            set_proposed_dt!(integrator, dt_new)
+        else
+            step_reject_controller!(integrator, controller, alg, integrator.u_old)
+        end
     end # "main loop" timer
+
+    println("Number of rejected steps: ", integrator.nreject) # TODO: Maybe this should be include somewhere else. Maybe in .stats
 
     return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
@@ -389,10 +437,12 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
     # TODO: This function should probably be moved to another function called `proposed_dt` or similar
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-        # Set `u_old` to incoming `u`    
+        # Set `u_old` to incoming `u`
+        #=    
         @threaded for i in eachindex(integrator.du)
             integrator.u_old[i] = integrator.u[i]
         end
+        =#
 
         # k1 is in general required, as we use b_1 to satisfy the first-order cons. cond.
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
@@ -470,17 +520,18 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             @threaded for i in eachindex(integrator.u)
                 # Note that 'k_higher' carries the values of K_{S-1}
                 # and that we construct 'K_S' "in-place" from 'integrator.du'
-                #TODO: Calculate original u[i] of PERK3 with the help of k1 and k_higher
                 integrator.u[i] = integrator.u_old[i] + (integrator.k1[i] + integrator.k_higher[i] +
                 4.0 * integrator.du[i] * integrator.dt) / 6.0
             end
         end
     end # PairedExplicitRK step timer
     
+    # Compute the estimated local truncation error
+    integrator.EEst = norm((integrator.u - integrator.u_e) ./ (alg.abs_tol .+ alg.rel_tol .* max.(
+        abs.(integrator.u), 
+        abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
 
     integrator.iter += 1
-    # Update the local estimated local truncation error
-    integrator.EEst = 0.0
     integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.
 
     # handle callbacks
