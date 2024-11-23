@@ -571,6 +571,9 @@ function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
 
     resize!(integrator.k1, new_size)
     resize!(integrator.k_higher, new_size)
+
+    resize!(integrator.u_old, new_size)
+    resize!(integrator.u_e, new_size)
 end
 
 # Forward integrator.stats.naccept to integrator.iter and integrator.stats.nreject to integrator.nreject (see GitHub PR#771)
