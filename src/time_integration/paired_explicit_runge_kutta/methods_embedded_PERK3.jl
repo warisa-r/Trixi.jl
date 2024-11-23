@@ -422,7 +422,8 @@ function solve!(integrator::EmbeddedPairedRK3Integrator)
         end
     end # "main loop" timer
 
-    println("Number of rejected steps: ", integrator.nreject) # TODO: Maybe this should be include somewhere else. Maybe in .stats
+    println("Number of rejected steps: ", integrator.nreject) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
+                                                              # that can be generalized to all the other integrators
 
     return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
@@ -451,12 +452,6 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 
     # TODO: This function should probably be moved to another function called `proposed_dt` or similar
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
-        # Set `u_old` to incoming `u` -> We put this in the main loop instead
-        #=    
-        @threaded for i in eachindex(integrator.du)
-            integrator.u_old[i] = integrator.u[i]
-        end
-        =#
 
         # k1 is in general required, as we use b_1 to satisfy the first-order cons. cond.
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
@@ -576,5 +571,14 @@ function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
 
     resize!(integrator.k1, new_size)
     resize!(integrator.k_higher, new_size)
+end
+
+# Forward integrator.stats.naccept to integrator.iter and integrator.stats.nreject to integrator.nreject (see GitHub PR#771)
+function Base.getproperty(integrator::EmbeddedPairedRK3Integrator, field::Symbol)
+    if field === :stats
+        return (naccept = getfield(integrator, :iter), nreject = getfield(integrator, :nreject),)
+    end
+    # general fallback
+    return getfield(integrator, field)
 end
 end # @muladd
