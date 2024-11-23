@@ -310,6 +310,7 @@ mutable struct EmbeddedPairedExplicitRK3Integrator{RealT <: Real, uType, Params,
     tdir::RealT
     dt::RealT # current time step
     dtcache::RealT # manually set time step
+    dtpropose::RealT # proposed time step stored for save_restart.jl
     iter::Int # current number of time steps (iteration)
     p::Params # will be the semidiscretization from Trixi
     sol::Sol # faked
@@ -351,7 +352,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedExplicitRK3;
     iter = 0
     EEst = 0.0
 
-    integrator = EmbeddedPairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
+    integrator = EmbeddedPairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, 0.0, iter,
                                              ode.p,
                                              (prob = ode,), ode.f, alg,
                                              EmbeddedPairedExplicitRKOptions(callback,

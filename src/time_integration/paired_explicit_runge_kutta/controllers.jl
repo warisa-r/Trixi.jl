@@ -80,6 +80,7 @@ function stepsize_controller!(integrator, controller::PIDController, alg)
     #   0.21 ≈ limiter(0) <= dt_factor <= limiter(Inf) ≈ 2.57
     # See Söderlind, Wang (2006), Section 6.
     integrator.qold = dt_factor
+    integrator.dtpropose = integrator.dt * dt_factor
     return dt_factor
 end
 
