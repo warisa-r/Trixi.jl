@@ -288,11 +288,11 @@ function EmbeddedPairedExplicitRKOptions(callback, tspan, controller, abstol, re
                                                                                true,
                                                                                Inf,
                                                                                maxiters,
+                                                                               0.1,
+                                                                               1.2, # This values of q_steady_min and qsteady_max are taken from Vermiere paper on order 1-2
                                                                                controller,
                                                                                abstol,
                                                                                reltol,
-                                                                               0.1,
-                                                                               1.2 # This values of q_steady_min and qsteady_max are taken from Vermiere paper on order 1-2
                                                                                tstops_internal)
 end
 

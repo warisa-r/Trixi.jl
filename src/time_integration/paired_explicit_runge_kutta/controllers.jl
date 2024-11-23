@@ -2,7 +2,7 @@ abstract type AbstractController end
 
 # This comes later after we test out other controllers and found out that a controller is superior to others.
 
-function stepsize_controller!(integrator, alg)
+@inline function stepsize_controller!(integrator, alg)
     stepsize_controller!(integrator, integrator.opts.controller, alg)
 end
 
@@ -17,6 +17,11 @@ end
 
 @inline function step_reject_controller!(integrator, alg)
     step_reject_controller!(integrator, integrator.opts.controller, alg)
+end
+
+struct PIController <: AbstractController
+    beta1::Float64
+    beta2::Float64
 end
 
 # Implementing the PID controller is great since we can also test PI as well here.
