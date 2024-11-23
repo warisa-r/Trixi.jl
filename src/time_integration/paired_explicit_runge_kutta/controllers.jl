@@ -19,12 +19,7 @@ end
     step_reject_controller!(integrator, integrator.opts.controller, alg)
 end
 
-struct PIController <: AbstractController
-    beta1::Float64
-    beta2::Float64
-end
-
-# Implementing the PID controller is great since we can also test PI as well here.
+# Implement the PID controller in such way that it can be used with the PERK schemes
 struct PIDController <: AbstractController
     beta::Vector{Float64}      # beta parameter of the PID controller
     err::Vector{Float64} # history of the error estimates
@@ -123,5 +118,4 @@ function step_reject_controller!(integrator, controller::PIDController, alg, u_o
 
     integrator.nreject += 1 # Increment nreject
     integrator.dt *= integrator.qold # Set the proposed time step with regard to the time controller
-    #println("dt_new : ", integrator.dt)
 end
