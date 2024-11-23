@@ -422,7 +422,7 @@ function solve!(integrator::EmbeddedPairedRK3Integrator)
         end
     end # "main loop" timer
 
-    println("Number of rejected steps: ", integrator.nreject) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
+    println("Stats: ", integrator.stats) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
                                                               # that can be generalized to all the other integrators
 
     return TimeIntegratorSolution((first(prob.tspan), integrator.t),
