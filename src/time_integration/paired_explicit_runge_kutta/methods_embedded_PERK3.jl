@@ -87,10 +87,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
         monomial_coeffs, dt_opt = bisect_stability_polynomial(consistency_order,
-                                                                num_eig_vals,
-                                                                num_stage_evals,
-                                                                dtmax, dteps,
-                                                                eig_vals; verbose)
+                                                              num_eig_vals,
+                                                              num_stage_evals,
+                                                              dtmax, dteps,
+                                                              eig_vals; verbose)
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
@@ -103,19 +103,20 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     verbose)
 
         monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
-                                                                         1,
-                                                                         num_eig_vals,
-                                                                         num_stage_evals -
-                                                                         1,
-                                                                         dtmax, dteps,
-                                                                         eig_vals;
-                                                                         verbose)
+                                                                                1,
+                                                                                num_eig_vals,
+                                                                                num_stage_evals -
+                                                                                1,
+                                                                                dtmax,
+                                                                                dteps,
+                                                                                eig_vals;
+                                                                                verbose)
         monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
         b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
-                                      monomial_coeffs_embedded, a_unknown, c)
+                                               monomial_coeffs_embedded, a_unknown, c)
 
         b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
@@ -228,11 +229,12 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
                            cS2 = 1.0f0)
     a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                               num_stage_evals,
-                                                               base_path_coeffs;
-                                                               cS2)
+                                                                        num_stage_evals,
+                                                                        base_path_coeffs;
+                                                                        cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+                             dt_opt,
                              dt_opt_embedded)
 end
 
@@ -250,12 +252,13 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
     a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                                                   num_stage_evals,
-                                                                                   tspan,
-                                                                                   eig_vals;
-                                                                                   verbose,
-                                                                                   cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+                                                                                                 num_stage_evals,
+                                                                                                 tspan,
+                                                                                                 eig_vals;
+                                                                                                 verbose,
+                                                                                                 cS2)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+                             dt_opt,
                              dt_opt_embedded)
 end
 
@@ -265,15 +268,16 @@ mutable struct EmbeddedPairedExplicitRKOptions{Callback, TStops}
     adaptive::Bool # whether the algorithm is adaptive
     dtmax::Float64 # ignored
     maxiters::Int # maximal number of time steps
-    #qsteady_max::Float64
-    #qsteady_min::Float64
+    qsteady_max::Float64
+    qsteady_min::Float64
     controller::AbstractController # When we find out what kind of controller is the best, make it an option
     abstol::Float64 # User-specified absolute tolerance
     reltol::Float64 # User-specified relative tolerance
     tstops::TStops # tstops from https://diffeq.sciml.ai/v6.8/basics/common_solver_opts/#Output-Control-1; ignored
 end
 
-function EmbeddedPairedExplicitRKOptions(callback, tspan , controller, abstol, reltol; maxiters = typemax(Int), kwargs...)
+function EmbeddedPairedExplicitRKOptions(callback, tspan, controller, abstol, reltol;
+                                         maxiters = typemax(Int), kwargs...)
     tstops_internal = BinaryHeap{eltype(tspan)}(FasterForward())
     # We add last(tspan) to make sure that the time integration stops at the end time
     push!(tstops_internal, last(tspan))
@@ -281,11 +285,16 @@ function EmbeddedPairedExplicitRKOptions(callback, tspan , controller, abstol, r
     # (https://github.com/SciML/DiffEqCallbacks.jl/blob/025dfe99029bd0f30a2e027582744528eb92cd24/src/iterative_and_periodic.jl#L92)
     push!(tstops_internal, 2 * last(tspan))
     EmbeddedPairedExplicitRKOptions{typeof(callback), typeof(tstops_internal)}(callback,
-                                                                       true, Inf,
-                                                                       maxiters, controller, abstol, reltol,
-                                                                       tstops_internal)
+                                                                               true,
+                                                                               Inf,
+                                                                               maxiters,
+                                                                               controller,
+                                                                               abstol,
+                                                                               reltol,
+                                                                               0.1,
+                                                                               1.2 # This values of q_steady_min and qsteady_max are taken from Vermiere paper on order 1-2
+                                                                               tstops_internal)
 end
-
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L77
 # This implements the interface components described at
@@ -323,7 +332,8 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
 end
 
 function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
-              dt, callback::Union{CallbackSet, Nothing} = nothing, controller, abstol, reltol, kwargs...)
+              dt, callback::Union{CallbackSet, Nothing} = nothing, controller, abstol,
+              reltol, kwargs...)
     u0 = copy(ode.u0)
     du = zero(u0)
     u_tmp = zero(u0)
@@ -345,8 +355,11 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
                                              ode.p,
                                              (prob = ode,), ode.f, alg,
                                              EmbeddedPairedExplicitRKOptions(callback,
-                                                                     ode.tspan, controller, abstol, reltol,;
-                                                                     kwargs...),
+                                                                             ode.tspan,
+                                                                             controller,
+                                                                             abstol,
+                                                                             reltol, ;
+                                                                             kwargs...),
                                              false, true, EEst, 1.0, false,
                                              k1, k_higher,
                                              u_old, u_e, 0)
@@ -368,9 +381,12 @@ end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
 function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
-               dt, callback = nothing, controller, abstol = 1e-4, reltol = 1e-4, kwargs...)
+               dt, callback = nothing, controller, abstol = 1e-4, reltol = 1e-4,
+               kwargs...)
     # TODO: If the algorithm to determine the stepsize is error-based then we should throw an error when user input StepsizeCallback?
-    integrator = init(ode, alg, dt = alg.dt_opt, callback = callback, controller= controller, abstol = abstol, reltol = reltol; kwargs...)
+    integrator = init(ode, alg, dt = alg.dt_opt, callback = callback,
+                      controller = controller, abstol = abstol, reltol = reltol;
+                      kwargs...)
 
     # Start actual solve
     solve!(integrator)
@@ -447,7 +463,8 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
         @threaded for i in eachindex(integrator.du)
             integrator.k1[i] = integrator.du[i] * integrator.dt
             # Add the contribution of the first stage (b_1 in general non-zero)
-            integrator.u_e[i] = integrator.u_old[i] + alg.b_embedded[1] * integrator.k1[i]
+            integrator.u_e[i] = integrator.u_old[i] +
+                                alg.b_embedded[1] * integrator.k1[i]
         end
 
         # Higher order stages
@@ -500,34 +517,37 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
                 integrator.u_e[i] += alg.b_embedded[stage - alg.num_stages + alg.num_stage_evals] *
-                                   integrator.k_higher[i]
+                                     integrator.k_higher[i]
             end
 
             # Last stage
             @threaded for i in eachindex(integrator.du)
                 integrator.u_tmp[i] = integrator.u_old[i] +
-                                    alg.a_matrix[alg.num_stage_evals - 2, 1] *
-                                    integrator.k1[i] +
-                                    alg.a_matrix[alg.num_stage_evals - 2, 2] *
-                                    integrator.k_higher[i]
+                                      alg.a_matrix[alg.num_stage_evals - 2, 1] *
+                                      integrator.k1[i] +
+                                      alg.a_matrix[alg.num_stage_evals - 2, 2] *
+                                      integrator.k_higher[i]
             end
 
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                        integrator.t + alg.c[alg.num_stages] * integrator.dt)
+                         integrator.t + alg.c[alg.num_stages] * integrator.dt)
 
             @threaded for i in eachindex(integrator.u)
                 # Note that 'k_higher' carries the values of K_{S-1}
                 # and that we construct 'K_S' "in-place" from 'integrator.du'
-                integrator.u[i] = integrator.u_old[i] + (integrator.k1[i] + integrator.k_higher[i] +
-                4.0 * integrator.du[i] * integrator.dt) / 6.0
+                integrator.u[i] = integrator.u_old[i] +
+                                  (integrator.k1[i] + integrator.k_higher[i] +
+                                   4.0 * integrator.du[i] * integrator.dt) / 6.0
             end
         end
     end # PairedExplicitRK step timer
-    
+
     # Compute the estimated local truncation error
-    integrator.EEst = norm((integrator.u - integrator.u_e) ./ (integrator.opts.abstol .+ integrator.opts.reltol .* max.(
-        abs.(integrator.u), 
-        abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
+    integrator.EEst = norm((integrator.u - integrator.u_e) ./
+                           (integrator.opts.abstol .+
+                            integrator.opts.reltol .*
+                            max.(abs.(integrator.u),
+                                 abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
 
     integrator.iter += 1
     integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.

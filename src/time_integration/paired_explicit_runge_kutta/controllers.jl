@@ -29,8 +29,8 @@ struct PIDController <: AbstractController
 end
 
 function PIDController(beta1, beta2, beta3;
-    limiter = default_dt_factor_limiter,
-    accept_safety = 0.81) # 0.81 - 0.9^2
+                       limiter = default_dt_factor_limiter,
+                       accept_safety = 0.81) # 0.81 - 0.9^2
     beta = [float(beta1), float(beta2), float(beta3)]  # Create a Vector{Float64} of size 3
     err = ones(Float64, 3)
     return PIDController(beta, err, accept_safety, limiter)
@@ -38,9 +38,9 @@ end
 
 default_dt_factor_limiter(x) = one(x) + atan(x - one(x))
 
+# Taken from OrdinaryDiffEq.jl
 # This funtion is to calculate the factor to multiply the current time step by
 function stepsize_controller!(integrator, controller::PIDController, alg)
-    #@unpack qmax = integrator.opts # Deal with this later
     beta1, beta2, beta3 = controller.beta
 
     EEst = integrator.EEst
@@ -90,14 +90,14 @@ end
 
 # This function is to actually handles the controller and reset the next default time step to dt_opt
 function step_accept_controller!(integrator, controller::PIDController, alg, dt_factor)
-    #@unpack qsteady_min, qsteady_max = integrator.opts
+    @unpack qsteady_min, qsteady_max = integrator.opts
 
     # We will deal with this later
-    #=
+
     if qsteady_min <= inv(dt_factor) <= qsteady_max
         dt_factor = one(dt_factor)
     end
-    =#
+
     @inbounds begin
         controller.err[3] = controller.err[2]
         controller.err[2] = controller.err[1]
