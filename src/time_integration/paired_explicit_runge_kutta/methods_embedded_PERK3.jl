@@ -65,7 +65,7 @@ end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
-function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, tspan,
+function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals, tspan,
                                                    eig_vals::Vector{ComplexF64};
                                                    verbose = false, cS2)
     # Initialize array of c
@@ -139,7 +139,7 @@ end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using provided values of coefficients a in A-matrix of Butcher tableau
-function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
+function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals,
                                                    base_path_coeffs::AbstractString;
                                                    cS2)
 
@@ -180,11 +180,11 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals,
 end
 
 @doc raw"""
-    EmbeddedPairedRK3(num_stages, base_path_coeffs::AbstractString, dt_opt;
+    EmbeddedPairedExplicitRK3(num_stages, base_path_coeffs::AbstractString, dt_opt;
                       cS2 = 1.0f0)
-    EmbeddedPairedRK3(num_stages, tspan, semi::AbstractSemidiscretization;
+    EmbeddedPairedExplicitRK3(num_stages, tspan, semi::AbstractSemidiscretization;
                       verbose = false, cS2 = 1.0f0)
-    EmbeddedPairedRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
+    EmbeddedPairedExplicitRK3(num_stages, tspan, eig_vals::Vector{ComplexF64};
                       verbose = false, cS2 = 1.0f0)
 
     Parameters:
@@ -213,7 +213,7 @@ While the changes to SSPRK33 base-scheme are described in
 Multirate Time-Integration based on Dynamic ODE Partitioning through Adaptively Refined Meshes for Compressible Fluid Dynamics
 [DOI: 10.1016/j.jcp.2024.113223](https://doi.org/10.1016/j.jcp.2024.113223)
 """
-mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
+mutable struct EmbeddedPairedExplicitRK3 <: AbstractPairedExplicitRKSingle
     const num_stages::Int # S
     const num_stage_evals::Int # e
 
@@ -222,42 +222,42 @@ mutable struct EmbeddedPairedRK3 <: AbstractPairedExplicitRKSingle
     c::Vector{Float64}
     dt_opt::Float64
     dt_opt_embedded::Float64
-end # struct EmbeddedPairedRK3
+end # struct EmbeddedPairedExplicitRK3
 
 # Constructor for previously computed A Coeffs
-function EmbeddedPairedRK3(num_stages, num_stage_evals,
+function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
                            cS2 = 1.0f0)
-    a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b_embedded, c = compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages,
                                                                         num_stage_evals,
                                                                         base_path_coeffs;
                                                                         cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
                              dt_opt,
                              dt_opt_embedded)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
-function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
+function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan,
                            semi::AbstractSemidiscretization;
                            verbose = false, cS2 = 1.0f0)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
-function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
+function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
-    a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
+    a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages,
                                                                                                  num_stage_evals,
                                                                                                  tspan,
                                                                                                  eig_vals;
                                                                                                  verbose,
                                                                                                  cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
                              dt_opt,
                              dt_opt_embedded)
 end
@@ -300,7 +300,7 @@ end
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.jl.
-mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
+mutable struct EmbeddedPairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
                                            PairedExplicitRKOptions} <:
                AbstractPairedExplicitRKSingleIntegrator
     u::uType
@@ -331,7 +331,7 @@ mutable struct EmbeddedPairedRK3Integrator{RealT <: Real, uType, Params, Sol, F,
     nreject::Int # This is probably what we want to know as a criteria of choosing stepsize controllers -> Should actually be in .stats like OrDiffEq
 end
 
-function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
+function init(ode::ODEProblem, alg::EmbeddedPairedExplicitRK3;
               dt, callback::Union{CallbackSet, Nothing} = nothing, controller, abstol,
               reltol, kwargs...)
     u0 = copy(ode.u0)
@@ -351,7 +351,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
     iter = 0
     EEst = 0.0
 
-    integrator = EmbeddedPairedRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
+    integrator = EmbeddedPairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, iter,
                                              ode.p,
                                              (prob = ode,), ode.f, alg,
                                              EmbeddedPairedExplicitRKOptions(callback,
@@ -380,7 +380,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedRK3;
 end
 
 # Fakes `solve`: https://diffeq.sciml.ai/v6.8/basics/overview/#Solving-the-Problems-1
-function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
+function solve(ode::ODEProblem, alg::EmbeddedPairedExplicitRK3;
                dt, callback = nothing, controller, abstol = 1e-4, reltol = 1e-4,
                kwargs...)
     # TODO: If the algorithm to determine the stepsize is error-based then we should throw an error when user input StepsizeCallback?
@@ -392,7 +392,7 @@ function solve(ode::ODEProblem, alg::EmbeddedPairedRK3;
     solve!(integrator)
 end
 
-function solve!(integrator::EmbeddedPairedRK3Integrator)
+function solve!(integrator::EmbeddedPairedExplicitRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     @unpack controller = integrator.opts
@@ -430,7 +430,7 @@ function solve!(integrator::EmbeddedPairedRK3Integrator)
                                   integrator.sol.prob)
 end
 
-function step!(integrator::EmbeddedPairedRK3Integrator)
+function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
     t_end = last(prob.tspan)
@@ -564,7 +564,7 @@ function step!(integrator::EmbeddedPairedRK3Integrator)
 end
 
 # used for AMR (Adaptive Mesh Refinement)
-function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
+function Base.resize!(integrator::EmbeddedPairedExplicitRK3Integrator, new_size)
     resize!(integrator.u, new_size)
     resize!(integrator.du, new_size)
     resize!(integrator.u_tmp, new_size)
@@ -577,7 +577,7 @@ function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
 end
 
 # Forward integrator.stats.naccept to integrator.iter and integrator.stats.nreject to integrator.nreject (see GitHub PR#771)
-function Base.getproperty(integrator::EmbeddedPairedRK3Integrator, field::Symbol)
+function Base.getproperty(integrator::EmbeddedPairedExplicitRK3Integrator, field::Symbol)
     if field === :stats
         return (naccept = getfield(integrator, :iter), nreject = getfield(integrator, :nreject),)
     end

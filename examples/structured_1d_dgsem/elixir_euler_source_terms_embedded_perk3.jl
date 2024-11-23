@@ -48,7 +48,7 @@ save_solution = SaveSolutionCallback(interval = 100,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 6 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 8, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 8, tspan, semi)
 #cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 
 stepsize_callback = StepsizeCallback(cfl = 1.0)

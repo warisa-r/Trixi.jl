@@ -66,7 +66,7 @@ function stepsize_controller!(integrator, controller::PIDController, alg)
     controller.err[1] = inv(EEst)
     err1, err2, err3 = controller.err
 
-    k = 3 # the order of the main method of EmbeddedPairedRK3
+    k = 3 # the order of the main method of EmbeddedPairedExplicitRK3
     dt_factor = err1^(beta1 / k) * err2^(beta2 / k) * err3^(beta3 / k)
     if isnan(dt_factor)
         @warn "unlimited dt_factor" dt_factor err1 err2 err3 beta1 beta2 beta3 k

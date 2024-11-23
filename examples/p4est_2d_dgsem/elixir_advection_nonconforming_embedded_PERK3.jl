@@ -68,7 +68,7 @@ analysis_callback = AnalysisCallback(semi, interval = 100)
 save_solution = SaveSolutionCallback(interval = 100,
                                      solution_variables = cons2prim)
 
-ode_algorithm = Trixi.EmbeddedPairedRK3(10, 10, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
 
