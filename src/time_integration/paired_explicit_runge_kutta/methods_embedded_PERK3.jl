@@ -477,5 +477,6 @@ function Base.resize!(integrator::EmbeddedPairedRK3Integrator, new_size)
 
     resize!(integrator.k1, new_size)
     resize!(integrator.k_higher, new_size)
+    resize!(integrator.u_old, new_size)
 end
 end # @muladd
