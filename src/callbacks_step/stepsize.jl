@@ -70,7 +70,7 @@ end
         dt = @trixi_timeit timer() "calculate dt" calculate_dt(u_ode, t, cfl_number,
                                                                semi)
 
-        set_proposed_dt!(integrator, dt)
+        set_proposed_dt!(integrator, dt) #set_proposed_dt for PERK3 to choose between optimum dt from cfl or from the embedded scheme
         integrator.opts.dtmax = dt
         integrator.dtcache = dt
     end

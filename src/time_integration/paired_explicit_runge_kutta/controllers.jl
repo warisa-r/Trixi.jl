@@ -111,12 +111,6 @@ function step_accept_controller!(integrator, controller::PIDController, alg, dt_
 end
 
 function step_reject_controller!(integrator, controller::PIDController, alg, u_old)
-    integrator.t -= integrator.dt # Reset t from step! to t_old
-    integrator.iter -= 1 # Decrement iter
-    @threaded for i in eachindex(integrator.du) # Reset u from step! to u_old
-        integrator.u[i] = integrator.u_old[i]
-    end
-
     integrator.nreject += 1 # Increment nreject
     integrator.dt *= integrator.qold # Set the proposed time step with regard to the time controller
 end

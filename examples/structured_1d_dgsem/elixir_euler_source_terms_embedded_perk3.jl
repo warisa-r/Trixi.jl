@@ -1,7 +1,6 @@
 # The same setup as tree_1d_dgsem/elixir_euler_source_terms.jl
 # to verify the StructuredMesh implementation against TreeMesh
 using Convex, ECOS
-using NLsolve
 using OrdinaryDiffEq
 using Trixi
 

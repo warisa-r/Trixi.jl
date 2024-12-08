@@ -396,31 +396,13 @@ end
 function solve!(integrator::EmbeddedPairedExplicitRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
-    @unpack controller = integrator.opts
 
     integrator.finalstep = false
 
     @trixi_timeit timer() "main loop" while !integrator.finalstep
         # Look at https://github.com/SciML/OrdinaryDiffEq.jl/blob/d76335281c540ee5a6d1bd8bb634713e004f62ee/src/integrators/controllers.jl#L174
         # for the original implementation of the adaptive time stepping and time step controller
-        # TODO: adapt the logic here https://github.com/SciML/OrdinaryDiffEq.jl/blob/master/lib/OrdinaryDiffEqCore/src/integrators/integrator_utils.jl#L209
-        # Maybe do sth like step! first. Call the controller. Check if the step is accepted. If not, reset the value back to u_old
-        t_old = integrator.t
-        # Save the value of the current u right now in u_old
-        @threaded for i in eachindex(integrator.du)
-            integrator.u_old[i] = integrator.u[i]
-        end
-
         step!(integrator)
-
-        dt_factor = stepsize_controller!(integrator, controller, alg) # Then no need for dt_factor then! Since q_old is already set to dt_factor
-
-        if accept_step_controller(integrator, controller)
-            dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
-            set_proposed_dt!(integrator, dt_new)
-        else
-            step_reject_controller!(integrator, controller, alg, integrator.u_old)
-        end
     end # "main loop" timer
 
     println("Stats: ", integrator.stats) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
@@ -434,6 +416,7 @@ end
 function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
+    @unpack controller = integrator.opts
     t_end = last(prob.tspan)
     callbacks = integrator.opts.callback
 
@@ -453,6 +436,11 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
 
     # TODO: This function should probably be moved to another function called `proposed_dt` or similar
     @trixi_timeit timer() "Paired Explicit Runge-Kutta ODE integration step" begin
+
+        # Save the value of the current u right now in u_old
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_old[i] = integrator.u[i]
+        end
 
         # k1 is in general required, as we use b_1 to satisfy the first-order cons. cond.
         integrator.f(integrator.du, integrator.u, prob.p, integrator.t)
@@ -545,22 +533,33 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
                             max.(abs.(integrator.u),
                                  abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
 
-    integrator.iter += 1
-    integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.
+    dt_factor = stepsize_controller!(integrator, controller, alg) # Then no need for dt_factor then! Since q_old is already set to dt_factor
 
-    # handle callbacks
-    if callbacks isa CallbackSet
-        for cb in callbacks.discrete_callbacks
-            if cb.condition(integrator.u, integrator.t, integrator)
-                cb.affect!(integrator)
+    if accept_step_controller(integrator, controller)
+        dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
+        set_proposed_dt!(integrator, dt_new)
+        integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.
+        integrator.iter += 1
+
+        # handle callbacks
+        if callbacks isa CallbackSet
+            for cb in callbacks.discrete_callbacks
+                if cb.condition(integrator.u, integrator.t, integrator)
+                    cb.affect!(integrator)
+                end
             end
         end
-    end
-
-    # respect maximum number of iterations
-    if integrator.iter >= integrator.opts.maxiters && !integrator.finalstep
-        @warn "Interrupted. Larger maxiters is needed."
-        terminate!(integrator)
+        # respect maximum number of iterations
+        if integrator.iter >= integrator.opts.maxiters && !integrator.finalstep
+            @warn "Interrupted. Larger maxiters is needed."
+            terminate!(integrator)
+        end
+    else
+        @threaded for i in eachindex(integrator.du) # Reset u from step! to u_old
+            integrator.u[i] = integrator.u_old[i]
+        end
+        integrator.nreject += 1 # Increment nreject
+        step_reject_controller!(integrator, controller, alg, integrator.u_old)
     end
 end
 
