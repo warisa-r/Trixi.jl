@@ -536,11 +536,11 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
     dt_factor = stepsize_controller!(integrator, controller, alg) # Then no need for dt_factor then! Since q_old is already set to dt_factor
 
     if accept_step_controller(integrator, controller)
-        dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
-        set_proposed_dt!(integrator, dt_new)
         integrator.t += integrator.dt # The logic and the function to increment the accepted time step has to be called here.
         integrator.iter += 1
-
+        dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
+        set_proposed_dt!(integrator, dt_new)
+        
         # handle callbacks
         if callbacks isa CallbackSet
             for cb in callbacks.discrete_callbacks
