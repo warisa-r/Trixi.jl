@@ -111,6 +111,5 @@ function step_accept_controller!(integrator, controller::PIDController, alg, dt_
 end
 
 function step_reject_controller!(integrator, controller::PIDController, alg, u_old)
-    integrator.nreject += 1 # Increment nreject
     integrator.dt *= integrator.qold # Set the proposed time step with regard to the time controller
 end
