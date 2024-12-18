@@ -408,7 +408,9 @@ function solve!(integrator::EmbeddedPairedExplicitRK3Integrator)
     println("Stats: ", integrator.stats) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
                                                               # that can be generalized to all the other integrators
 
-    return TimeIntegratorSolution((first(prob.tspan), integrator.t),
+    rhs_eval = integrator.stats.naccept + integrator.stats.nreject
+
+    return rhs_eval, TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
                                   integrator.sol.prob)
 end

@@ -78,18 +78,85 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = true,
                                      solution_variables = cons2prim)
 
-stepsize_callback = StepsizeCallback(cfl = 0.8)
+ode_algorithm = Trixi.PairedExplicitRK3(10, tspan, semi)
+cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
 
-ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
+ode_algorithm = Trixi.PairedExplicitRK3(10, tspan, semi)
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
-                        save_restart, save_solution)
+                        save_restart, save_solution, stepsize_callback)
 ###############################################################################
 # run the simulation
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  save_everystep = false, callback = callbacks, controller = controller);
+                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-1, reltol = 1e-1);
 summary_callback() # print the timer summary
+
+
+ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
+cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
+
+# Tolerances to test
+tolerances = 10.0 .^ (-7:1:-1)
+
+# Arrays to store errors for both cases
+errors_embedded_callback = Float64[]
+errors_cfl_callback = Float64[]
+
+# Arrays to store num_rhs for both case
+nums_rhs_embedded = []
+nums_rhs_cfl = fill(41, length(tolerances))
+
+# Define callbacks (reuse from earlier setup)
+callbacks_embedded = CallbackSet(summary_callback, alive_callback, save_solution,
+analysis_callback)
+callbacks_cfl = CallbackSet(summary_callback, alive_callback, save_solution,
+   analysis_callback, stepsize_callback)
+
+# Loop over each tolerance value
+for tol in tolerances
+
+    # Solve with the StepsizeCallback
+    num_rhs_embedded, sol_embedded = Trixi.solve(ode, ode_algorithm_embedded, dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
+                                save_everystep = false, callback = callbacks_embedded, controller = controller, abstol = tol, reltol = tol);
+    results_embedded = analysis_callback(sol_embedded)
+    push!(errors_embedded_callback, results_embedded.l2[1]) # Assuming l2[1] stores the error
+    push!(nums_rhs_embedded, num_rhs_embedded)
+
+    # Solve without the StepsizeCallback
+    sol_cfl = Trixi.solve(ode, ode_algorithm_cfl, dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
+                          save_everystep = false, callback = callbacks_cfl);
+    results_cfl = analysis_callback(sol_cfl)
+    push!(errors_cfl_callback, results_cfl.l2[1]) # Assuming l2[1] stores the error
+end
+
+round_cfl = round( 0.7 * cfl_number, digits=3)
+
+# Plot the error against tolerances
+plot(tolerances, errors_embedded_callback, xscale = :log10,
+     marker = :circle, label = "PERK23", color = :blue,
+     xlabel = "Tolerances (abstol = reltol)", ylabel = "L2 Error",
+     title = "Error (rho) vs. Tolerance from weak blast test case (non-uniform grid)")
+plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
+         label = "CFL = $round_cfl")
+plot!(size = (1000, 800))
+
+savefig("plot_l2_error_weakblast_PERK23.png")
+
+# Plot the error against tolerances
+plot(tolerances, nums_rhs_embedded, xscale = :log10,
+     marker = :circle, label = "PERK23", color = :blue,
+     xlabel = "Tolerances (abstol = reltol)", ylabel = "Number of RHS evaluation",
+     title = "Number of RHS evaluation vs. Tolerance from weak blast test case (non-uniform grid)")
+plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
+         label = "CFL = $round_cfl")
+
+plot!(size = (1000, 800))
+
+savefig("plot_num_rhs_weakblast_PERK23.png")
