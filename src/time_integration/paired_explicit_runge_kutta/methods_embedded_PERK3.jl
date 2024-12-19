@@ -6,8 +6,8 @@ using DelimitedFiles: readdlm
 
 @muladd begin
 #! format: noindent
-function compute_b_embedded_coeffs(num_stage_evals, num_stages,
-                                   embedded_monomial_coeffs, a_unknown, c)
+function compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
+                                         embedded_monomial_coeffs, a_unknown, c)
     b_embedded = zeros(num_stage_evals - 1)
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
@@ -65,9 +65,10 @@ end
 
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
-function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals, tspan,
-                                                   eig_vals::Vector{ComplexF64};
-                                                   verbose = false, cS2)
+function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals,
+                                                           tspan,
+                                                           eig_vals::Vector{ComplexF64};
+                                                           verbose = false, cS2)
     # Initialize array of c
     c = compute_c_coeffs(num_stages, cS2)
 
@@ -115,8 +116,9 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
-        b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
-                                               monomial_coeffs_embedded, a_unknown, c)
+        b_embedded = compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
+                                                     monomial_coeffs_embedded,
+                                                     a_unknown, c)
 
         b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
@@ -140,8 +142,8 @@ end
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using provided values of coefficients a in A-matrix of Butcher tableau
 function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals,
-                                                   base_path_coeffs::AbstractString;
-                                                   cS2)
+                                                           base_path_coeffs::AbstractString;
+                                                           cS2)
 
     # Initialize array of c
     c = compute_c_coeffs(num_stages, cS2)
@@ -226,40 +228,44 @@ end # struct EmbeddedPairedExplicitRK3
 
 # Constructor for previously computed A Coeffs
 function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals,
-                           base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
-                           cS2 = 1.0f0)
+                                   base_path_coeffs::AbstractString, dt_opt,
+                                   dt_opt_embedded;
+                                   cS2 = 1.0f0)
     a_matrix, b_embedded, c = compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages,
-                                                                        num_stage_evals,
-                                                                        base_path_coeffs;
-                                                                        cS2)
+                                                                                num_stage_evals,
+                                                                                base_path_coeffs;
+                                                                                cS2)
 
-    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
-                             dt_opt,
-                             dt_opt_embedded)
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded,
+                                     c,
+                                     dt_opt,
+                                     dt_opt_embedded)
 end
 
 # Constructor that computes Butcher matrix A coefficients from a semidiscretization
 function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan,
-                           semi::AbstractSemidiscretization;
-                           verbose = false, cS2 = 1.0f0)
+                                   semi::AbstractSemidiscretization;
+                                   verbose = false, cS2 = 1.0f0)
     eig_vals = eigvals(jacobian_ad_forward(semi))
 
-    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan, eig_vals; verbose, cS2)
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan, eig_vals;
+                                     verbose, cS2)
 end
 
 # Constructor that calculates the coefficients with polynomial optimizer from a list of eigenvalues
 function EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, tspan,
-                           eig_vals::Vector{ComplexF64};
-                           verbose = false, cS2 = 1.0f0)
+                                   eig_vals::Vector{ComplexF64};
+                                   verbose = false, cS2 = 1.0f0)
     a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages,
-                                                                                                 num_stage_evals,
-                                                                                                 tspan,
-                                                                                                 eig_vals;
-                                                                                                 verbose,
-                                                                                                 cS2)
-    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
-                             dt_opt,
-                             dt_opt_embedded)
+                                                                                                         num_stage_evals,
+                                                                                                         tspan,
+                                                                                                         eig_vals;
+                                                                                                         verbose,
+                                                                                                         cS2)
+    return EmbeddedPairedExplicitRK3(num_stages, num_stage_evals, a_matrix, b_embedded,
+                                     c,
+                                     dt_opt,
+                                     dt_opt_embedded)
 end
 
 # This struct is needed to fake https://github.com/SciML/OrdinaryDiffEq.jl/blob/0c2048a502101647ac35faabd80da8a5645beac7/src/integrators/type.jl#L1
@@ -300,8 +306,9 @@ end
 # This implements the interface components described at
 # https://diffeq.sciml.ai/v6.8/basics/integrator/#Handing-Integrators-1
 # which are used in Trixi.jl.
-mutable struct EmbeddedPairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F, Alg,
-                                           PairedExplicitRKOptions} <:
+mutable struct EmbeddedPairedExplicitRK3Integrator{RealT <: Real, uType, Params, Sol, F,
+                                                   Alg,
+                                                   PairedExplicitRKOptions} <:
                AbstractPairedExplicitRKSingleIntegrator
     u::uType
     du::uType
@@ -352,18 +359,20 @@ function init(ode::ODEProblem, alg::EmbeddedPairedExplicitRK3;
     iter = 0
     EEst = 0.0
 
-    integrator = EmbeddedPairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt, 0.0, iter,
-                                             ode.p,
-                                             (prob = ode,), ode.f, alg,
-                                             EmbeddedPairedExplicitRKOptions(callback,
-                                                                             ode.tspan,
-                                                                             controller,
-                                                                             abstol,
-                                                                             reltol, ;
-                                                                             kwargs...),
-                                             false, true, EEst, 1.0, false,
-                                             k1, k_higher,
-                                             u_old, u_e, 0)
+    integrator = EmbeddedPairedExplicitRK3Integrator(u0, du, u_tmp, t0, tdir, dt, dt,
+                                                     0.0, iter,
+                                                     ode.p,
+                                                     (prob = ode,), ode.f, alg,
+                                                     EmbeddedPairedExplicitRKOptions(callback,
+                                                                                     ode.tspan,
+                                                                                     controller,
+                                                                                     abstol,
+                                                                                     reltol,
+                                                                                     ;
+                                                                                     kwargs...),
+                                                     false, true, EEst, 1.0, false,
+                                                     k1, k_higher,
+                                                     u_old, u_e, 0)
 
     # initialize callbacks
     if callback isa CallbackSet
@@ -406,11 +415,12 @@ function solve!(integrator::EmbeddedPairedExplicitRK3Integrator)
     end # "main loop" timer
 
     println("Stats: ", integrator.stats) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
-                                                              # that can be generalized to all the other integrators
+    # that can be generalized to all the other integrators
 
     rhs_eval = integrator.stats.naccept + integrator.stats.nreject
 
-    return rhs_eval, TimeIntegratorSolution((first(prob.tspan), integrator.t),
+    return rhs_eval,
+           TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
                                   integrator.sol.prob)
 end
@@ -542,7 +552,7 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
         integrator.iter += 1
         dt_new = step_accept_controller!(integrator, controller, alg, dt_factor)
         set_proposed_dt!(integrator, dt_new)
-        
+
         # handle callbacks
         if callbacks isa CallbackSet
             for cb in callbacks.discrete_callbacks
@@ -579,9 +589,11 @@ function Base.resize!(integrator::EmbeddedPairedExplicitRK3Integrator, new_size)
 end
 
 # Forward integrator.stats.naccept to integrator.iter and integrator.stats.nreject to integrator.nreject (see GitHub PR#771)
-function Base.getproperty(integrator::EmbeddedPairedExplicitRK3Integrator, field::Symbol)
+function Base.getproperty(integrator::EmbeddedPairedExplicitRK3Integrator,
+                          field::Symbol)
     if field === :stats
-        return (naccept = getfield(integrator, :iter), nreject = getfield(integrator, :nreject),)
+        return (naccept = getfield(integrator, :iter),
+                nreject = getfield(integrator, :nreject))
     end
     # general fallback
     return getfield(integrator, field)

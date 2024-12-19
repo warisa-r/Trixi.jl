@@ -5,7 +5,6 @@ using Convex, ECOS
 
 using OrdinaryDiffEq
 using Trixi
-using Plots
 
 ###############################################################################
 # semidiscretization of the linear advection equation
@@ -57,33 +56,34 @@ save_solution = SaveSolutionCallback(dt = 0.1,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 7 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-#ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
-ode_algorithm = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(10, tspan, semi)
+#ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
-cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
-stepsize_callback = StepsizeCallback(cfl = cfl_number)
+#cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
+#stepsize_callback = StepsizeCallback(cfl = cfl_number)
 
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
 
 callbacks = CallbackSet(summary_callback,
                         alive_callback,
                         save_solution,
-                        analysis_callback, stepsize_callback)
+                        analysis_callback)
 
 ###############################################################################
 # run the simulation
-sol = Trixi.solve(ode, ode_algorithm,
-                  dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
-                  save_everystep = false, callback = callbacks);
-
 #sol = Trixi.solve(ode, ode_algorithm,
 #                  dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
-#                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-2, reltol = 1e-2);
+#                  save_everystep = false, callback = callbacks);
+
+sol = Trixi.solve(ode, ode_algorithm,
+                  dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
+                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-2, reltol = 1e-2);
 
 # Print the timer summary
 summary_callback()
 
+#=
 ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
 ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
@@ -148,3 +148,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 plot!(size = (1000, 800))
 
 savefig("plot_num_rhs_advection_PERK23.png")
+=#

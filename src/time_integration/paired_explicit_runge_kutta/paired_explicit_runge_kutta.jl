@@ -10,6 +10,7 @@ include("controllers.jl")
 include("methods_PERK2.jl")
 include("methods_PERK3.jl")
 include("methods_embedded_PERK3.jl")
+include("methods_embedded_PERK2.jl")
 # Define all of the functions necessary for polynomial optimizations
 include("polynomial_optimizer.jl")
 
