@@ -83,7 +83,7 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
-
+#=
 ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
 ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
@@ -148,3 +148,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 plot!(size = (1000, 800))
 
 savefig("plot_num_rhs_advection_PERK23.png")
+=#
