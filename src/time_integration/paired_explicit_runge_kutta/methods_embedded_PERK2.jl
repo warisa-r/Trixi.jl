@@ -11,18 +11,20 @@ using LinearAlgebra: eigvals
 function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
                                          embedded_monomial_coeffs, a_unknown, c)
     b_embedded = zeros(num_stage_evals - 1)
+    println(c)
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
-    for i in (num_stage_evals - 1):-1:3 # i here represents the degree of stability polynomial we are going through
+    # TODO: 2 here can be replaced by consistency_order and the second constraint can be put in if so that two functions of two orders can be merged into one
+    for i in (num_stage_evals - 1):-1:2 # i here represents the degree of stability polynomial we are going through
         # Initialize b_embedded[i]
-        b_embedded[i] = embedded_monomial_coeffs[i - 2]
+        b_embedded[i] = embedded_monomial_coeffs[i - 1] # and the offset here is the consistency order of the embedded scheme
 
         # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
-            aij = c[num_stages - num_stage_evals + j - 1]
-            for k in 1:(i - 2) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
+            aij = c[num_stages - num_stage_evals + j - i + 2]
+            for k in 1:(i - 2)
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
             end
 
@@ -30,19 +32,13 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
             b_embedded[i] -= aij * b_embedded[j]
         end
 
+        println("b_embedded", b_embedded[i])
         # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
-        b_embedded[i] /= c[num_stages - num_stage_evals + i - 1]
+        b_embedded[i] /= c[num_stages - num_stage_evals + 2]
         for k in 1:(i - 2)
             b_embedded[i] /= a_unknown[i - k]
         end
     end
-
-    # The second order constraint or i = 2
-    b_embedded[2] = 1 / 2
-    for j in 3:(num_stage_evals - 1)
-        b_embedded[2] -= c[num_stages - num_stage_evals + j] * b_embedded[j]
-    end
-    b_embedded[2] /= c[num_stages - num_stage_evals + 2]
 
     b_embedded[1] = 1
     # The first order constraint or i = 1
