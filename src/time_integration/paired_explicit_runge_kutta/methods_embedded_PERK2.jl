@@ -254,6 +254,7 @@ mutable struct EmbeddedPairedExplicitRK2Integrator{RealT <: Real, uType, Params,
     tdir::RealT
     dt::RealT # current time step
     dtcache::RealT # manually set time step
+    dtpropose::RealT # proposed time step stored for save_restart.jl
     iter::Int # current number of time steps (iteration)
     p::Params # will be the semidiscretization from Trixi
     sol::Sol # faked
@@ -262,6 +263,8 @@ mutable struct EmbeddedPairedExplicitRK2Integrator{RealT <: Real, uType, Params,
     opts::PairedExplicitRKOptions
     finalstep::Bool # added for convenience
     dtchangeable::Bool
+    EEst::Float64 # The estimated local truncation error
+    qold::Float64 # Temporary time step factor
     force_stepfail::Bool
     # EmbeddedPairedExplicitRK2 stages:
     k1::uType
@@ -290,6 +293,7 @@ function init(ode::ODEProblem, alg::EmbeddedPairedExplicitRK2;
     t0 = first(ode.tspan)
     tdir = sign(ode.tspan[end] - ode.tspan[1])
     iter = 0
+    EEst = 0.0
 
     integrator = EmbeddedPairedExplicitRK2Integrator(u0, du, u_tmp, t0, tdir, dt, dt,
                                                      0.0, iter,
@@ -342,7 +346,7 @@ function solve!(integrator::EmbeddedPairedExplicitRK2Integrator)
     println("Stats: ", integrator.stats) # TODO: Do we want this to be showed the way naccept is showed? This means we have to do sth with alive.jl
     # that can be generalized to all the other integrators
 
-    rhs_eval = integrator.stats.naccept + integrator.stats.nreject
+    #rhs_eval = integrator.stats.naccept + integrator.stats.nreject
 
     return TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
@@ -352,6 +356,8 @@ end
 function step!(integrator::EmbeddedPairedExplicitRK2Integrator)
     @unpack prob = integrator.sol
     @unpack alg = integrator
+    @unpack controller = integrator.opts
+
     t_end = last(prob.tspan)
     callbacks = integrator.opts.callback
 
@@ -395,8 +401,7 @@ function step!(integrator::EmbeddedPairedExplicitRK2Integrator)
 
         @threaded for i in eachindex(integrator.du)
             integrator.k_higher[i] = integrator.du[i] * integrator.dt
-            integrator.u_e[i] = integrator.u_old[i] +
-                                alg.b_embedded[1] * integrator.k_higher[i]
+            integrator.u_e[i] += alg.b_embedded[2] * integrator.k_higher[i]
         end
 
         # Higher stages
@@ -415,8 +420,9 @@ function step!(integrator::EmbeddedPairedExplicitRK2Integrator)
 
             @threaded for i in eachindex(integrator.du)
                 integrator.k_higher[i] = integrator.du[i] * integrator.dt
-                integrator.u_e[i] = integrator.u_old[i] +
-                                    alg.b_embedded[1] * integrator.k_higher[i]
+                if stage < alg.num_stages
+                    integrator.u_e[i] += alg.b_embedded[stage] * integrator.k_higher[i]
+                end
             end
         end
 
@@ -431,7 +437,7 @@ function step!(integrator::EmbeddedPairedExplicitRK2Integrator)
                            (integrator.opts.abstol .+
                             integrator.opts.reltol .*
                             max.(abs.(integrator.u),
-                                 abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.jl
+                                 abs.(integrator.u_e))), 2) # Use this norm according to PID controller from OrdinaryDiffEq.j
 
     dt_factor = stepsize_controller!(integrator, controller, alg) # Then no need for dt_factor then! Since q_old is already set to dt_factor
 
