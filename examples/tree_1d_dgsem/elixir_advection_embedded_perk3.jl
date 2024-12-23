@@ -78,7 +78,7 @@ callbacks = CallbackSet(summary_callback,
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # Manual time step value, will be overwritten by the stepsize_callback when it is specified.
-                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-2, reltol = 1e-2);
+                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-4, reltol = 1e-4);
 
 # Print the timer summary
 summary_callback()

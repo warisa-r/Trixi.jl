@@ -19,8 +19,8 @@ function compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
         # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
-            aij = c[num_stages - num_stage_evals + j - i + 2] #TODO: this is probably not correct
-            for k in 1:(i - 2) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
+            aij = c[num_stages - num_stage_evals + j - i + 2]
+            for k in 2:(i - 1) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
             end
 
@@ -30,7 +30,7 @@ function compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
 
         # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
         b_embedded[i] /= c[num_stages - num_stage_evals + 2]
-        for k in 1:(i - 2)
+        for k in 2:(i - 1)
             b_embedded[i] /= a_unknown[i - k]
         end
     end

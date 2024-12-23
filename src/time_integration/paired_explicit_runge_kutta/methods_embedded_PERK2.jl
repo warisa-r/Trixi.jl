@@ -11,7 +11,8 @@ using LinearAlgebra: eigvals
 function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
                                          embedded_monomial_coeffs, a_unknown, c)
     b_embedded = zeros(num_stage_evals - 1)
-    println(c)
+    println("c: ", c)
+    println("a_unknown", a_unknown)
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
@@ -23,20 +24,27 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
         # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
+            c_iter = num_stages - num_stage_evals + j -i + 2
             aij = c[num_stages - num_stage_evals + j - i + 2]
-            for k in 1:(i - 2)
+            for k in 2:(i - 1)
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
+                a_iter = j-k
+                println("aij, i = $i, j = $j, a_iter = [$a_iter]")
             end
+
+            # Print the value of aij for each i
+            println("polynomial degree = $i, j = $j, aij = $aij, c[$c_iter]")
 
             # Update b_embedded[i] with the computed value
             b_embedded[i] -= aij * b_embedded[j]
         end
 
-        println("b_embedded", b_embedded[i])
         # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
         b_embedded[i] /= c[num_stages - num_stage_evals + 2]
-        for k in 1:(i - 2)
+        for k in 2:(i - 1)
             b_embedded[i] /= a_unknown[i - k]
+            num = i-k
+            println("b_embedded of $i is divided by a[$num]")
         end
     end
 
@@ -56,18 +64,20 @@ function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals,
     # c Vector from Butcher Tableau (defines timestep per stage)
     c = zeros(num_stages)
     for k in 2:num_stages
-        c[k] = cS * (k - 1) / (num_stages - 1)
+        c[k] = (k - 1) / (2* (num_stages - 1))
     end
     stage_scaling_factors = bS * reverse(c[2:(end - 1)])
 
+    num_stage_evals = num_stages
+
     # - 2 Since first entry of A is always zero (explicit method) and second is given by c_2 (consistency)
-    coeffs_max = num_stages - 2
+    coeffs_max = num_stage_evals - 2
 
     a_matrix = zeros(coeffs_max, 2)
-    a_matrix[:, 1] = c[3:end]
+    a_matrix[:, 1] = c[(num_stages - num_stage_evals + 3):end]
 
     consistency_order = 2
-    b_embedded = zeros(num_stages - 1)
+    b_embedded = zeros(num_stage_evals - 1)
 
     dtmax = tspan[2] - tspan[1]
     dteps = 1e-9 # Hyperparameter of the optimization, might be too large for systems requiring very small timesteps
@@ -75,46 +85,45 @@ function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals,
     num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
     monomial_coeffs, dt_opt = bisect_stability_polynomial(consistency_order,
-                                                          num_eig_vals, num_stages,
-                                                          dtmax,
-                                                          dteps,
-                                                          eig_vals; verbose)
-
+                                                              num_eig_vals,
+                                                              num_stage_evals,
+                                                              dtmax, dteps,
+                                                              eig_vals; verbose)
     monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
-                                          num_stages)
+                                              num_stage_evals)
 
     monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
-                                                                            1,
-                                                                            num_eig_vals,
-                                                                            num_stages -
-                                                                            1,
-                                                                            dtmax,
-                                                                            dteps,
-                                                                            eig_vals;
-                                                                            verbose)
+                                                1,
+                                                num_eig_vals,
+                                                num_stage_evals -
+                                                1,
+                                                dtmax,
+                                                dteps,
+                                                eig_vals;
+                                                verbose)
     monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
-                                                   consistency_order - 1,
-                                                   num_stages - 1)
+                        consistency_order - 1,
+                        num_stage_evals - 1)
+
+    println("monomial_coeffs_embedded", monomial_coeffs_embedded)
 
     num_monomial_coeffs = length(monomial_coeffs)
     @assert num_monomial_coeffs == coeffs_max
-    A = compute_a_coeffs(num_stages, stage_scaling_factors, monomial_coeffs)
+    A = compute_a_coeffs(num_stage_evals, stage_scaling_factors, monomial_coeffs)
 
-    # TODO: Write an updated version of this since there is not that many constraint for this
-    # Compute b_embedded
-    b_embedded = compute_PERK2_b_embedded_coeffs(num_stages, num_stages,
-                                                 monomial_coeffs_embedded, A, c) # THIS CANNOT BE REUSED FOR 2ND ORDER STUFF
+    b_embedded = compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
+                                                 monomial_coeffs_embedded, A, c)
 
-    b_full = construct_b_vector(b_embedded, num_stages - 1, num_stages - 1)
-
-    println("mon_embedded ", monomial_coeffs_embedded)
+    b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
     println("Sum of b_full: ", sum(b_full))
-    println("Dot product of b_full and c: ", dot(b_full, c))
+    
 
     # Calculate and print the percentage of dt_opt_embedded / dt_opt
     percentage_dt_opt = (dt_opt_embedded / dt_opt) * 100
     println("Percentage of dt_opt_embedded / dt_opt: ", percentage_dt_opt, "%")
+
+    print("b_embedded", b_embedded)
 
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A
@@ -233,7 +242,6 @@ function EmbeddedPairedExplicitRK2(num_stages, tspan, eig_vals::Vector{ComplexF6
                                                                                         bS,
                                                                                         cS;
                                                                                         verbose)
-    println("b_embedded: ", b_embedded)
 
     return EmbeddedPairedExplicitRK2(num_stages, a_matrix, b_embedded, c, 1 - bS, bS,
                                      cS, dt_opt)
