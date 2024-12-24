@@ -88,7 +88,7 @@ eig_vals_from_file = readdlm(path, ComplexF64)
 # Ensure the data is in the correct format
 eig_vals_vector = vec(eig_vals_from_file)
 
-ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(16, eig_vals_vector)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(16, tspan, eig_vals_vector)
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller
 
 ol = Trixi.solve(ode, ode_algorithm,
