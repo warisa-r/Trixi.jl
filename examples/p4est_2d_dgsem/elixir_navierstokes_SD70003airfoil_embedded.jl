@@ -80,7 +80,14 @@ callbacks = CallbackSet(analysis_callback,
 ###############################################################################
 # run the simulation
 path = "examples/p4est_2d_dgsem/Eigenvalues_SD7003_SampleCase.txt"
-ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(16, path)
+
+# Read the eigenvalues from the .txt file as a Vector{ComplexF64}
+eig_vals_from_file = readdlm(path, ComplexF64)
+
+# Ensure the data is in the correct format
+eig_vals_vector = vec(eig_vals_from_file)
+
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(16, eig_vals_vector)
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller
 
 ol = Trixi.solve(ode, ode_algorithm,
