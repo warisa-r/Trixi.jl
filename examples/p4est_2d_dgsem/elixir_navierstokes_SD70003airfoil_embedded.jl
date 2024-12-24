@@ -42,8 +42,8 @@ solver = DGSEM(polydeg = polydeg, surface_flux = surf_flux,
                volume_integral = VolumeIntegralFluxDifferencing(vol_flux))
 ###############################################################################
 # Get the uncurved mesh from a file (downloads the file if not available locally)
-path = "examples/p4est_2d_dgsem"
-mesh_file = path * "sd7003_laminar_straight_sided_Trixi.inp"
+path = 
+mesh_file = "examples/p4est_2d_dgsem/sd7003_laminar_straight_sided_Trixi.inp"
 boundary_symbols = [:Airfoil, :FarField]
 mesh = P4estMesh{2}(mesh_file, polydeg = polydeg, boundary_symbols = boundary_symbols,
                     initial_refinement_level = 0)
