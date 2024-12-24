@@ -2,6 +2,7 @@ using OrdinaryDiffEq
 using Trixi
 using Convex, ECOS
 using NLsolve
+using DelimitedFiles
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 U_inf = 0.2
