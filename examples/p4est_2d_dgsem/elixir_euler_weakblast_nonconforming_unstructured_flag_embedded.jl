@@ -79,11 +79,11 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = true,
                                      solution_variables = cons2prim)
 
-ode_algorithm = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
 
-ode_algorithm = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
 
 callbacks = CallbackSet(summary_callback,
@@ -98,8 +98,8 @@ sol = Trixi.solve(ode, ode_algorithm,
 summary_callback() # print the timer summary
 
 
-ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
-ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
+ode_algorithm_cfl = Trixi.PairedExplicitRK2(10, tspan, semi)
+ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK2(10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
 
@@ -141,18 +141,18 @@ round_cfl = round( 0.7 * cfl_number, digits=3)
 
 # Plot the error against tolerances
 plot(tolerances, errors_embedded_callback, xscale = :log10,
-     marker = :circle, label = "PERK23", color = :blue,
+     marker = :circle, label = "PERK21", color = :blue,
      xlabel = "Tolerances (abstol = reltol)", ylabel = "L2 Error",
      title = "Error (rho) vs. Tolerance from weak blast test case (non-uniform grid)")
 plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
          label = "CFL = $round_cfl")
 plot!(size = (1000, 800))
 
-savefig("plot_l2_error_weakblast_PERK23.png")
+savefig("plot_l2_error_weakblast_PERK21.png")
 
 # Plot the error against tolerances
 plot(tolerances, nums_rhs_embedded, xscale = :log10,
-     marker = :circle, label = "PERK23", color = :blue,
+     marker = :circle, label = "PERK21", color = :blue,
      xlabel = "Tolerances (abstol = reltol)", ylabel = "Number of RHS evaluation",
      title = "Number of RHS evaluation vs. Tolerance from weak blast test case (non-uniform grid)")
 plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
@@ -160,4 +160,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_num_rhs_weakblast_PERK23.png")
+savefig("plot_num_rhs_weakblast_PERK21.png")

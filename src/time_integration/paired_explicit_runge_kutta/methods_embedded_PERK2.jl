@@ -356,7 +356,7 @@ function solve!(integrator::EmbeddedPairedExplicitRK2Integrator)
 
     #rhs_eval = integrator.stats.naccept + integrator.stats.nreject
 
-    return TimeIntegratorSolution((first(prob.tspan), integrator.t),
+    return integrator.iter + integrator.nreject, TimeIntegratorSolution((first(prob.tspan), integrator.t),
                                   (prob.u0, integrator.u),
                                   integrator.sol.prob)
 end

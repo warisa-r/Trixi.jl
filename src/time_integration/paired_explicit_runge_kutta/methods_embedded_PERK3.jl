@@ -122,6 +122,8 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
 
         b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
+        println("b_embedded", b_embedded)
+
         println("Sum of b_full: ", sum(b_full))
         println("Dot product of b_full and c: ", dot(b_full, c))
 
