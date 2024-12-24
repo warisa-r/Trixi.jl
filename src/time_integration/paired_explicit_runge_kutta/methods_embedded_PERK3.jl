@@ -20,7 +20,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
             aij = c[num_stages - num_stage_evals + j - i + 2]
-            for k in 1:(i - 2) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
+            for k in 2:(i - 1) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
             end
 
@@ -30,7 +30,7 @@ function compute_b_embedded_coeffs(num_stage_evals, num_stages,
 
         # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
         b_embedded[i] /= c[num_stages - num_stage_evals + 2]
-        for k in 1:(i - 2)
+        for k in 2:(i - 1)
             b_embedded[i] /= a_unknown[i - k]
         end
     end
@@ -87,10 +87,10 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
         num_eig_vals, eig_vals = filter_eig_vals(eig_vals; verbose)
 
         monomial_coeffs, dt_opt = bisect_stability_polynomial(consistency_order,
-                                                                num_eig_vals,
-                                                                num_stage_evals,
-                                                                dtmax, dteps,
-                                                                eig_vals; verbose)
+                                                              num_eig_vals,
+                                                              num_stage_evals,
+                                                              dtmax, dteps,
+                                                              eig_vals; verbose)
         monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
@@ -103,19 +103,20 @@ function compute_EmbeddedPairedRK3_butcher_tableau(num_stages, num_stage_evals, 
                                                     verbose)
 
         monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
-                                                                         1,
-                                                                         num_eig_vals,
-                                                                         num_stage_evals -
-                                                                         1,
-                                                                         dtmax, dteps,
-                                                                         eig_vals;
-                                                                         verbose)
+                                                                                1,
+                                                                                num_eig_vals,
+                                                                                num_stage_evals -
+                                                                                1,
+                                                                                dtmax,
+                                                                                dteps,
+                                                                                eig_vals;
+                                                                                verbose)
         monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
                                                        consistency_order - 1,
                                                        num_stage_evals - 1)
 
         b_embedded = compute_b_embedded_coeffs(num_stage_evals, num_stages,
-                                      monomial_coeffs_embedded, a_unknown, c)
+                                               monomial_coeffs_embedded, a_unknown, c)
     end
 
     # Fill A-matrix in P-ERK style
@@ -219,11 +220,12 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals,
                            base_path_coeffs::AbstractString, dt_opt, dt_opt_embedded;
                            cS2 = 1.0f0)
     a_matrix, b_embedded, c = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                               num_stage_evals,
-                                                               base_path_coeffs;
-                                                               cS2)
+                                                                        num_stage_evals,
+                                                                        base_path_coeffs;
+                                                                        cS2)
 
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+                             dt_opt,
                              dt_opt_embedded)
 end
 
@@ -241,12 +243,13 @@ function EmbeddedPairedRK3(num_stages, num_stage_evals, tspan,
                            eig_vals::Vector{ComplexF64};
                            verbose = false, cS2 = 1.0f0)
     a_matrix, b_embedded, c, dt_opt, dt_opt_embedded = compute_EmbeddedPairedRK3_butcher_tableau(num_stages,
-                                                                                   num_stage_evals,
-                                                                                   tspan,
-                                                                                   eig_vals;
-                                                                                   verbose,
-                                                                                   cS2)
-    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c, dt_opt,
+                                                                                                 num_stage_evals,
+                                                                                                 tspan,
+                                                                                                 eig_vals;
+                                                                                                 verbose,
+                                                                                                 cS2)
+    return EmbeddedPairedRK3(num_stages, num_stage_evals, a_matrix, b_embedded, c,
+                             dt_opt,
                              dt_opt_embedded)
 end
 
