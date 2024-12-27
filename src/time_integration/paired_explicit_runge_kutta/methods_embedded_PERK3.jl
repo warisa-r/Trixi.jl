@@ -6,51 +6,6 @@ using DelimitedFiles: readdlm
 
 @muladd begin
 #! format: noindent
-function compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
-                                         embedded_monomial_coeffs, a_unknown, c)
-    b_embedded = zeros(num_stage_evals - 1)
-
-    # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
-    # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
-    for i in (num_stage_evals - 1):-1:3 # i here represents the degree of stability polynomial we are going through
-        # Initialize b_embedded[i]
-        b_embedded[i] = embedded_monomial_coeffs[i - 2]
-
-        # Subtract the contributions of the upper triangular part
-        for j in (i + 1):(num_stage_evals - 1)
-            # Compute the equivalent of A[i, j] without creating the matrix
-            aij = c[num_stages - num_stage_evals + j - i + 2]
-            for k in 2:(i - 1) # This loops become inactive for i = 1 and i = 2 since there is no a_unknown contribution there.
-                aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
-            end
-
-            # Update b_embedded[i] with the computed value
-            b_embedded[i] -= aij * b_embedded[j]
-        end
-
-        # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
-        b_embedded[i] /= c[num_stages - num_stage_evals + 2]
-        for k in 2:(i - 1)
-            b_embedded[i] /= a_unknown[i - k]
-        end
-    end
-
-    # The second order constraint or i = 2
-    b_embedded[2] = 1 / 2
-    for j in 3:(num_stage_evals - 1)
-        b_embedded[2] -= c[num_stages - num_stage_evals + j] * b_embedded[j]
-    end
-    b_embedded[2] /= c[num_stages - num_stage_evals + 2]
-
-    b_embedded[1] = 1
-    # The first order constraint or i = 1
-    for j in 2:(num_stage_evals - 1)
-        b_embedded[1] -= b_embedded[j]
-    end
-
-    return b_embedded
-end
-
 # Some function defined so that I can check if the second order condition is met. This will be removed later.
 function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     # Construct the b_embedded vector
@@ -103,22 +58,11 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
                                                     monomial_coeffs, cS2, c;
                                                     verbose)
 
-        monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
-                                                                                1,
-                                                                                num_eig_vals,
-                                                                                num_stage_evals -
-                                                                                1,
-                                                                                dtmax,
-                                                                                dteps,
-                                                                                eig_vals;
-                                                                                verbose)
-        monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
-                                                       consistency_order - 1,
-                                                       num_stage_evals - 1)
-
-        b_embedded = compute_PERK3_b_embedded_coeffs(num_stage_evals, num_stages,
-                                                     monomial_coeffs_embedded,
-                                                     a_unknown, c)
+        b_embedded, dt_opt_embedded = bisect_stability_polynomial(num_eig_vals, eig_vals,
+                                                    num_stages, num_stage_evals,
+                                                    num_stages - 1, num_stage_evals - 1,
+                                                    a_unknown, c,
+                                                    dtmax, dteps)
 
         b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
@@ -126,6 +70,7 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
 
         println("Sum of b_full: ", sum(b_full))
         println("Dot product of b_full and c: ", dot(b_full, c))
+        println("dt_opt of the non-embedded scheme: ", dt_opt)
 
         # Calculate and print the percentage of dt_opt_embedded / dt_opt
         percentage_dt_opt = (dt_opt_embedded / dt_opt) * 100

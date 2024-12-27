@@ -98,8 +98,8 @@ sol = Trixi.solve(ode, ode_algorithm,
 summary_callback() # print the timer summary
 
 
-ode_algorithm_cfl = Trixi.PairedExplicitRK2(10, tspan, semi)
-ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK2(10, tspan, semi)
+ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
 
@@ -148,7 +148,7 @@ plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
          label = "CFL = $round_cfl")
 plot!(size = (1000, 800))
 
-savefig("plot_l2_error_weakblast_PERK21.png")
+savefig("plot_l2_error_weakblast_PERK32_pos.png")
 
 # Plot the error against tolerances
 plot(tolerances, nums_rhs_embedded, xscale = :log10,
@@ -160,4 +160,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_num_rhs_weakblast_PERK21.png")
+savefig("plot_num_rhs_weakblast_PERK32_pos.png")

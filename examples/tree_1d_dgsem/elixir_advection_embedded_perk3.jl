@@ -56,7 +56,7 @@ save_solution = SaveSolutionCallback(dt = 0.1,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 7 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedExplicitRK2(16, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(16,16, tspan, semi)
 #ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
@@ -83,9 +83,9 @@ sol = Trixi.solve(ode, ode_algorithm,
 # Print the timer summary
 summary_callback()
 
-#=
-ode_algorithm_cfl = Trixi.PairedExplicitRK2(10, tspan, semi)
-ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK2(10, tspan, semi)
+
+ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
+ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = cfl_number)
 
@@ -135,7 +135,7 @@ plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_l2_error_advection_PERK21.png")
+savefig("plot_l2_error_advection_PERK32_pos.png")
 
 # Plot the error against tolerances
 plot(tolerances, nums_rhs_embedded, xscale = :log10,
@@ -147,5 +147,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_num_rhs_advection_PERK21.png")
-=#
+savefig("plot_num_rhs_advection_PERK32_pos.png")
