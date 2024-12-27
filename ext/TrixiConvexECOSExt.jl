@@ -185,10 +185,12 @@ function stability_polynomials!(pnoms,
     b = construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embedded)
     a = zeros(num_stages)
     a[2] = c[2]
+
     num_unknown = length(a_unknown)
     for i = 1:num_unknown
-        a[num_stages - i + 1] = a[num_unknown - i + 1]
+        a[num_stages - i + 1] = a_unknown[num_unknown - i + 1]
     end
+    println("a: ", a)
 
     num_eig_vals = length(pnoms)
 
@@ -273,7 +275,7 @@ function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
 
         # Second-order constraint
         # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from b_unknown
-        constraints = [b_unknown >= -1e-6, sum(b_unknown) == 1.0,
+        constraints = [sum(b_unknown) == 1.0,
                        2 * dot(b_unknown[2:end], c[num_stages - num_stage_evals + 2:num_stages - 1]) == 1.0] # Since c[1] = 0.0
 
         # Use last optimal values for b in (potentially) next iteration
