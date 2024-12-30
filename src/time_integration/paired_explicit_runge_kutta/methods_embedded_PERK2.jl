@@ -92,38 +92,28 @@ function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals,
     monomial_coeffs = undo_normalization!(monomial_coeffs, consistency_order,
                                               num_stage_evals)
 
-    monomial_coeffs_embedded, dt_opt_embedded = bisect_stability_polynomial(consistency_order -
-                                                1,
-                                                num_eig_vals,
-                                                num_stage_evals -
-                                                1,
-                                                dtmax,
-                                                dteps,
-                                                eig_vals;
-                                                verbose)
-    monomial_coeffs_embedded = undo_normalization!(monomial_coeffs_embedded,
-                        consistency_order - 1,
-                        num_stage_evals - 1)
-
-    println("monomial_coeffs_embedded", monomial_coeffs_embedded)
-
     num_monomial_coeffs = length(monomial_coeffs)
     @assert num_monomial_coeffs == coeffs_max
     A = compute_a_coeffs(num_stage_evals, stage_scaling_factors, monomial_coeffs)
 
-    b_embedded = compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
-                                                 monomial_coeffs_embedded, A, c)
+    b_embedded, dt_opt_embedded = bisect_stability_polynomial(num_eig_vals, eig_vals,
+                                                    num_stages, num_stage_evals,
+                                                    num_stages - 1, num_stage_evals - 1, consistency_order,
+                                                    A, c,
+                                                    dtmax, dteps)
+
 
     b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
+    println("b_embedded", b_embedded)
+
     println("Sum of b_full: ", sum(b_full))
-    
+    println("Dot product of b_full and c: ", dot(b_full, c))
+    println("dt_opt of the non-embedded scheme: ", dt_opt)
 
     # Calculate and print the percentage of dt_opt_embedded / dt_opt
     percentage_dt_opt = (dt_opt_embedded / dt_opt) * 100
     println("Percentage of dt_opt_embedded / dt_opt: ", percentage_dt_opt, "%")
-
-    print("b_embedded", b_embedded)
 
     a_matrix[:, 1] -= A
     a_matrix[:, 2] = A

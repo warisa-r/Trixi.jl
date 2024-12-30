@@ -60,7 +60,7 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
 
         b_embedded, dt_opt_embedded = bisect_stability_polynomial(num_eig_vals, eig_vals,
                                                     num_stages, num_stage_evals,
-                                                    num_stages - 1, num_stage_evals - 1,
+                                                    num_stages - 1, num_stage_evals - 1, consistency_order,
                                                     a_unknown, c,
                                                     dtmax, dteps)
 

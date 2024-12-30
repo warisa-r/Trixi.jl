@@ -177,7 +177,7 @@ end
 # order(p = 2), including contributions from free coefficients for higher orders, and
 # return the maximum absolute value
 function stability_polynomials!(pnoms, 
-                                num_stages_embedded, num_stage_evals_embedded,
+                                num_stages_embedded, num_stage_evals_embedded, consistency_order,
                                 normalized_powered_eigvals_scaled,
                                 a_unknown, b_unknown, c)
     num_stages = num_stages_embedded + 1
@@ -198,8 +198,15 @@ function stability_polynomials!(pnoms,
         pnoms[i] = 1.0 + normalized_powered_eigvals_scaled[i, 1]
     end
     # z^2: b^T * c
-    #pnoms += dot(b, c) * normalized_powered_eigvals_scaled[:, 2]
-    pnoms += 0.5 * normalized_powered_eigvals_scaled[:, 2]
+
+    if consistency_order == 2 # Consistency order of the original scheme
+        pnoms += dot(b, c) * normalized_powered_eigvals_scaled[:, 2]
+    elseif consistency_order == 3
+        pnoms += 0.5 * normalized_powered_eigvals_scaled[:, 2]
+    else
+        error("Unsupported")
+    end
+    
 
     # Contribution from free coefficients
     for i in 3:num_stage_evals_embedded
@@ -232,7 +239,7 @@ Optimal stability polynomials for numerical integration of initial value problem
 # Perform bisection to optimize timestep for stability of the polynomial
 function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
                                      num_stages, num_stage_evals,
-                                     num_stages_embedded, num_stage_evals_embedded,
+                                     num_stages_embedded, num_stage_evals_embedded, consistency_order,
                                      a, c,
                                      dtmax, dteps)
     dtmin = 0.0
@@ -273,18 +280,25 @@ function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
         end
 
         constraints = []
+
+        #=
         for i in 1:num_stage_evals -1
-            push!(constraints, b_unknown[i] >=-1e-6)
+            push!(constraints, b_unknown[i] >=-1e-6) # Positivity constraints
         end
+        =#
         push!(constraints, sum(b_unknown) == 1.0)
-        # Second-order constraint
-        # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from b_unknown
-        push!(constraints, 2 * dot(b_unknown[2:end], c[num_stages - num_stage_evals + 2:num_stages - 1]) == 1.0) # Since c[1] = 0.0
+
+        if consistency_order == 3 # Consistency order of the original scheme
+            # Second-order constraint
+            # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from b_unknown
+            push!(constraints, 2 * dot(b_unknown[2:end], c[num_stages - num_stage_evals + 2:num_stages - 1]) == 1.0) # Since c[1] = 0.0
+        end
+        
         
 
         # Use last optimal values for b in (potentially) next iteration
         problem = minimize(stability_polynomials!(pnoms,
-                                                  num_stages_embedded, num_stage_evals_embedded,
+                                                  num_stages_embedded, num_stage_evals_embedded, consistency_order,
                                                   normalized_powered_eigvals_scaled,
                                                   a, b_unknown, c),
                                                   constraints
