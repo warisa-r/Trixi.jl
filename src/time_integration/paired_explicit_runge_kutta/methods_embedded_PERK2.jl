@@ -7,56 +7,6 @@ using LinearAlgebra: eigvals
 
 @muladd begin
 #! format: noindent
-
-function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
-                                         embedded_monomial_coeffs, a_unknown, c)
-    b_embedded = zeros(num_stage_evals - 1)
-    println("c: ", c)
-    println("a_unknown", a_unknown)
-
-    # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
-    # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
-    # TODO: 2 here can be replaced by consistency_order and the second constraint can be put in if so that two functions of two orders can be merged into one
-    for i in (num_stage_evals - 1):-1:2 # i here represents the degree of stability polynomial we are going through
-        # Initialize b_embedded[i]
-        b_embedded[i] = embedded_monomial_coeffs[i - 1] # and the offset here is the consistency order of the embedded scheme
-
-        # Subtract the contributions of the upper triangular part
-        for j in (i + 1):(num_stage_evals - 1)
-            # Compute the equivalent of A[i, j] without creating the matrix
-            c_iter = num_stages - num_stage_evals + j -i + 2
-            aij = c[num_stages - num_stage_evals + j - i + 2]
-            for k in 2:(i - 1)
-                aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
-                a_iter = j-k
-                println("aij, i = $i, j = $j, a_iter = [$a_iter]")
-            end
-
-            # Print the value of aij for each i
-            println("polynomial degree = $i, j = $j, aij = $aij, c[$c_iter]")
-
-            # Update b_embedded[i] with the computed value
-            b_embedded[i] -= aij * b_embedded[j]
-        end
-
-        # Retrieve the value of b_embedded by dividing all the a_unknown and c values associated with it
-        b_embedded[i] /= c[num_stages - num_stage_evals + 2]
-        for k in 2:(i - 1)
-            b_embedded[i] /= a_unknown[i - k]
-            num = i-k
-            println("b_embedded of $i is divided by a[$num]")
-        end
-    end
-
-    b_embedded[1] = 1
-    # The first order constraint or i = 1
-    for j in 2:(num_stage_evals - 1)
-        b_embedded[1] -= b_embedded[j]
-    end
-
-    return b_embedded
-end
-
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 2
 # using a list of eigenvalues
 function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals, tspan,
