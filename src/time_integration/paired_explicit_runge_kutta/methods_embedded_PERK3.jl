@@ -475,31 +475,31 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
                 integrator.u_e[i] += alg.b_embedded[stage - alg.num_stages + alg.num_stage_evals] *
                                      integrator.k_higher[i]
             end
+        end
 
-            # Last stage
-            @threaded for i in eachindex(integrator.du)
-                integrator.u_tmp[i] = integrator.u_old[i] +
-                                      alg.a_matrix[alg.num_stage_evals - 2, 1] *
-                                      integrator.k1[i] +
-                                      alg.a_matrix[alg.num_stage_evals - 2, 2] *
-                                      integrator.k_higher[i]
-            end
+        # Last stage
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_tmp[i] = integrator.u_old[i] +
+                                  alg.a_matrix[alg.num_stage_evals - 2, 1] *
+                                  integrator.k1[i] +
+                                  alg.a_matrix[alg.num_stage_evals - 2, 2] *
+                                  integrator.k_higher[i]
+        end
 
-            integrator.f(integrator.du, integrator.u_tmp, prob.p,
-                         integrator.t + alg.c[alg.num_stages] * integrator.dt)
+        integrator.f(integrator.du, integrator.u_tmp, prob.p,
+                     integrator.t + alg.c[alg.num_stages] * integrator.dt)
 
-            @threaded for i in eachindex(integrator.du)
-                integrator.u_e[i] += alg.b_embedded[alg.num_stage_evals] *
-                                                    integrator.du[i] * integrator.dt
-            end
+        @threaded for i in eachindex(integrator.du)
+            integrator.u_e[i] += alg.b_embedded[alg.num_stage_evals] *
+                                                integrator.du[i] * integrator.dt
+        end
 
-            @threaded for i in eachindex(integrator.u)
-                # Note that 'k_higher' carries the values of K_{S-1}
-                # and that we construct 'K_S' "in-place" from 'integrator.du'
-                integrator.u[i] = integrator.u_old[i] +
-                                  (integrator.k1[i] + integrator.k_higher[i] +
-                                   4.0 * integrator.du[i] * integrator.dt) / 6.0
-            end
+        @threaded for i in eachindex(integrator.u)
+            # Note that 'k_higher' carries the values of K_{S-1}
+            # and that we construct 'K_S' "in-place" from 'integrator.du'
+            integrator.u[i] = integrator.u_old[i] +
+                              (integrator.k1[i] + integrator.k_higher[i] +
+                               4.0 * integrator.du[i] * integrator.dt) / 6.0
         end
     end # PairedExplicitRK step timer
 
