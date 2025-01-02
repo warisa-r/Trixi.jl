@@ -283,7 +283,7 @@ function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
 
         
         for i in 1:num_stage_evals -1
-            push!(constraints, b_unknown[i] >=-1e-6) # Positivity constraints
+            push!(constraints, b_unknown[i] >=-1e-8) # Positivity constraints
         end
         
         push!(constraints, sum(b_unknown) == 1.0)

@@ -488,6 +488,11 @@ function step!(integrator::EmbeddedPairedExplicitRK3Integrator)
             integrator.f(integrator.du, integrator.u_tmp, prob.p,
                          integrator.t + alg.c[alg.num_stages] * integrator.dt)
 
+            @threaded for i in eachindex(integrator.du)
+                integrator.u_e[i] += alg.b_embedded[alg.num_stage_evals] *
+                                                    integrator.du[i] * integrator.dt
+            end
+
             @threaded for i in eachindex(integrator.u)
                 # Note that 'k_higher' carries the values of K_{S-1}
                 # and that we construct 'K_S' "in-place" from 'integrator.du'
