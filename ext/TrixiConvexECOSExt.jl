@@ -250,7 +250,7 @@ function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
     pnoms = ones(Complex{Float64}, num_eig_vals, 1)
 
     # There are e - 2 free variables for the stability polynomial of the embedded scheme
-    b_unknown = Variable(num_stage_evals - 1)
+    b_unknown = Variable(num_stage_evals_embedded)
 
     normalized_powered_eigvals = zeros(Complex{Float64}, num_eig_vals, num_stage_evals)
 
