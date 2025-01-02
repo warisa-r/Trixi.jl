@@ -56,7 +56,7 @@ save_solution = SaveSolutionCallback(dt = 0.1,
 # Construct embedded order paired explicit Runge-Kutta method with 10 stages and 7 evaluation stages for given simulation setup.
 # Pass `tspan` to calculate maximum time step allowed for the bisection algorithm used 
 # in calculating the polynomial coefficients in the ODE algorithm.
-ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 8, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 #ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 # Calculate the CFL number for the given ODE algorithm and ODE problem (cfl_number calculate from dt_opt of the optimization of
 # b values in the Butcher tableau of the ODE algorithm).
@@ -127,7 +127,7 @@ round_cfl = round(cfl_number, digits=3)
 
 # Plot the error against tolerances
 plot(tolerances, errors_embedded_callback, xscale = :log10, yscale = :log10,
-     marker = :circle, label = "PERK21", color = :blue,
+     marker = :circle, label = "PERK32", color = :blue,
      xlabel = "Tolerances (abstol = reltol)", ylabel = "L2 Error",
      title = "Error vs. Tolerance from 1D advection with tree mesh")
 plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
@@ -135,11 +135,11 @@ plot!(tolerances, errors_cfl_callback, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_l2_error_advection_PERK32_pos.png")
+savefig("plot_l2_error_advection_PERK32.png")
 
 # Plot the error against tolerances
 plot(tolerances, nums_rhs_embedded, xscale = :log10,
-     marker = :circle, label = "PERK21", color = :blue,
+     marker = :circle, label = "PERK32", color = :blue,
      xlabel = "Tolerances (abstol = reltol)", ylabel = "Number of RHS evaluation",
      title = "Number of RHS evaluation vs. Tolerance from 1D advection with tree mesh")
 plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
@@ -147,5 +147,5 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 
 plot!(size = (1000, 800))
 
-savefig("plot_num_rhs_advection_PERK32_pos.png")
+savefig("plot_num_rhs_advection_PERK32.png")
 =#

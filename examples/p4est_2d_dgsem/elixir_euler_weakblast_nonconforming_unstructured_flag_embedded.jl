@@ -79,25 +79,24 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = true,
                                      solution_variables = cons2prim)
 
-ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
 stepsize_callback = StepsizeCallback(cfl = 0.7 * cfl_number)
 
-ode_algorithm = Trixi.PairedExplicitRK2(10, tspan, semi)
+ode_algorithm = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 controller = Trixi.PIDController(0.60, -0.33, 0) # Intiialize the controller 
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
-                        save_restart, save_solution, stepsize_callback)
+                        save_restart, save_solution)
 ###############################################################################
 # run the simulation
 
 sol = Trixi.solve(ode, ode_algorithm,
                   dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-1, reltol = 1e-1);
+                  save_everystep = false, callback = callbacks, controller = controller, abstol = 1e-3, reltol = 1e-3);
 summary_callback() # print the timer summary
 
-
+#=
 ode_algorithm_cfl = Trixi.PairedExplicitRK3(10, tspan, semi)
 ode_algorithm_embedded = Trixi.EmbeddedPairedExplicitRK3(10, 10, tspan, semi)
 cfl_number = Trixi.calculate_cfl(ode_algorithm, ode)
@@ -161,3 +160,4 @@ plot!(tolerances, nums_rhs_cfl, marker = :square, color = :red,
 plot!(size = (1000, 800))
 
 savefig("plot_num_rhs_weakblast_PERK32_pos.png")
+=#
