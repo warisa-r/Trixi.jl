@@ -17,6 +17,19 @@ function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embe
     return b_embedded
 end
 
+function clip_b_embedded!(b_embedded, tol = 1e-6)
+    print("Sparsity pattern of b_embedded: [")
+    for i in eachindex(b_embedded)
+        if abs(b_embedded[i]) < tol
+            b_embedded[i] = 0
+            print(" 0")
+        else
+            print(" *")
+        end
+    end
+    println("]")
+end
+
 # Compute the Butcher tableau for a paired explicit Runge-Kutta method order 3
 # using a list of eigenvalues
 function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage_evals,
@@ -66,6 +79,7 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
         b_full = construct_b_vector(b_embedded, num_stages - 1, num_stage_evals - 1)
 
         println("b_embedded", b_embedded)
+        clip_b_embedded!(b_embedded)
 
         println("Sum of b_full: ", sum(b_embedded))
         println("Dot product of b_full and c: ", dot(b_full, c))
