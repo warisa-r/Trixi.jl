@@ -281,17 +281,17 @@ function Trixi.bisect_stability_polynomial(num_eig_vals, eig_vals,
 
         constraints = []
 
-        #=
+        
         for i in 1:num_stage_evals -1
             push!(constraints, b_unknown[i] >=-1e-6) # Positivity constraints
         end
-        =#
+        
         push!(constraints, sum(b_unknown) == 1.0)
 
         if consistency_order == 3 # Consistency order of the original scheme
             # Second-order constraint
             # Since c[1] is always 0 we can ignore the contribution of b[1] and only account for the ones from b_unknown
-            push!(constraints, 2 * dot(b_unknown[2:end], c[num_stages - num_stage_evals + 2:num_stages - 1]) == 1.0) # Since c[1] = 0.0
+            push!(constraints, 2 * dot(b_unknown[2:end], c[num_stages - num_stage_evals + 2:num_stages_embedded]) == 1.0) # Since c[1] = 0.0
         end
         
         

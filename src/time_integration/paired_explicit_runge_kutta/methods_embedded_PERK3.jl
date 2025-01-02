@@ -13,7 +13,6 @@ function construct_b_vector(b_unknown, num_stages_embedded, num_stage_evals_embe
         b_unknown[1],
         zeros(Float64, num_stages_embedded - num_stage_evals_embedded)...,
         b_unknown[2:end]...,
-        0
     ]
     return b_embedded
 end
@@ -60,7 +59,7 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
 
         b_embedded, dt_opt_embedded = bisect_stability_polynomial(num_eig_vals, eig_vals,
                                                     num_stages, num_stage_evals,
-                                                    num_stages - 1, num_stage_evals - 1, consistency_order,
+                                                    num_stages, num_stage_evals, consistency_order,
                                                     a_unknown, c,
                                                     dtmax, dteps)
 
@@ -68,7 +67,7 @@ function compute_EmbeddedPairedExplicitRK3_butcher_tableau(num_stages, num_stage
 
         println("b_embedded", b_embedded)
 
-        println("Sum of b_full: ", sum(b_full))
+        println("Sum of b_full: ", sum(b_embedded))
         println("Dot product of b_full and c: ", dot(b_full, c))
         println("dt_opt of the non-embedded scheme: ", dt_opt)
 
