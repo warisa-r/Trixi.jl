@@ -10,7 +10,7 @@ using LinearAlgebra: eigvals
 
 function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
                                          embedded_monomial_coeffs, a_unknown, c)
-
+    println("c: ", c)
     b_embedded = zeros(num_stage_evals - 1)
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
@@ -52,9 +52,10 @@ end
 function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals, tspan,
                                                            bS, cS; verbose = false)
     # c Vector from Butcher Tableau (defines timestep per stage)
+    # This deviates from the original c vector we use in methods_PERK2.jl. I'm using the values that Vermeire used.
     c = zeros(num_stages)
     for k in 2:num_stages
-        c[k] = cS * (k - 1) / (num_stages - 1)
+        c[k] = (k - 1) / (2* (num_stages - 1))
     end
     stage_scaling_factors = bS * reverse(c[2:(end - 1)])
 
