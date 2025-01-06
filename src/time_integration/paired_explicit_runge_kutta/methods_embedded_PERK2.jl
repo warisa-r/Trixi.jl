@@ -16,7 +16,6 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
-    # TODO: 2 here can be replaced by consistency_order and the second constraint can be put in if so that two functions of two orders can be merged into one
     for i in (num_stage_evals - 1):-1:2 # i here represents the degree of stability polynomial we are going through
         # Initialize b_embedded[i]
         b_embedded[i] = embedded_monomial_coeffs[i - 1] # and the offset here is the consistency order of the embedded scheme
@@ -24,16 +23,11 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
         # Subtract the contributions of the upper triangular part
         for j in (i + 1):(num_stage_evals - 1)
             # Compute the equivalent of A[i, j] without creating the matrix
-            c_iter = num_stages - num_stage_evals + j -i + 2
             aij = c[num_stages - num_stage_evals + j - i + 2]
             for k in 2:(i - 1)
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
                 a_iter = j-k
-                println("aij, i = $i, j = $j, a_iter = [$a_iter]")
             end
-
-            # Print the value of aij for each i
-            println("polynomial degree = $i, j = $j, aij = $aij, c[$c_iter]")
 
             # Update b_embedded[i] with the computed value
             b_embedded[i] -= aij * b_embedded[j]
@@ -43,8 +37,6 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
         b_embedded[i] /= c[num_stages - num_stage_evals + 2]
         for k in 2:(i - 1)
             b_embedded[i] /= a_unknown[i - k]
-            num = i-k
-            println("b_embedded of $i is divided by a[$num]")
         end
     end
 
