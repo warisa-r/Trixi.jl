@@ -10,9 +10,8 @@ using LinearAlgebra: eigvals
 
 function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
                                          embedded_monomial_coeffs, a_unknown, c)
+
     b_embedded = zeros(num_stage_evals - 1)
-    println("c: ", c)
-    println("a_unknown", a_unknown)
 
     # Solve for b_embedded in a matrix-free manner, using a loop-based serial approach
     # We go in reverse order since we have to solve b_embedded last entry from the highest degree first.
@@ -26,7 +25,6 @@ function compute_PERK2_b_embedded_coeffs(num_stage_evals, num_stages,
             aij = c[num_stages - num_stage_evals + j - i + 2]
             for k in 2:(i - 1)
                 aij *= a_unknown[j - k] # i-2 times multiplications of a_unknown. The first one is already accounted for by c-coeff.
-                a_iter = j-k
             end
 
             # Update b_embedded[i] with the computed value
@@ -56,7 +54,7 @@ function compute_EmbeddedPairedExplicitRK2_butcher_tableau(num_stages, eig_vals,
     # c Vector from Butcher Tableau (defines timestep per stage)
     c = zeros(num_stages)
     for k in 2:num_stages
-        c[k] = (k - 1) / (2* (num_stages - 1))
+        c[k] = cS * (k - 1) / (num_stages - 1)
     end
     stage_scaling_factors = bS * reverse(c[2:(end - 1)])
 
