@@ -444,7 +444,7 @@ include("compressible_euler_3d.jl")
 include("compressible_euler_quasi_1d.jl")
 
 abstract type AbstractCompressibleEulerMultiIonEquations{NDIMS, NVARS, NCOMP} <:
-    AbstractEquations{NDIMS, NVARS} end
+              AbstractEquations{NDIMS, NVARS} end
 include("compressible_euler_multiion.jl")
 
 # CompressibleEulerMulticomponentEquations
@@ -481,12 +481,12 @@ end
 
 # Retrieve number of components from equation instance for the multicomponent case
 @inline function ncomponents(::AbstractCompressibleEulerMultiIonEquations{NDIMS,
-    NVARS,
-    NCOMP}) where {
-                   NDIMS,
-                   NVARS,
-                   NCOMP
-                   }
+                                                                          NVARS,
+                                                                          NCOMP}) where {
+                                                                                         NDIMS,
+                                                                                         NVARS,
+                                                                                         NCOMP
+                                                                                         }
     NCOMP
 end
 """

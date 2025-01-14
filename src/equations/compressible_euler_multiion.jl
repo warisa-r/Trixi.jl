@@ -5,17 +5,20 @@
 @muladd begin
 #! format: noindent
 
-
 mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real} <:
-    AbstractCompressibleEulerMultiIonEquations{1, NVARS, NCOMP}
+               AbstractCompressibleEulerMultiIonEquations{1, NVARS, NCOMP}
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
     inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1); can be used to write slow divisions as fast multiplications
 
-    function CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas) where {NVARS, NCOMP, RealT <: Real}
-
+    function CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas) where {
+                                                                                      NVARS,
+                                                                                      NCOMP,
+                                                                                      RealT <:
+                                                                                      Real
+                                                                                      }
         NCOMP >= 1 ||
             throw(DimensionMismatch("`gammas` and `charge_to_mass` have to be filled with at least one value"))
-    
+
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
         new(gammas, inv_gammas_minus_one)
     end
@@ -35,16 +38,21 @@ function CompressibleEulerMultiIonEquations1D(gammas)
     return CompressibleEulerMultiIonEquations1D(gammas = gammas)
 end
 
-@inline function Base.real(::CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}) where {NVARS, NCOMP, RealT <: Real}
+@inline function Base.real(::CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}) where {
+                                                                                               NVARS,
+                                                                                               NCOMP,
+                                                                                               RealT <:
+                                                                                               Real
+                                                                                               }
     RealT
 end
-
 
 function varnames(::typeof(cons2cons), equations::CompressibleEulerMultiIonEquations1D)
     cons = ()
     for i in eachcomponent(equations)
         cons = (cons...,
-                tuple("rho_" * string(i), "rho_v1_" * string(i), "rho_e_" * string(i))...)
+                tuple("rho_" * string(i), "rho_v1_" * string(i),
+                      "rho_e_" * string(i))...)
     end
 
     return cons
@@ -95,7 +103,8 @@ end
 
 Calculate the flux for the multiion system. The flux is calculated for each ion species separately.
 """
-@inline function flux(u, orientation::Integer, equations::CompressibleEulerMultiIonEquations1D)
+@inline function flux(u, orientation::Integer,
+                      equations::CompressibleEulerMultiIonEquations1D)
     f = zero(MVector{nvariables(equations), eltype(u)})
 
     for k in eachcomponent(equations)
@@ -121,9 +130,10 @@ end
 
 A constant initial condition to test free-stream preservation.
 """
-function initial_condition_constant(x, t, equations::CompressibleEulerMultiIonEquations1D)
+function initial_condition_constant(x, t,
+                                    equations::CompressibleEulerMultiIonEquations1D)
     cons = zero(MVector{nvariables(equations), eltype(x)})
-    
+
     rho = 0.1
     rho_v1 = 1
     rho_e = 10
@@ -142,10 +152,11 @@ A smooth initial condition used for convergence tests in combination with
 [`source_terms_convergence_test`](@ref)
 (and [`BoundaryConditionDirichlet(initial_condition_convergence_test)`](@ref) in non-periodic domains).
 """
-function initial_condition_convergence_test(x, t, equations::CompressibleEulerMultiIonEquations1D)
+function initial_condition_convergence_test(x, t,
+                                            equations::CompressibleEulerMultiIonEquations1D)
     RealT = eltype(x)
     cons = zero(MVector{nvariables(equations), RealT})
-    
+
     c = 2
     A = convert(RealT, 0.1)
     L = 2
@@ -163,7 +174,6 @@ function initial_condition_convergence_test(x, t, equations::CompressibleEulerMu
 
     return SVector(cons)
 end
-
 
 """
     source_terms_convergence_test(u, x, t, equations::CompressibleEulerMultiIonEquations1D)
@@ -209,8 +219,8 @@ end
 # Calculate estimates for maximum wave speed for local Lax-Friedrichs-type dissipation as the
 # maximum velocity magnitude plus the maximum speed of sound
 @inline function max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
-    equations::CompressibleEulerMultiIonEquations1D)
-    
+                                     equations::CompressibleEulerMultiIonEquations1D)
+
     # Calculate velocities
     v_mag_ll = zero(eltype(u_ll))
     v_mag_rr = zero(eltype(u_rr))
@@ -225,12 +235,12 @@ end
         # Calculate primitive variables and speed of sound
         v1_ll = rho_v1_ll / rho_ll
         p_ll = (gamma - 1) * (rho_e_ll - 0.5f0 * rho_ll * abs(v1_ll)^2)
-        v_mag_ll = max(v_mag_ll,abs(v1_ll))
+        v_mag_ll = max(v_mag_ll, abs(v1_ll))
         c_ll = max(c_ll, sqrt(gamma * p_ll / rho_ll))
 
         v1_rr = rho_v1_rr / rho_rr
         p_rr = (gamma - 1) * (rho_e_rr - 0.5f0 * rho_rr * abs(v1_rr)^2)
-        v_mag_rr = max(v_mag_rr,abs(v1_rr))
+        v_mag_rr = max(v_mag_rr, abs(v1_rr))
         c_rr = max(c_rr, sqrt(gamma * p_rr / rho_rr))
     end
 
@@ -238,7 +248,7 @@ end
 end
 
 @inline function max_abs_speeds(u,
-    equations::CompressibleEulerMultiIonEquations1D)
+                                equations::CompressibleEulerMultiIonEquations1D)
     prim = cons2prim(u, equations)
     v1_max = zero(eltype(u))
     for k in eachcomponent(equations)
@@ -250,10 +260,9 @@ end
     return (v1_max,)
 end
 
-
 # Calculate estimates for minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_naive(u_ll, u_rr, orientation::Integer,
-    equations::CompressibleEulerMultiIonEquations1D)
+                                     equations::CompressibleEulerMultiIonEquations1D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
@@ -268,7 +277,7 @@ end
         λ_min = min(λ_min, v1_ll - sqrt(gamma * p_ll / rho_ll))
         λ_max = max(λ_max, v1_rr + sqrt(gamma * p_rr / rho_rr))
     end
-    
+
     #Assert that λ_min and λ_max are not Inf
     @assert !isinf(λ_min) "λ_min is Inf"
     @assert !isinf(λ_max) "λ_max is Inf"
@@ -278,7 +287,7 @@ end
 
 # More refined estimates for minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_davis(u_ll, u_rr, orientation::Integer,
-    equations::CompressibleEulerMultiIonEquations1D)
+                                     equations::CompressibleEulerMultiIonEquations1D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
@@ -327,7 +336,7 @@ end
         rho_p = rho / p
 
         w1 = (gamma - s) * inv_gamma_minus_one -
-            0.5 * rho_p * v_square
+             0.5 * rho_p * v_square
         w2 = rho_p * v1
         w3 = -rho_p
         set_component!(w, k, w1, w2, w3, equations)
@@ -352,7 +361,7 @@ end
 
         # eq. (52)
         energy_internal = ((gamma - 1) / (-V5)^gamma)^(inv_gamma_minus_one) *
-                        exp(-s * inv_gamma_minus_one)
+                          exp(-s * inv_gamma_minus_one)
 
         # eq. (51)
         rho = -V5 * energy_internal
@@ -420,5 +429,4 @@ end
     end
     return pressure
 end
-
 end # @muladd
