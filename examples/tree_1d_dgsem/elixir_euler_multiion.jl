@@ -3,12 +3,13 @@ using OrdinaryDiffEq
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
-equations = Trixi.CompressibleEulerPlasmaEquations1D(1.4)
+gammas = SVector(1.4, 1.76, 1.4)  # Heat capacity ratios for two species
+equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas)
 
 initial_condition = initial_condition_convergence_test
 
-solver = DGSEM(polydeg = 3, surface_flux = flux_hllc,
-               volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_hllc))
+solver = DGSEM(polydeg = 3, surface_flux = flux_hll,
+               volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_hll))
 
 coordinates_min = 0.0
 coordinates_max = 2.0
