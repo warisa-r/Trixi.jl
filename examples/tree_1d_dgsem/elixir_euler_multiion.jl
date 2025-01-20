@@ -2,20 +2,109 @@ using Trixi
 using OrdinaryDiffEq
 
 ###############################################################################
-# semidiscretization of the compressible Euler equations
-gammas = SVector(1.4, 1.76, 1.4)  # Heat capacity ratios for two species
-equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas) # Since I haven't exported this yet
+# This elixir describes the frictional slowing of an ionized carbon fluid (C6+) with respect to another species 
+# of a background ionized carbon fluid with an initially nonzero relative velocity. It is the second slow-down
+# test (fluids with different densities) described in:
+# - Ghosh, D., Chapman, T. D., Berger, R. L., Dimits, A., & Banks, J. W. (2019). A 
+#   multispecies, multifluid model for laser–induced counterstreaming plasma simulations. 
+#   Computers & Fluids, 186, 38-57.
+#
+# This is effectively a zero-dimensional case because the spatial gradients are zero, and we use it to test the
+# collision source terms.
+#
+# To run this physically relevant test, we use the following characteristic quantities to non-dimensionalize
+# the equations:
+# Characteristic length: L_inf = 1.00E-03 m (domain size)
+# Characteristic density: rho_inf = 1.99E+00 kg/m^3 (corresponds to a number density of 1e20 cm^{-3})
+# Characteristic vacuum permeability: mu0_inf = 1.26E-06 N/A^2 (for equations with mu0 = 1)
+# Characteristic gas constant: R_inf = 6.92237E+02 J/kg/K (specific gas constant for a Carbon fluid)
+# Characteristic velocity: V_inf = 1.00E+06 m/s
+#
+# The results of the paper can be reproduced using `source_terms = source_terms_collision_ion_ion` (i.e., only
+# taking into account ion-ion collisions). However, we include ion-electron collisions assuming a constant 
+# electron temperature of 1 keV in this elixir to test the function `source_terms_collision_ion_electron`
 
-initial_condition = initial_condition_convergence_test
+# Return the electron pressure for a constant electron temperature Te = 1 keV
+function electron_pressure_constantTe(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    @unpack charge_to_mass = equations
+    Te = 0.008029953773 # [nondimensional] = 1 [keV]
+    total_electron_charge = zero(eltype(u))
+    for k in eachcomponent(equations)
+        rho_k = u[(k - 1) * 3 + 1]
+        total_electron_charge += rho_k * charge_to_mass[k]
+    end
+
+    # Boltzmann constant divided by elementary charge
+    kB_e = 7.86319034E-02 #[nondimensional]
+
+    return total_electron_charge * kB_e * Te
+end
+
+# Return the constant electron temperature Te = 1 keV
+function electron_temperature_constantTe(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    return 0.008029953773 # [nondimensional] = 1 [keV]
+end
+
+equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas = (5 / 3, 5 / 3),
+                                                                charge_to_mass = (76.3049060157692000,
+                                                                                76.3049060157692000), # [nondimensional]
+                                                                gas_constants = (1.0, 1.0), # [nondimensional]
+                                                                molar_masses = (1.0, 1.0), # [nondimensional]
+                                                                ion_ion_collision_constants = [0.0 0.4079382480442680;
+                                                                                            0.4079382480442680 0.0], # [nondimensional] (computed with eq (4.142) of Schunk & Nagy (2009))
+                                                                ion_electron_collision_constants = (8.56368379833E-06,
+                                                                                                    8.56368379833E-06), # [nondimensional] (computed with eq (9) of Ghosh et al. (2019))
+                                                                electron_pressure = electron_pressure_constantTe,
+                                                                electron_temperature = electron_temperature_constantTe)
+
+# Frictional slowing of an ionized carbon fluid with respect to another background carbon fluid in motion
+function initial_condition_slow_down(x, t, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    v11 = 0.65508770000000
+    v21 = 0.0
+    rho1 = 0.1
+    rho2 = 1.0
+
+    p1 = 0.00040170535986
+    p2 = 0.00401705359856
+
+    return prim2cons(SVector(rho1, v11, p1, rho2, v21, p2),
+                     equations)
+end
+
+# Temperature of ion 1
+function temperature1(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    rho_1, _ = Trixi.get_component(1, u, equations)
+    p = pressure(u, equations)
+
+    return p[1] / (rho_1 * equations.gas_constants[1])
+end
+
+# Temperature of ion 2
+function temperature2(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    rho_2, _ = Trixi.get_component(2, u, equations)
+    p = pressure(u, equations)
+
+    return p[2] / (rho_2 * equations.gas_constants[2])
+end
+
+initial_condition = initial_condition_slow_down
+tspan = (0.0, 0.1) # 100 [ps]
 
 solver = DGSEM(polydeg = 3, surface_flux = flux_hll,
                volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_hll))
 
 coordinates_min = 0.0
-coordinates_max = 2.0
+coordinates_max = 1.0
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level = 4,
                 n_cells_max = 10_000)
+
+# Ion-ion and ion-electron collision source terms
+# In this particular case, we can omit source_terms_lorentz because the magnetic field is zero!
+function source_terms(u, x, t, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+    source_terms_collision_ion_ion(u, x, t, equations) +
+    source_terms_collision_ion_electron(u, x, t, equations)
+end
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
                                     source_terms = source_terms_convergence_test)

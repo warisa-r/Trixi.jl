@@ -5,37 +5,100 @@
 @muladd begin
 #! format: noindent
 
-mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real} <:
+mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real,
+                                                    ElectronPressure,
+                                                    ElectronTemperature} <:
                AbstractCompressibleEulerMultiIonEquations{1, NVARS, NCOMP}
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
-    inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1); can be used to write slow divisions as fast multiplications
+    inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1)
+    charge_to_mass::SVector{NCOMP, RealT} # Charge to mass ratios
+    gas_constants::SVector{NCOMP, RealT} # Specific gas constants
+    molar_masses::SVector{NCOMP, RealT} # Molar masses
+    ion_ion_collision_constants::Array{RealT, 2} # Collision coefficients
+    ion_electron_collision_constants::SVector{NCOMP, RealT} # Ion-electron collision constants
+    electron_pressure::ElectronPressure # Electron pressure function
+    electron_temperature::ElectronTemperature # Electron temperature function
 
-    function CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas) where {
-                                                                                      NVARS,
-                                                                                      NCOMP,
-                                                                                      RealT <:
-                                                                                      Real
-                                                                                      }
+    # Inner Constructor
+    function CompressibleEulerMultiIonEquations1D(gammas::SVector{NCOMP, RealT},
+                                                  charge_to_mass::SVector{NCOMP, RealT},
+                                                  gas_constants::SVector{NCOMP, RealT},
+                                                  molar_masses::SVector{NCOMP, RealT},
+                                                  ion_ion_collision_constants::Array{RealT,
+                                                                                     2},
+                                                  ion_electron_collision_constants::SVector{NCOMP,
+                                                                                            RealT},
+                                                  electron_pressure::ElectronPressure,
+                                                  electron_temperature::ElectronTemperature) where {
+                                                                                                    NCOMP,
+                                                                                                    RealT <:
+                                                                                                    Real,
+                                                                                                    ElectronPressure,
+                                                                                                    ElectronTemperature
+                                                                                                    }
         NCOMP >= 1 ||
-            throw(DimensionMismatch("`gammas` and `charge_to_mass` have to be filled with at least one value"))
+            throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
 
+        # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
-        new(gammas, inv_gammas_minus_one)
+
+        NVARS = 3 * NCOMP
+
+        return new{NVARS, NCOMP, RealT, ElectronPressure, ElectronTemperature}(gammas,
+                                                                               inv_gammas_minus_one,
+                                                                               charge_to_mass,
+                                                                               gas_constants,
+                                                                               molar_masses,
+                                                                               ion_ion_collision_constants,
+                                                                               ion_electron_collision_constants,
+                                                                               electron_pressure,
+                                                                               electron_temperature)
     end
 end
 
-function CompressibleEulerMultiIonEquations1D(; gammas)
+# Outer Constructor Delegating to Inner Constructor
+function CompressibleEulerMultiIonEquations1D(; gammas, charge_to_mass,
+                                              gas_constants = zero(SVector{length(gammas),
+                                                                           eltype(gammas)}),
+                                              molar_masses = zero(SVector{length(gammas),
+                                                                          eltype(gammas)}),
+                                              ion_ion_collision_constants = zeros(eltype(gammas),
+                                                                                  length(gammas),
+                                                                                  length(gammas)),
+                                              ion_electron_collision_constants = zero(SVector{length(gammas),
+                                                                                              eltype(gammas)}),
+                                              electron_pressure = electron_pressure_zero,
+                                              electron_temperature = electron_pressure_zero)
+    # Promote input types
     _gammas = promote(gammas...)
+    _charge_to_mass = promote(charge_to_mass...)
+    _gas_constants = promote(gas_constants...)
+    _molar_masses = promote(molar_masses...)
+    _ion_electron_collision_constants = promote(ion_electron_collision_constants...)
+    RealT = promote_type(eltype(_gammas), eltype(_charge_to_mass),
+                         eltype(_gas_constants), eltype(_molar_masses),
+                         eltype(ion_ion_collision_constants),
+                         eltype(_ion_electron_collision_constants))
+    __gammas = SVector(map(RealT, _gammas))
+    __charge_to_mass = SVector(map(RealT, _charge_to_mass))
+    __gas_constants = SVector(map(RealT, _gas_constants))
+    __molar_masses = SVector(map(RealT, _molar_masses))
+    __ion_ion_collision_constants = map(RealT, ion_ion_collision_constants)
+    __ion_electron_collision_constants = SVector(map(RealT,
+                                                     _ion_electron_collision_constants))
     NCOMP = length(_gammas)
     NVARS = 3 * NCOMP
-    RealT = promote_type(eltype(_gammas))
 
-    return CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}(_gammas)
-end
-
-# Outer constructor for `@reset` works correctly
-function CompressibleEulerMultiIonEquations1D(gammas)
-    return CompressibleEulerMultiIonEquations1D(gammas = gammas)
+    return CompressibleEulerMultiIonEquations1D(
+        __gammas,
+        __charge_to_mass,
+        __gas_constants,
+        __molar_masses,
+        __ion_ion_collision_constants,
+        __ion_electron_collision_constants,
+        electron_pressure,
+        electron_temperature
+    )
 end
 
 @inline function Base.real(::CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}) where {
@@ -64,6 +127,35 @@ function varnames(::typeof(cons2prim), equations::CompressibleEulerMultiIonEquat
                 tuple("rho_" * string(i), "v1_" * string(i), "p_" * string(i))...)
     end
     return prim
+end
+
+"""
+    v1, vk1 = charge_averaged_velocities(u, equations::CompressibleEulerMultiIonEquations1D)
+
+
+Compute the charge-averaged velocities (`v1`) and each ion species' contribution
+to the charge-averaged velocities (`vk1`). The output variables `vk1` 
+are `SVectors` of size `ncomponents(equations)`.
+
+!!! warning "Experimental implementation"
+    This is an experimental feature and may change in future releases.
+"""
+@inline function charge_averaged_velocities(u,
+                                            equations::CompressibleEulerMultiIonEquations1D)
+    total_electron_charge = zero(real(equations))
+
+    vk1_plus = zero(MVector{ncomponents(equations), eltype(u)})
+
+    for k in eachcomponent(equations)
+        rho, rho_v1, _ = get_component(k, u, equations)
+
+        total_electron_charge += rho * equations.charge_to_mass[k]
+        vk1_plus[k] = rho_v1 * equations.charge_to_mass[k]
+    end
+    vk1_plus ./= total_electron_charge
+    v1_plus = sum(vk1_plus)
+
+    return v1_plus, SVector(vk1_plus)
 end
 
 """
@@ -214,6 +306,164 @@ Source terms used for convergence tests in combination with
     end
 
     return SVector(cons)
+end
+
+@doc raw"""
+    source_terms_collision_ion_ion(u, x, t,
+                                   equations::CompressibleEulerMultiIonEquations1D)
+
+Compute the ion-ion collision source terms for the momentum and energy equations of each ion species as
+```math
+\begin{aligned}
+  \vec{s}_{\rho_k \vec{v}_k} =&  \rho_k\sum_{k'}\bar{\nu}_{kk'}(\vec{v}_{k'} - \vec{v}_k),\\
+  s_{E_k}  =& 
+    3 \sum_{k'} \left(
+    \bar{\nu}_{kk'} \frac{\rho_k M_1}{M_{k'} + M_k} R_1 (T_{k'} - T_k)
+    \right) + 
+    \sum_{k'} \left(
+        \bar{\nu}_{kk'} \rho_k \frac{M_{k'}}{M_{k'} + M_k} \|\vec{v}_{k'} - \vec{v}_k\|^2
+        \right)
+        +
+        \vec{v}_k \cdot \vec{s}_{\rho_k \vec{v}_k},
+\end{aligned}
+```
+where ``M_k`` is the molar mass of ion species `k` provided in `equations.molar_masses`, 
+``R_k`` is the specific gas constant of ion species `k` provided in `equations.gas_constants`, and
+ ``\bar{\nu}_{kk'}`` is the effective collision frequency of species `k` with species `k'`, which is computed as
+```math
+\begin{aligned}
+  \bar{\nu}_{kk'} = \bar{\nu}^1_{kk'} \tilde{B}_{kk'} \frac{\rho_{k'}}{T_{k k'}^{3/2}},
+\end{aligned}
+```
+with the so-called reduced temperature ``T_{k k'}`` and the ion-ion collision constants ``\tilde{B}_{kk'}`` provided
+in `equations.ion_electron_collision_constants` (see [`CompressibleEulerMultiIonEquations1D`](@ref)).
+
+The additional coefficient ``\bar{\nu}^1_{kk'}`` is a non-dimensional drift correction factor proposed by Rambo and Denavit.
+
+References:
+- P. Rambo, J. Denavit, Interpenetration and ion separation in colliding plasmas, Physics of Plasmas 1 (1994) 4050–4060.
+- Schunk, R. W., Nagy, A. F. (2000). Ionospheres: Physics, plasma physics, and chemistry. 
+  Cambridge university press.
+"""
+@inline function source_terms_collision_ion_ion(u, x, t,
+                                                equations::CompressibleEulerMultiIonEquations1D)
+    s = zero(MVector{nvariables(equations), eltype(u)})
+    @unpack gas_constants, molar_masses, ion_ion_collision_constants = equations
+
+    prim = cons2prim(u, equations)
+
+    for k in eachcomponent(equations)
+        rho_k, v1_k, p_k = get_component(k, prim, equations)
+        T_k = p_k / (rho_k * gas_constants[k])
+
+        S_q1 = zero(eltype(u))
+        S_E = zero(eltype(u))
+        for l in eachcomponent(equations)
+            # Do not compute collisions of an ion species with itself
+            k == l && continue
+
+            rho_l, v1_l, p_l = get_component(l, prim, equations)
+            T_l = p_l / (rho_l * gas_constants[l])
+
+            # Reduced temperature
+            T_kl = (molar_masses[l] * T_k + molar_masses[k] * T_l) /
+                   (molar_masses[k] + molar_masses[l])
+
+            delta_v = (v1_l - v1_k)^2
+
+            # Compute collision frequency without drifting correction
+            v_kl = ion_ion_collision_constants[k, l] * rho_l / T_kl^(3 / 2)
+
+            # Correct the collision frequency with the drifting effect
+            z = delta_v / (p_l / rho_l + p_k / rho_k)
+            v_kl /= (1 + (2 / (9 * pi))^(1 / 3) * z)^(3 / 2)
+
+            S_q1 += rho_k * v_kl * (v1_l - v1_k)
+            S_E += (3 * molar_masses[1] * gas_constants[1] * (T_l - T_k)
+                    +
+                    molar_masses[l] * delta_v) * v_kl * rho_k /
+                   (molar_masses[k] + molar_masses[l])
+        end
+
+        S_E += v1_k * S_q1
+
+        set_component!(s, k, 0, S_q1, S_E, equations)
+    end
+    return SVector{nvariables(equations), real(equations)}(s)
+end
+
+@doc raw"""
+    source_terms_collision_ion_electron(u, x, t,
+                                        equations::CompressibleEulerMultiIonEquations1D)
+
+Compute the ion-electron collision source terms for the momentum and energy equations of each ion species. We assume ``v_e = v^+`` 
+(no effect of currents on the electron velocity).
+
+The collision sources read as
+```math
+\begin{aligned}
+    \vec{s}_{\rho_k \vec{v}_k} =&  \rho_k \bar{\nu}_{ke} (\vec{v}_{e} - \vec{v}_k),
+    \\
+    s_{E_k}  =& 
+    3  \left(
+    \bar{\nu}_{ke} \frac{\rho_k M_{1}}{M_k} R_1 (T_{e} - T_k)
+    \right) 
+        +
+        \vec{v}_k \cdot \vec{s}_{\rho_k \vec{v}_k},
+\end{aligned}
+```
+where ``T_e`` is the electron temperature computed with the function `equations.electron_temperature`, 
+``M_k`` is the molar mass of ion species `k` provided in `equations.molar_masses`, 
+``R_k`` is the specific gas constant of ion species `k` provided in `equations.gas_constants`, and
+``\bar{\nu}_{kk'}`` is the collision frequency of species `k` with the electrons, which is computed as
+```math
+\begin{aligned}
+  \bar{\nu}_{ke} = \tilde{B}_{ke} \frac{e n_e}{T_e^{3/2}},
+\end{aligned}
+```
+with the total electron charge ``e n_e`` (computed assuming quasi-neutrality), and the
+ion-electron collision coefficient ``\tilde{B}_{ke}`` provided in `equations.ion_electron_collision_constants`,
+which is scaled with the elementary charge (see [`CompressibleEulerMultiIonEquations1D`](@ref)).
+
+References:
+- P. Rambo, J. Denavit, Interpenetration and ion separation in colliding plasmas, Physics of Plasmas 1 (1994) 4050–4060.
+- Schunk, R. W., Nagy, A. F. (2000). Ionospheres: Physics, plasma physics, and chemistry. 
+  Cambridge university press.
+"""
+function source_terms_collision_ion_electron(u, x, t,
+                                             equations::CompressibleEulerMultiIonEquations1D)
+    s = zero(MVector{nvariables(equations), eltype(u)})
+    @unpack gas_constants, molar_masses, ion_electron_collision_constants, electron_temperature = equations
+
+    prim = cons2prim(u, equations)
+    T_e = electron_temperature(u, equations)
+    T_e32 = T_e^(3 / 2)
+    v1_plus, vk1_plus = charge_averaged_velocities(u, equations)
+
+    # Compute total electron charge
+    total_electron_charge = zero(real(equations))
+    for k in eachcomponent(equations)
+        rho, _ = get_component(k, u, equations)
+        total_electron_charge += rho * equations.charge_to_mass[k]
+    end
+
+    for k in eachcomponent(equations)
+        rho_k, v1_k, p_k = get_component(k, prim, equations)
+        T_k = p_k / (rho_k * gas_constants[k])
+
+        # Compute effective collision frequency
+        v_ke = ion_electron_collision_constants[k] * total_electron_charge / T_e32
+
+        S_q1 = rho_k * v_ke * (v1_plus - v1_k)
+
+        S_E = 3 * molar_masses[1] * gas_constants[1] * (T_e - T_k) * v_ke * rho_k /
+              molar_masses[k]
+
+        S_E += (v1_k * S_q1)
+
+        set_component!(s, k, 0, S_q1, S_E, equations)
+    end
+    return SVector{nvariables(equations), real(equations)}(s)
 end
 
 # Calculate estimates for maximum wave speed for local Lax-Friedrichs-type dissipation as the
