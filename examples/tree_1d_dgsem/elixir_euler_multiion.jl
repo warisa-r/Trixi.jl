@@ -102,17 +102,17 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
 # Ion-ion and ion-electron collision source terms
 # In this particular case, we can omit source_terms_lorentz because the magnetic field is zero!
 function source_terms(u, x, t, equations::Trixi.CompressibleEulerMultiIonEquations1D)
-    source_terms_collision_ion_ion(u, x, t, equations) +
-    source_terms_collision_ion_electron(u, x, t, equations)
+    Trixi.source_terms_collision_ion_ion(u, x, t, equations) +
+    Trixi.source_terms_collision_ion_electron(u, x, t, equations)
 end
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
-                                    source_terms = source_terms_convergence_test)
+                                    source_terms = source_terms)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 2.0)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -129,7 +129,7 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = true,
                                      solution_variables = cons2prim)
 
-stepsize_callback = StepsizeCallback(cfl = 0.8)
+stepsize_callback = StepsizeCallback(cfl = 0.01)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
