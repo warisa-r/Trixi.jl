@@ -677,6 +677,6 @@ end
         p = (equations.gammas[k] - 1) * (rho_e - 0.5f0 * (rho_v1^2) / rho)
         pressures[k] = p
     end
-    return pressure
+    return SVector(pressures)
 end
 end # @muladd
