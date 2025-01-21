@@ -96,7 +96,7 @@ solver = DGSEM(polydeg = 3, surface_flux = flux_hll,
 coordinates_min = 0.0
 coordinates_max = 1.0
 mesh = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 4,
+                initial_refinement_level = 2,
                 n_cells_max = 10_000)
 
 # Ion-ion and ion-electron collision source terms
@@ -117,16 +117,18 @@ ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 100
-analysis_callback = AnalysisCallback(semi, interval = analysis_interval,
-                                     extra_analysis_errors = (:l2_error_primitive,
-                                                              :linf_error_primitive))
+analysis_interval = 1
+analysis_callback = AnalysisCallback(semi,
+                                     save_analysis = true,
+                                     interval = analysis_interval,
+                                     extra_analysis_integrals = (temperature1,
+                                                                 temperature2))
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 
 save_solution = SaveSolutionCallback(interval = 100,
-                                     save_initial_solution = true,
-                                     save_final_solution = true,
+                                     save_initial_solution = false,
+                                     save_final_solution = false,
                                      solution_variables = cons2prim)
 
 stepsize_callback = StepsizeCallback(cfl = 0.01)
@@ -141,5 +143,24 @@ callbacks = CallbackSet(summary_callback,
 
 sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false),
             dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            save_everystep = false, callback = callbacks);
+            save_everystep = true, callback = callbacks);
 summary_callback() # print the timer summary
+
+#=
+using DelimitedFiles
+using Plots
+
+# Read the data from the file
+filename = "out/analysis.dat"
+
+data = readdlm(filename, skipstart=1)
+
+time = data[:, 2]  # Column 2: Time
+temperatures1 = data[:, 17]  # Column 17: Temperature1
+temperatures1 ./= 0.008029953773
+temperatures2 = data[:, 18]  # Column 18: Temperature2
+temperatures2 ./= 0.008029953773
+
+plot(time, temperatures1, label="Temperature 1", xlabel="Time", ylabel="Temperature", title="Temperature (keV) vs Time", lw=2)
+plot!(time, temperatures2, label="Temperature 2", lw=2)
+=#
