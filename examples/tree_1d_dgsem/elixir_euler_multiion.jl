@@ -25,7 +25,8 @@ using OrdinaryDiffEq
 # electron temperature of 1 keV in this elixir to test the function `source_terms_collision_ion_electron`
 
 # Return the electron pressure for a constant electron temperature Te = 1 keV
-function electron_pressure_constantTe(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+function electron_pressure_constantTe(u,
+                                      equations::Trixi.CompressibleEulerMultiIonEquations1D)
     @unpack charge_to_mass = equations
     Te = 0.008029953773 # [nondimensional] = 1 [keV]
     total_electron_charge = zero(eltype(u))
@@ -41,24 +42,26 @@ function electron_pressure_constantTe(u, equations::Trixi.CompressibleEulerMulti
 end
 
 # Return the constant electron temperature Te = 1 keV
-function electron_temperature_constantTe(u, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+function electron_temperature_constantTe(u,
+                                         equations::Trixi.CompressibleEulerMultiIonEquations1D)
     return 0.008029953773 # [nondimensional] = 1 [keV]
 end
 
 equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas = (5 / 3, 5 / 3),
-                                                                charge_to_mass = (76.3049060157692000,
-                                                                                76.3049060157692000), # [nondimensional]
-                                                                gas_constants = (1.0, 1.0), # [nondimensional]
-                                                                molar_masses = (1.0, 1.0), # [nondimensional]
-                                                                ion_ion_collision_constants = [0.0 0.4079382480442680;
-                                                                                            0.4079382480442680 0.0], # [nondimensional] (computed with eq (4.142) of Schunk & Nagy (2009))
-                                                                ion_electron_collision_constants = (8.56368379833E-06,
-                                                                                                    8.56368379833E-06), # [nondimensional] (computed with eq (9) of Ghosh et al. (2019))
-                                                                electron_pressure = electron_pressure_constantTe,
-                                                                electron_temperature = electron_temperature_constantTe)
+                                                       charge_to_mass = (76.3049060157692000,
+                                                                         76.3049060157692000), # [nondimensional]
+                                                       gas_constants = (1.0, 1.0), # [nondimensional]
+                                                       molar_masses = (1.0, 1.0), # [nondimensional]
+                                                       ion_ion_collision_constants = [0.0 0.4079382480442680;
+                                                                                      0.4079382480442680 0.0], # [nondimensional] (computed with eq (4.142) of Schunk & Nagy (2009))
+                                                       ion_electron_collision_constants = (8.56368379833E-06,
+                                                                                           8.56368379833E-06), # [nondimensional] (computed with eq (9) of Ghosh et al. (2019))
+                                                       electron_pressure = electron_pressure_constantTe,
+                                                       electron_temperature = electron_temperature_constantTe)
 
 # Frictional slowing of an ionized carbon fluid with respect to another background carbon fluid in motion
-function initial_condition_slow_down(x, t, equations::Trixi.CompressibleEulerMultiIonEquations1D)
+function initial_condition_slow_down(x, t,
+                                     equations::Trixi.CompressibleEulerMultiIonEquations1D)
     v11 = 0.65508770000000
     v21 = 0.0
     rho1 = 0.1

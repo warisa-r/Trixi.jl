@@ -86,19 +86,15 @@ function CompressibleEulerMultiIonEquations1D(; gammas, charge_to_mass,
     __ion_ion_collision_constants = map(RealT, ion_ion_collision_constants)
     __ion_electron_collision_constants = SVector(map(RealT,
                                                      _ion_electron_collision_constants))
-    NCOMP = length(_gammas)
-    NVARS = 3 * NCOMP
 
-    return CompressibleEulerMultiIonEquations1D(
-        __gammas,
-        __charge_to_mass,
-        __gas_constants,
-        __molar_masses,
-        __ion_ion_collision_constants,
-        __ion_electron_collision_constants,
-        electron_pressure,
-        electron_temperature
-    )
+    return CompressibleEulerMultiIonEquations1D(__gammas,
+                                                __charge_to_mass,
+                                                __gas_constants,
+                                                __molar_masses,
+                                                __ion_ion_collision_constants,
+                                                __ion_electron_collision_constants,
+                                                electron_pressure,
+                                                electron_temperature)
 end
 
 @inline function Base.real(::CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT}) where {
@@ -120,6 +116,7 @@ function varnames(::typeof(cons2cons), equations::CompressibleEulerMultiIonEquat
 
     return cons
 end
+
 function varnames(::typeof(cons2prim), equations::CompressibleEulerMultiIonEquations1D)
     prim = ()
     for i in eachcomponent(equations)
@@ -127,94 +124,6 @@ function varnames(::typeof(cons2prim), equations::CompressibleEulerMultiIonEquat
                 tuple("rho_" * string(i), "v1_" * string(i), "p_" * string(i))...)
     end
     return prim
-end
-
-"""
-    v1, vk1 = charge_averaged_velocities(u, equations::CompressibleEulerMultiIonEquations1D)
-
-
-Compute the charge-averaged velocities (`v1`) and each ion species' contribution
-to the charge-averaged velocities (`vk1`). The output variables `vk1` 
-are `SVectors` of size `ncomponents(equations)`.
-
-!!! warning "Experimental implementation"
-    This is an experimental feature and may change in future releases.
-"""
-@inline function charge_averaged_velocities(u,
-                                            equations::CompressibleEulerMultiIonEquations1D)
-    total_electron_charge = zero(real(equations))
-
-    vk1_plus = zero(MVector{ncomponents(equations), eltype(u)})
-
-    for k in eachcomponent(equations)
-        rho, rho_v1, _ = get_component(k, u, equations)
-
-        total_electron_charge += rho * equations.charge_to_mass[k]
-        vk1_plus[k] = rho_v1 * equations.charge_to_mass[k]
-    end
-    vk1_plus ./= total_electron_charge
-    v1_plus = sum(vk1_plus)
-
-    return v1_plus, SVector(vk1_plus)
-end
-
-"""
-    get_component(k, u, equations::CompressibleEulerMultiIonEquations1D)
-
-Get the variables of component (ion species) `k`.
-
-!!! warning "Experimental implementation"
-    This is an experimental feature and may change in future releases.
-"""
-@inline function get_component(k, u, equations::CompressibleEulerMultiIonEquations1D)
-    return SVector(u[(k - 1) * 3 + 1],
-                   u[(k - 1) * 3 + 2],
-                   u[(k - 1) * 3 + 3])
-end
-
-"""
-    set_component!(u, k, u1, u2, u3,
-                   equations::CompressibleEulerMultiIonEquations1D)
-
-Set the variables (`u1` to `u3`) of component (ion species) `k`.
-
-!!! warning "Experimental implementation"
-    This is an experimental feature and may change in future releases.
-"""
-@inline function set_component!(u, k, u1, u2, u3,
-                                equations::CompressibleEulerMultiIonEquations1D)
-    u[(k - 1) * 3 + 1] = u1
-    u[(k - 1) * 3 + 2] = u2
-    u[(k - 1) * 3 + 3] = u3
-
-    return u
-end
-
-"""
-    flux(u, orientation::Integer, equations::CompressibleEulerMultiIonEquations1D)
-
-Calculate the flux for the multiion system. The flux is calculated for each ion species separately.
-"""
-@inline function flux(u, orientation::Integer,
-                      equations::CompressibleEulerMultiIonEquations1D)
-    f = zero(MVector{nvariables(equations), eltype(u)})
-
-    for k in eachcomponent(equations)
-        rho, rho_v1, rho_e = get_component(k, u, equations)
-        rho_inv = 1 / rho
-        v1 = rho_v1 * rho_inv
-
-        gamma = equations.gammas[k]
-        p = (gamma - 1) * (rho_e - 0.5 * rho_v1 * v1)
-
-        f1 = rho_v1
-        f2 = rho_v1 * v1 + p
-        f3 = (rho_e + p) * v1
-
-        set_component!(f, k, f1, f2, f3, equations)
-    end
-
-    return SVector(f)
 end
 
 """
@@ -466,6 +375,104 @@ function source_terms_collision_ion_electron(u, x, t,
     return SVector{nvariables(equations), real(equations)}(s)
 end
 
+"""
+    flux(u, orientation::Integer, equations::CompressibleEulerMultiIonEquations1D)
+
+Calculate the flux for the multiion system. The flux is calculated for each ion species separately.
+"""
+@inline function flux(u, orientation::Integer,
+                      equations::CompressibleEulerMultiIonEquations1D)
+    f = zero(MVector{nvariables(equations), eltype(u)})
+
+    for k in eachcomponent(equations)
+        rho, rho_v1, rho_e = get_component(k, u, equations)
+        rho_inv = 1 / rho
+        v1 = rho_v1 * rho_inv
+
+        gamma = equations.gammas[k]
+        p = (gamma - 1) * (rho_e - 0.5 * rho_v1 * v1)
+
+        f1 = rho_v1
+        f2 = rho_v1 * v1 + p
+        f3 = (rho_e + p) * v1
+
+        set_component!(f, k, f1, f2, f3, equations)
+    end
+
+    return SVector(f)
+end
+
+"""
+    electron_pressure_zero(u, equations::CompressibleEulerMultiIonEquations1D)
+
+Returns the value of zero for the electron pressure. Needed for consistency with the 
+single-fluid compressible euler equations in the limit of one ion species.
+"""
+function electron_pressure_zero(u, equations::CompressibleEulerMultiIonEquations1D)
+    return zero(u[1])
+end
+
+"""
+    v1, vk1 = charge_averaged_velocities(u, equations::CompressibleEulerMultiIonEquations1D)
+
+
+Compute the charge-averaged velocities (`v1`) and each ion species' contribution
+to the charge-averaged velocities (`vk1`). The output variables `vk1` 
+are `SVectors` of size `ncomponents(equations)`.
+
+!!! warning "Experimental implementation"
+    This is an experimental feature and may change in future releases.
+"""
+@inline function charge_averaged_velocities(u,
+                                            equations::CompressibleEulerMultiIonEquations1D)
+    total_electron_charge = zero(real(equations))
+
+    vk1_plus = zero(MVector{ncomponents(equations), eltype(u)})
+
+    for k in eachcomponent(equations)
+        rho, rho_v1, _ = get_component(k, u, equations)
+
+        total_electron_charge += rho * equations.charge_to_mass[k]
+        vk1_plus[k] = rho_v1 * equations.charge_to_mass[k]
+    end
+    vk1_plus ./= total_electron_charge
+    v1_plus = sum(vk1_plus)
+
+    return v1_plus, SVector(vk1_plus)
+end
+
+"""
+    get_component(k, u, equations::CompressibleEulerMultiIonEquations1D)
+
+Get the variables of component (ion species) `k`.
+
+!!! warning "Experimental implementation"
+    This is an experimental feature and may change in future releases.
+"""
+@inline function get_component(k, u, equations::CompressibleEulerMultiIonEquations1D)
+    return SVector(u[(k - 1) * 3 + 1],
+                   u[(k - 1) * 3 + 2],
+                   u[(k - 1) * 3 + 3])
+end
+
+"""
+    set_component!(u, k, u1, u2, u3,
+                   equations::CompressibleEulerMultiIonEquations1D)
+
+Set the variables (`u1` to `u3`) of component (ion species) `k`.
+
+!!! warning "Experimental implementation"
+    This is an experimental feature and may change in future releases.
+"""
+@inline function set_component!(u, k, u1, u2, u3,
+                                equations::CompressibleEulerMultiIonEquations1D)
+    u[(k - 1) * 3 + 1] = u1
+    u[(k - 1) * 3 + 2] = u2
+    u[(k - 1) * 3 + 3] = u3
+
+    return u
+end
+
 # Calculate estimates for maximum wave speed for local Lax-Friedrichs-type dissipation as the
 # maximum velocity magnitude plus the maximum speed of sound
 @inline function max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
@@ -620,14 +627,6 @@ end
         set_component!(cons, k, rho, rho_v1, rho_e, equations)
     end
     return SVector(cons)
-end
-
-# Convert primitive to conservative variables
-@inline function single_species_prim2cons(prim, inv_gamma_minus_one)
-    rho, v1, p = prim
-    rho_v1 = rho * v1
-    rho_e = p * inv_gamma_minus_one + 0.5f0 * (rho_v1 * v1)
-    return SVector(rho, rho_v1, rho_e)
 end
 
 @inline function prim2cons(prim, equations::CompressibleEulerMultiIonEquations1D)

@@ -4,7 +4,8 @@ using OrdinaryDiffEq
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 gammas = (1.4, 1.76, 1.4)  # Heat capacity ratios for two species
-equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas=gammas, charge_to_mass = (0.0, 0.0, 0.0)) # Since I haven't exported this yet
+equations = Trixi.CompressibleEulerMultiIonEquations1D(gammas = gammas,
+                                                       charge_to_mass = (0.0, 0.0, 0.0)) # Since I haven't exported this yet
 
 initial_condition = initial_condition_convergence_test
 
