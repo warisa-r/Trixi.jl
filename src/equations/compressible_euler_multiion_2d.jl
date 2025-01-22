@@ -121,7 +121,8 @@ function varnames(::typeof(cons2prim), equations::CompressibleEulerMultiIonEquat
     prim = ()
     for i in eachcomponent(equations)
         prim = (prim...,
-                tuple("rho_" * string(i), "v1_" * string(i), "v2_" * string(i), "p_" * string(i))...)
+                tuple("rho_" * string(i), "v1_" * string(i), "v2_" * string(i),
+                      "p_" * string(i))...)
     end
     return prim
 end
@@ -184,7 +185,7 @@ Source terms used for convergence tests in combination with
         rho = c + A * si
         rho_x = ω * A * co
 
-       # Note that d/dt rho = -d/dx rho = -d/dy rho.
+        # Note that d/dt rho = -d/dx rho = -d/dy rho.
 
         tmp = (2 * rho - 1) * (gamma - 1)
 
@@ -376,7 +377,7 @@ Calculate the flux for the multiion system. The flux is calculated for each ion 
 
         gamma = equations.gammas[k]
         p = (gamma - 1) * (rho_e - 0.5f0 * (rho_v1 * v1 + rho_v2 * v2))
-        
+
         if orientation == 1
             f1 = rho_v1
             f2 = rho_v1 * v1 + p
@@ -397,7 +398,7 @@ end
 # Calculate 2D flux for a single point in the normal direction
 # Note, this directional vector is not normalized
 @inline function flux(u, normal_direction::AbstractMatrix,
-    equations::CompressibleEulerMultiIonEquations2D)
+                      equations::CompressibleEulerMultiIonEquations2D)
     f = zero(MVector{nvariables(equations), eltype(u)})
     prim = cons2prim(u, equations)
 
@@ -532,7 +533,7 @@ end
 end
 
 @inline function max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
-    equations::CompressibleEulerMultiIonEquations2D)
+                                     equations::CompressibleEulerMultiIonEquations2D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
@@ -562,7 +563,7 @@ end
                 +
                 v2_rr * normal_direction[k, 2])
         v_mag_rr = max(v_mag_rr, abs(v_rr))
-        c_rr = max(c_rr,sqrt(equations.gamma * p_rr / rho_rr))
+        c_rr = max(c_rr, sqrt(equations.gamma * p_rr / rho_rr))
     end
 
     return max(v_mag_ll, v_mag_rr) + max(c_ll, c_rr) * norm_
@@ -613,8 +614,7 @@ end
 end
 
 @inline function min_max_speed_naive(u_ll, u_rr, normal_direction::AbstractMatrix,
-    equations::CompressibleEulerMultiIonEquations2D)
-
+                                     equations::CompressibleEulerMultiIonEquations2D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
@@ -653,7 +653,7 @@ end
 
         c_ll = sqrt(gamma * p_ll / rho_ll)
         c_rr = sqrt(gamma * p_rr / rho_rr)
-        
+
         if orientation == 1 # x-direction
             λ_min = min(λ_min, min(v1_ll - c_ll, v1_rr - c_rr))
             λ_max = max(λ_max, max(v1_ll + c_ll, v1_rr + c_rr))
@@ -668,7 +668,7 @@ end
 
 # More refined estimates for minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_davis(u_ll, u_rr, normal_direction::AbstractMatrix,
-    equations::CompressibleEulerMultiIonEquations2D)
+                                     equations::CompressibleEulerMultiIonEquations2D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
@@ -687,7 +687,7 @@ end
         v_normal_ll = v1_ll * normal_direction[k, 1] + v2_ll * normal_direction[k, 2]
         v_normal_rr = v1_rr * normal_direction[k, 1] + v2_rr * normal_direction[k, 2]
 
-         # The v_normals are already scaled by the norm
+        # The v_normals are already scaled by the norm
         λ_min = min(λ_min, min(v_normal_ll - c_ll, v_normal_rr - c_rr))
         λ_max = max(λ_max, max(v_normal_ll + c_ll, v_normal_rr + c_rr))
     end
@@ -750,7 +750,8 @@ end
         s = gamma - V1 + (V2^2 + V3^2) / (2 * V5)
 
         # eq. (52)
-        rho_iota = ((gamma - 1) / (-V5)^gamma)^(inv_gamma_minus_one) * exp(-s * inv_gamma_minus_one)
+        rho_iota = ((gamma - 1) / (-V5)^gamma)^(inv_gamma_minus_one) *
+                   exp(-s * inv_gamma_minus_one)
 
         # eq. (51)
         rho = -V5 * rho_iota
