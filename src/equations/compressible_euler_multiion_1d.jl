@@ -653,7 +653,7 @@ end
         rhos[k] = rho
     end
 
-    return rhos
+    return SVector(rhos)
 end
 
 @inline function velocity(u, equations::CompressibleEulerMultiIonEquations1D)
@@ -665,7 +665,7 @@ end
         velocities[k] = rho_v1 / rho
     end
 
-    return velocities
+    return SVector(velocities)
 end
 
 @inline function pressure(u, equations::CompressibleEulerMultiIonEquations1D)
