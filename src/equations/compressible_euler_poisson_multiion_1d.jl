@@ -6,7 +6,7 @@
 #! format: noindent
 
 #TODO: Probably needs a name change
-mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <: Real,} <:
+mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <: Real} <:
                AbstractCompressibleEulerPoissonMultiIonEquations{1, NVARS, NCOMP}
 
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
@@ -15,8 +15,8 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
     scaled_debye_length::RealT
 
     # Inner Constructor
-    function CompressibleEulerPoissonMultiIonEquations1D(gammas::SVector{NCOMP, RealT}, epsilon::RealT,
-                                                            scaled_debye_length::RealT) where {NCOMP,
+    function CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT}, epsilon::RealT,
+                                                            scaled_debye_length::RealT) where {NVARS, NCOMP,
                                                                                                     RealT <:
                                                                                                     Real
                                                                                                     }
@@ -24,15 +24,10 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
             throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
 
         # Have this in to prevent system with multi-ion that I haven't currently figure out the flux yet
-        NCOMP > 2 ||
-            throw(ArgumentError("Currently, multi-ion species system is not available yet"))
-
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
 
-        NVARS = 3 * NCOMP # We count electron as one component
-
-        return new{NVARS, NCOMP, RealT}(gammas,inv_gammas_minus_one, epsilon, scaled_debye_length)
+        new(gammas,inv_gammas_minus_one, epsilon, scaled_debye_length)
     end
 end
 
@@ -44,8 +39,10 @@ function CompressibleEulerPoissonMultiIonEquations1D(; gammas, epsilon, scaled_d
     __gammas = SVector(map(RealT, _gammas))  # Now defined
     _epsilon = convert(RealT, epsilon)
     _scaled_debye_length = convert(RealT, scaled_debye_length)
+    NVARS = length(_gammas) * 3
+    NCOMP = length(_gammas)
 
-    return CompressibleEulerPoissonMultiIonEquations1D(__gammas,
+    return CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(__gammas,
                                                 _epsilon, _scaled_debye_length)
 end
 

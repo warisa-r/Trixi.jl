@@ -507,11 +507,22 @@ In particular, not the components themselves are returned.
     Base.OneTo(ncomponents(equations))
 end
 
+# Retrieve number of components from equation instance for the multicomponent case
+@inline function ncomponents(::AbstractCompressibleEulerPoissonMultiIonEquations{NDIMS,
+    NVARS,
+    NCOMP}) where {
+                   NDIMS,
+                   NVARS,
+                   NCOMP
+                   }
+    NCOMP
+end
+
 """
     eachcomponent(equations::AbstractCompressibleEulerPoissonMultiIonEquations)
 
 Return an iterator over the indices that specify the location in relevant data structures
-for the components in `AbstractCompressibleEulerMultiIonEquationsEquations`.
+for the components in `AbstractCompressibleEulerPoissonMultiIonEquations`.
 In particular, not the components themselves are returned.
 """
 @inline function eachcomponent(equations::AbstractCompressibleEulerPoissonMultiIonEquations)
