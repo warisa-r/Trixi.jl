@@ -449,6 +449,10 @@ abstract type AbstractCompressibleEulerMultiIonEquations{NDIMS, NVARS, NCOMP} <:
 include("compressible_euler_multiion_1d.jl")
 include("compressible_euler_multiion_2d.jl")
 
+abstract type AbstractCompressibleEulerPoissonMultiIonEquations{NDIMS, NVARS, NCOMP} <:
+              AbstractEquations{NDIMS, NVARS} end
+include("compressible_euler_poisson_multiion_1d.jl")
+
 # CompressibleEulerMulticomponentEquations
 abstract type AbstractCompressibleEulerMulticomponentEquations{NDIMS, NVARS, NCOMP} <:
               AbstractEquations{NDIMS, NVARS} end
@@ -470,6 +474,7 @@ include("polytropic_euler_2d.jl")
                                                                                                }
     NCOMP
 end
+
 """
     eachcomponent(equations::AbstractCompressibleEulerMulticomponentEquations)
 
@@ -499,6 +504,38 @@ for the components in `AbstractCompressibleEulerMultiIonEquationsEquations`.
 In particular, not the components themselves are returned.
 """
 @inline function eachcomponent(equations::AbstractCompressibleEulerMultiIonEquations)
+    Base.OneTo(ncomponents(equations))
+end
+
+"""
+    eachcomponent(equations::AbstractCompressibleEulerMulticomponentEquations)
+
+Return an iterator over the indices that specify the location in relevant data structures
+for the components in `AbstractCompressibleEulerMulticomponentEquations`.
+In particular, not the components themselves are returned.
+"""
+@inline function eachcomponent(equations::AbstractCompressibleEulerMulticomponentEquations)
+    Base.OneTo(ncomponents(equations))
+end
+
+# Retrieve number of components from equation instance for the multicomponent case
+@inline function ncomponents(::AbstractCompressibleEulerMultiIonEquations{NDIMS,
+                                                                          NVARS,
+                                                                          NCOMP}) where {
+                                                                                         NDIMS,
+                                                                                         NVARS,
+                                                                                         NCOMP
+                                                                                         }
+    NCOMP
+end
+"""
+    eachcomponent(equations::AbstractCompressibleEulerPoissonMultiIonEquations)
+
+Return an iterator over the indices that specify the location in relevant data structures
+for the components in `AbstractCompressibleEulerMultiIonEquationsEquations`.
+In particular, not the components themselves are returned.
+"""
+@inline function eachcomponent(equations::AbstractCompressibleEulerPoissonMultiIonEquations)
     Base.OneTo(ncomponents(equations))
 end
 
