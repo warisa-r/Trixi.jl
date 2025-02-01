@@ -391,13 +391,18 @@ end
 end
 
 @inline function prim2cons(prim, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    @unpack epsilon = equations
     cons = zero(MVector{nvariables(equations), eltype(prim)})
 
     for k in eachcomponent(equations)
         rho, v1, p = get_component(k, prim, equations)
         inv_gamma_minus_one = equations.inv_gammas_minus_one[k]
         rho_v1 = rho * v1
-        rho_e = p * inv_gamma_minus_one + 0.5f0 * (rho_v1 * v1) #TODO: Change this
+        if k == 1
+            rho_e = p * inv_gamma_minus_one + 0.5f0 * (rho_v1 * v1 * epsilon) # electron
+        else
+            rho_e = p * inv_gamma_minus_one + 0.5f0 * (rho_v1 * v1) # ion
+        end
         set_component!(cons, k, rho, rho_v1, rho_e, equations)
     end
 
