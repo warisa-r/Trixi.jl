@@ -24,7 +24,7 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
             throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
 
         # Have this in to prevent system with multi-ion that I haven't currently figure out the flux yet
-        NCOMP > 2
+        NCOMP > 2 ||
             throw(ArgumentError("Currently, multi-ion species system is not available yet"))
 
         # Precompute inverse gamma - 1
@@ -32,7 +32,7 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
 
         NVARS = 3 * NCOMP # We count electron as one component
 
-        return new{NVARS, NCOMP}(gammas,inv_gammas_minus_one, epsilon, scaled_debye_length)
+        return new{NVARS, NCOMP, RealT}(gammas,inv_gammas_minus_one, epsilon, scaled_debye_length)
     end
 end
 
@@ -41,6 +41,7 @@ function CompressibleEulerPoissonMultiIonEquations1D(; gammas, epsilon, scaled_d
     # Promote input types
     _gammas = promote(gammas...)
     RealT = eltype(_gammas)
+    __gammas = SVector(map(RealT, _gammas))  # Now defined
     _epsilon = convert(RealT, epsilon)
     _scaled_debye_length = convert(RealT, scaled_debye_length)
 
