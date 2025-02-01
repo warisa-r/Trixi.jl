@@ -12,8 +12,8 @@ initial_condition = initial_condition_convergence_test #TODO: change this
 solver = DGSEM(polydeg = 3, surface_flux = flux_hll,
                volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_hll))
 
-coordinates_min = (0.0,)
-coordinates_max = (1.0,)
+coordinates_min = 0.0
+coordinates_max = 2.0
 mesh = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level = 3,
                 n_cells_max = 30_000)
@@ -24,7 +24,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 ###############################################################################
 # ODE solvers, callbacks etc.
 
-tspan = (0.0, 0.1)
+tspan = (0.0, 2.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
