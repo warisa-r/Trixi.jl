@@ -11,7 +11,7 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
 
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
     inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1)
-    epsilon::RealT # referred to as epsilon in the literature
+    epsilon::RealT # m_e / m_i
     scaled_debye_length::RealT
 
     # Inner Constructor
