@@ -12,11 +12,9 @@ mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
     inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1)
     epsilon::RealT # m_e / m_i
-    scaled_debye_length::RealT
 
     # Inner Constructor
-    function CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT}, epsilon::RealT,
-                                                            scaled_debye_length::RealT) where {NVARS, NCOMP,
+    function CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT}, epsilon::RealT) where {NVARS, NCOMP,
                                                                                                     RealT <:
                                                                                                     Real
                                                                                                     }
