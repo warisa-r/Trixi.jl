@@ -6,18 +6,23 @@
 #! format: noindent
 
 mutable struct CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT <: Real} <:
-    AbstractCompressibleEulerTwoFluidsEquations{1, NVARS, NCOMP}
+               AbstractCompressibleEulerTwoFluidsEquations{1, NVARS, NCOMP}
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
     inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1)
     epsilon::RealT # m_e / m_i
 
     # Inner Constructor
-    function CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT},
-                                                epsilon::RealT) where { NVARS, NCOMP,
-                                                                        RealT <: Real}
+    function CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP,
+                                                                                        RealT},
+                                                                        epsilon::RealT) where {
+                                                                                               NVARS,
+                                                                                               NCOMP,
+                                                                                               RealT <:
+                                                                                               Real
+                                                                                               }
         # Enforce the fixed values
-        @assert NCOMP == 2 "NCOMP must be 2 since we only consider one species of ion"
-        @assert NVARS == 6 "NVARS must be 6"
+        @assert NCOMP==2 "NCOMP must be 2 since we only consider one species of ion"
+        @assert NVARS==6 "NVARS must be 6"
 
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
@@ -38,12 +43,16 @@ function CompressibleEulerTwoFluidsEquations1D(; gammas, epsilon)
     NVARS = 3 * NCOMP
 
     return CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}(__gammas,
-    _epsilon)
-
+                                                                      _epsilon)
 end
 
 # TODO: Do we still need this??
-@inline function Base.real(::CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}) where {NVARS, NCOMP, RealT <: Real}
+@inline function Base.real(::CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}) where {
+                                                                                                NVARS,
+                                                                                                NCOMP,
+                                                                                                RealT <:
+                                                                                                Real
+                                                                                                }
     RealT
 end
 
