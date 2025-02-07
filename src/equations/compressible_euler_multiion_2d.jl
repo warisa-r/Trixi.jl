@@ -21,29 +21,40 @@ mutable struct CompressibleEulerMultiIonEquations2D{NVARS, NCOMP, RealT <: Real,
 
     # Inner Constructor
     function CompressibleEulerMultiIonEquations2D{NVARS, NCOMP, RealT, ElectronPressure,
-        ElectronTemperature}(gammas::SVector{NCOMP, RealT},
-                                                  charge_to_mass::SVector{NCOMP, RealT},
-                                                  gas_constants::SVector{NCOMP, RealT},
-                                                  molar_masses::SVector{NCOMP, RealT},
-                                                  ion_ion_collision_constants::Array{RealT,
-                                                                                     2},
-                                                  ion_electron_collision_constants::SVector{NCOMP,
-                                                                                            RealT},
-                                                  electron_pressure::ElectronPressure,
-                                                  electron_temperature::ElectronTemperature) where {NVARS, NCOMP, RealT <: Real, ElectronPressure, ElectronTemperature}
+                                                  ElectronTemperature}(gammas::SVector{NCOMP,
+                                                                                       RealT},
+                                                                       charge_to_mass::SVector{NCOMP,
+                                                                                               RealT},
+                                                                       gas_constants::SVector{NCOMP,
+                                                                                              RealT},
+                                                                       molar_masses::SVector{NCOMP,
+                                                                                             RealT},
+                                                                       ion_ion_collision_constants::Array{RealT,
+                                                                                                          2},
+                                                                       ion_electron_collision_constants::SVector{NCOMP,
+                                                                                                                 RealT},
+                                                                       electron_pressure::ElectronPressure,
+                                                                       electron_temperature::ElectronTemperature) where {
+                                                                                                                         NVARS,
+                                                                                                                         NCOMP,
+                                                                                                                         RealT <:
+                                                                                                                         Real,
+                                                                                                                         ElectronPressure,
+                                                                                                                         ElectronTemperature
+                                                                                                                         }
         NCOMP >= 1 ||
             throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
 
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
         new(gammas, inv_gammas_minus_one,
-                                                                               charge_to_mass,
-                                                                               gas_constants,
-                                                                               molar_masses,
-                                                                               ion_ion_collision_constants,
-                                                                               ion_electron_collision_constants,
-                                                                               electron_pressure,
-                                                                               electron_temperature)
+            charge_to_mass,
+            gas_constants,
+            molar_masses,
+            ion_ion_collision_constants,
+            ion_electron_collision_constants,
+            electron_pressure,
+            electron_temperature)
     end
 end
 
@@ -81,15 +92,15 @@ function CompressibleEulerMultiIonEquations2D(; gammas, charge_to_mass,
     NVARS = 4 * NCOMP
 
     return CompressibleEulerMultiIonEquations2D{NVARS, NCOMP, RealT,
-    typeof(electron_pressure),
-    typeof(electron_temperature)}(__gammas,
-                                                __charge_to_mass,
-                                                __gas_constants,
-                                                __molar_masses,
-                                                __ion_ion_collision_constants,
-                                                __ion_electron_collision_constants,
-                                                electron_pressure,
-                                                electron_temperature)
+                                                typeof(electron_pressure),
+                                                typeof(electron_temperature)}(__gammas,
+                                                                              __charge_to_mass,
+                                                                              __gas_constants,
+                                                                              __molar_masses,
+                                                                              __ion_ion_collision_constants,
+                                                                              __ion_electron_collision_constants,
+                                                                              electron_pressure,
+                                                                              electron_temperature)
 end
 
 @inline function Base.real(::CompressibleEulerMultiIonEquations2D{NVARS, NCOMP, RealT}) where {
