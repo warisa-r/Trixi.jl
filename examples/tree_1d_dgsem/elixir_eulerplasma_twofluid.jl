@@ -3,8 +3,8 @@ using Trixi
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
-equations_euler = Trixi.CompressibleEulerplasmaMultiIonEquations1D(gammas = (5/3, 5/3),
-                                                       epsilon = 1e-4, scaled_debye_length = 1e-4)
+equations_euler = Trixi.CompressibleEulerTwoFluidsEquations1D(gammas = (5/3, 5/3),
+                                                       epsilon = 1e-4)
 delta = 1e-2 # perturbation amplitude
 
 initial_condition = initial_condition_convergence_test #TODO: change this
@@ -24,7 +24,7 @@ semi_euler = SemidiscretizationHyperbolic(mesh, equations_euler, initial_conditi
 
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
-
+#=
 equations_plasma = HyperbolicDiffusionEquations1D()
 solver_plasma = DGSEM(polydeg, flux_lax_friedrichs)
 
@@ -41,15 +41,16 @@ parameters = ParametersEulerplasma(scaled_debye_length = 2.0,
                                     timestep_plasma = timestep_plasma_erk52_3Sstar!)
 
 semi = SemidiscretizationEulerplasma(semi_euler, semi_plasma, parameters)
+=#
 ###############################################################################
 # ODE solvers, callbacks etc.
 tspan = (0.0, 2.0)
-ode = semidiscretize(semi_euer, tspan)
+ode = semidiscretize(semi_euler, tspan) # Temporarily using semi_euler to check for coding mistakes
 
 summary_callback = SummaryCallback()
 
 analysis_interval = 100
-analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
+analysis_callback = AnalysisCallback(semi_euler, interval = analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 

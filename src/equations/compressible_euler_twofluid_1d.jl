@@ -5,83 +5,71 @@
 @muladd begin
 #! format: noindent
 
-#TODO: Probably needs a name change
-mutable struct CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT <: Real} <:
-               AbstractCompressibleEulerPoissonMultiIonEquations{1, NVARS, NCOMP}
-
+mutable struct CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT <: Real} <:
+    AbstractCompressibleEulerTwoFluidsEquations{1, NVARS, NCOMP}
     gammas::SVector{NCOMP, RealT} # Heat capacity ratios
     inv_gammas_minus_one::SVector{NCOMP, RealT} # = inv(gamma - 1)
     epsilon::RealT # m_e / m_i
 
     # Inner Constructor
-    function CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT}, epsilon::RealT) where {NVARS, NCOMP,
-                                                                                                    RealT <:
-                                                                                                    Real
-                                                                                                    }
-        NCOMP >= 1 ||
-            throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
+    function CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}(gammas::SVector{NCOMP, RealT},
+                                                epsilon::RealT) where { NVARS, NCOMP,
+                                                                        RealT <: Real}
+        # Enforce the fixed values
+        @assert NCOMP == 2 "NCOMP must be 2 since we only consider one species of ion"
+        @assert NVARS == 6 "NVARS must be 6"
 
-        # Have this in to prevent system with multi-ion that I haven't currently figure out the flux yet
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
 
-        new(gammas,inv_gammas_minus_one, epsilon, scaled_debye_length)
+        new(gammas, inv_gammas_minus_one, epsilon)
     end
 end
 
 # Outer Constructor Delegating to Inner Constructor
-function CompressibleEulerPoissonMultiIonEquations1D(; gammas, epsilon, scaled_debye_length)
+function CompressibleEulerTwoFluidsEquations1D(; gammas, epsilon)
     # Promote input types
     _gammas = promote(gammas...)
     RealT = eltype(_gammas)
-    __gammas = SVector(map(RealT, _gammas))  # Now defined
+    __gammas = SVector(map(RealT, _gammas))
     _epsilon = convert(RealT, epsilon)
-    _scaled_debye_length = convert(RealT, scaled_debye_length)
-    NVARS = length(_gammas) * 3
-    NCOMP = length(_gammas)
 
-    return CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}(__gammas,
-                                                _epsilon, _scaled_debye_length)
+    NCOMP = length(__gammas)
+    NVARS = 3 * NCOMP
+
+    return CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}(__gammas,
+    _epsilon)
+
 end
 
-@inline function Base.real(::CompressibleEulerPoissonMultiIonEquations1D{NVARS, NCOMP, RealT}) where {
-                                                                                               NVARS,
-                                                                                               NCOMP,
-                                                                                               RealT <:
-                                                                                               Real
-                                                                                               }
+# TODO: Do we still need this??
+@inline function Base.real(::CompressibleEulerTwoFluidsEquations1D{NVARS, NCOMP, RealT}) where {NVARS, NCOMP, RealT <: Real}
     RealT
 end
 
-function varnames(::typeof(cons2cons), equations::CompressibleEulerPoissonMultiIonEquations1D)
-    cons = ("rho_electron", "rho_v1_electron", "rho_e_electron")
-    for i in eachcomponent(equations)
-        i == 1 && continue
-            cons = (cons...,
-                    tuple("rho_" * string(i), "rho_v1_" * string(i),
-                          "rho_e_" * string(i))...) #TODO: maybe display i-1?
-    end
+function varnames(::typeof(cons2cons), equations::CompressibleEulerTwoFluidsEquations1D)
+    cons_electron = ("rho_electron", "rho_v1_electron", "rho_e_electron")
+    cons_ion = ("rho_ion", "rho_v1_ion", "rho_e_ion")
+    cons = (cons_electron..., cons_ion...)
 
     return cons
 end
 
-function varnames(::typeof(cons2prim), equations::CompressibleEulerPoissonMultiIonEquations1D)
-    prim = ("rho_electron", "v1_electron", "p_electron")
-    for i in eachcomponent(equations)
-        i == 1 && continue
-        prim = (prim...,
-                tuple("rho_" * string(i), "v1_" * string(i), "p_" * string(i))...) #TODO: maybe display i-1?
-    end
+function varnames(::typeof(cons2prim), equations::CompressibleEulerTwoFluidsEquations1D)
+    prim_electron = ("rho_electron", "v1_electron", "p_electron")
+    prim_ion = ("rho_ion", "v1_ion", "p_ion")
+    prim = (prim_electron..., prim_ion...)
+
     return prim
 end
 
 """
-    initial_condition_constant(x, t, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    initial_condition_constant(x, t, equations::CompressibleEulerTwoFluidsEquations1D)
 
 A constant initial condition to test free-stream preservation.
 """
 function initial_condition_constant(x, t,
-                                    equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                    equations::CompressibleEulerTwoFluidsEquations1D)
     cons = zero(MVector{nvariables(equations), eltype(x)}) # Dummy initial condition for sanity check
 
     rho = 0.1
@@ -96,14 +84,14 @@ function initial_condition_constant(x, t,
 end
 
 """
-    initial_condition_convergence_test(x, t, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    initial_condition_convergence_test(x, t, equations::CompressibleEulerTwoFluidsEquations1D)
 
 A smooth initial condition used for convergence tests in combination with
 [`source_terms_convergence_test`](@ref)
 (and [`BoundaryConditionDirichlet(initial_condition_convergence_test)`](@ref) in non-periodic domains).
 """
 function initial_condition_convergence_test(x, t,
-                                            equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                            equations::CompressibleEulerTwoFluidsEquations1D)
     RealT = eltype(x)
     cons = zero(MVector{nvariables(equations), RealT}) # Dummy convergence test for sanity check
 
@@ -118,7 +106,7 @@ function initial_condition_convergence_test(x, t,
     rho_v1 = ini
     rho_e = ini^2
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         set_component!(cons, k, rho, rho_v1, rho_e, equations)
     end
 
@@ -126,15 +114,15 @@ function initial_condition_convergence_test(x, t,
 end
 
 """
-    source_terms_convergence_test(u, x, t, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    source_terms_convergence_test(u, x, t, equations::CompressibleEulerTwoFluidsEquations1D)
 
 Source terms used for convergence tests in combination with
 [`initial_condition_convergence_test`](@ref)
 (and [`BoundaryConditionDirichlet(initial_condition_convergence_test)`](@ref) in non-periodic domains).
 """
 @inline function source_terms_convergence_test(u, x, t,
-                                               equations::CompressibleEulerPoissonMultiIonEquations1D)
-    
+                                               equations::CompressibleEulerTwoFluidsEquations1D)
+
     # Same settings as in `initial_condition`
     RealT = eltype(u)
     cons = zero(MVector{nvariables(equations), RealT})
@@ -149,7 +137,7 @@ Source terms used for convergence tests in combination with
 
     si, co = sincos(ω * (x1 - t))
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         gamma = equations.gammas[k]
         rho = c + A * si
         rho_x = ω * A * co
@@ -167,16 +155,16 @@ Source terms used for convergence tests in combination with
 end
 
 """
-    flux(u, orientation::Integer, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    flux(u, orientation::Integer, equations::CompressibleEulerTwoFluidsEquations1D)
 
 Calculate the flux for the multiion system. The flux is calculated for each ion species separately.
 """
 @inline function flux(u, orientation::Integer,
-                      equations::CompressibleEulerPoissonMultiIonEquations1D)
+                      equations::CompressibleEulerTwoFluidsEquations1D)
     f = zero(MVector{nvariables(equations), eltype(u)})
     @unpack epsilon = equations
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, rho_v1, rho_e = get_component(k, u, equations)
         rho_inv = 1 / rho
         v1 = rho_v1 * rho_inv
@@ -195,14 +183,14 @@ Calculate the flux for the multiion system. The flux is calculated for each ion 
 end
 
 """
-    get_component(k, u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+    get_component(k, u, equations::CompressibleEulerTwoFluidsEquations1D)
 
-Get the variables of component (ion species) `k`.
+Get the variables of component (k = 1 electron and k = 2 ion) `k`.
 
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in future releases.
 """
-@inline function get_component(k, u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function get_component(k, u, equations::CompressibleEulerTwoFluidsEquations1D)
     return SVector(u[(k - 1) * 3 + 1],
                    u[(k - 1) * 3 + 2],
                    u[(k - 1) * 3 + 3])
@@ -210,15 +198,15 @@ end
 
 """
     set_component!(u, k, u1, u2, u3,
-                   equations::CompressibleEulerPoissonMultiIonEquations1D)
+                   equations::CompressibleEulerTwoFluidsEquations1D)
 
-Set the variables (`u1` to `u3`) of component (ion species) `k`.
+Set the variables (`u1` to `u3`) of fluid species (k = 1 electron and k = 2 ion) `k`.
 
 !!! warning "Experimental implementation"
     This is an experimental feature and may change in future releases.
 """
 @inline function set_component!(u, k, u1, u2, u3,
-                                equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                equations::CompressibleEulerTwoFluidsEquations1D)
     u[(k - 1) * 3 + 1] = u1
     u[(k - 1) * 3 + 2] = u2
     u[(k - 1) * 3 + 3] = u3
@@ -229,7 +217,7 @@ end
 # Calculate estimates for maximum wave speed for local Lax-Friedrichs-type dissipation as the
 # maximum velocity magnitude plus the maximum speed of sound
 @inline function max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
-                                     equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                     equations::CompressibleEulerTwoFluidsEquations1D)
 
     # Calculate velocities
     v_mag_ll = zero(eltype(u_ll))
@@ -237,7 +225,7 @@ end
     c_ll = zero(eltype(u_ll))
     c_rr = zero(eltype(u_rr))
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho_ll, rho_v1_ll, rho_e_ll = get_component(k, u_ll, equations)
         rho_rr, rho_v1_rr, rho_e_rr = get_component(k, u_rr, equations)
         gamma = equations.gammas[k]
@@ -258,10 +246,10 @@ end
 end
 
 @inline function max_abs_speeds(u,
-                                equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                equations::CompressibleEulerTwoFluidsEquations1D)
     prim = cons2prim(u, equations)
     v1_max = zero(eltype(u))
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, v1, p = get_component(k, prim, equations)
         gamma = equations.gammas[k]
         c = sqrt(gamma * p / rho)
@@ -272,14 +260,14 @@ end
 
 # Calculate estimates for minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_naive(u_ll, u_rr, orientation::Integer,
-                                     equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                     equations::CompressibleEulerTwoFluidsEquations1D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
     λ_min = oftype(u_ll[1], Inf)
     λ_max = oftype(u_ll[1], -Inf)
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho_ll, v1_ll, p_ll = get_component(k, prim_ll, equations)
         rho_rr, v1_rr, p_rr = get_component(k, prim_rr, equations)
         gamma = equations.gammas[k]
@@ -297,14 +285,14 @@ end
 
 # More refined estimates for minimum and maximum wave speeds for HLL-type fluxes
 @inline function min_max_speed_davis(u_ll, u_rr, orientation::Integer,
-                                     equations::CompressibleEulerPoissonMultiIonEquations1D)
+                                     equations::CompressibleEulerTwoFluidsEquations1D)
     prim_ll = cons2prim(u_ll, equations)
     prim_rr = cons2prim(u_rr, equations)
 
     λ_min = oftype(u_ll[1], Inf)
     λ_max = oftype(u_ll[1], -Inf)
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho_ll, v1_ll, p_ll = get_component(k, prim_ll, equations)
         rho_rr, v1_rr, p_rr = get_component(k, prim_rr, equations)
         gamma = equations.gammas[k]
@@ -319,9 +307,9 @@ end
     return λ_min, λ_max
 end
 
-@inline function cons2prim(u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function cons2prim(u, equations::CompressibleEulerTwoFluidsEquations1D)
     prim = zero(MVector{nvariables(equations), eltype(u)})
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, rho_v1, rho_e = get_component(k, u, equations)
         v1 = rho_v1 / rho
         gamma = equations.gammas[k]
@@ -334,10 +322,10 @@ end
 
 #TODO: Does this still work for the electron?
 # Convert conservative variables to entropy
-@inline function cons2entropy(u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function cons2entropy(u, equations::CompressibleEulerTwoFluidsEquations1D)
     w = zero(MVector{nvariables(equations), eltype(u)})
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, rho_v1, rho_e = get_component(k, u, equations)
         gamma = equations.gammas[k]
         inv_gamma_minus_one = equations.inv_gammas_minus_one[k]
@@ -357,14 +345,14 @@ end
     return SVector(w)
 end
 
-@inline function entropy2cons(w, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function entropy2cons(w, equations::CompressibleEulerTwoFluidsEquations1D)
     cons = zero(MVector{nvariables(equations), eltype(w)})
     # See Hughes, Franca, Mallet (1986) A new finite element formulation for CFD
     # [DOI: 10.1016/0045-7825(86)90127-1](https://doi.org/10.1016/0045-7825(86)90127-1)
 
     # convert to entropy `-rho * s` used by Hughes, France, Mallet (1986)
     # instead of `-rho * s / (gamma - 1)`
-    for k in eachcomponent(equations)
+    for k in 1:2
         w_k = get_component(k, w, equations)
         gamma = equations.gammas[k]
         inv_gamma_minus_one = equations.inv_gammas_minus_one[k]
@@ -386,11 +374,11 @@ end
     return SVector(cons)
 end
 
-@inline function prim2cons(prim, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function prim2cons(prim, equations::CompressibleEulerTwoFluidsEquations1D)
     @unpack epsilon = equations
     cons = zero(MVector{nvariables(equations), eltype(prim)})
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, v1, p = get_component(k, prim, equations)
         inv_gamma_minus_one = equations.inv_gammas_minus_one[k]
         rho_v1 = rho * v1
@@ -405,11 +393,11 @@ end
     return SVector(cons)
 end
 
-@inline function density(u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function density(u, equations::CompressibleEulerTwoFluidsEquations1D)
     num_components = div(nvariables(equations), 3)
     rhos = zero(MVector{num_components, eltype(u)})
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, _, _ = get_component(k, u, equations)
         rhos[k] = rho
     end
@@ -417,11 +405,11 @@ end
     return SVector(rhos)
 end
 
-@inline function velocity(u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function velocity(u, equations::CompressibleEulerTwoFluidsEquations1D)
     num_components = div(nvariables(equations), 3)
     velocities = zero(MVector{num_components, eltype(u)})
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, rho_v1, _ = get_component(k, u, equations)
         velocities[k] = rho_v1 / rho
     end
@@ -429,11 +417,11 @@ end
     return SVector(velocities)
 end
 
-@inline function pressure(u, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function pressure(u, equations::CompressibleEulerTwoFluidsEquations1D)
     num_components = div(nvariables(equations), 3)
     pressures = zero(MVector{num_components, eltype(u)})
 
-    for k in eachcomponent(equations)
+    for k in 1:2
         rho, rho_v1, rho_e = get_component(k, u, equations)
         gamma = equations.gammas[k]
         p = pressure(k, rho_e, rho_v1, v1, gamma, equations)
@@ -443,12 +431,13 @@ end
 end
 
 # A function to calculate pressure for either electron or pressure
-@inline function pressure(k, rho_e, rho_v1, v1, gamma, equations::CompressibleEulerPoissonMultiIonEquations1D)
+@inline function pressure(k, rho_e, rho_v1, v1, gamma,
+                          equations::CompressibleEulerTwoFluidsEquations1D)
     @unpack epsilon = equations
     if k == 1
         p = (gamma - 1) * (rho_e - 0.5 * rho_v1 * v1 * epsilon) # electron's pressure
     else
-        p = (gamma - 1) * (rho_e - 0.5 * rho_v1 * v1)
+        p = (gamma - 1) * (rho_e - 0.5 * rho_v1 * v1) # ion's pressure
     end
     return p
 end
