@@ -443,9 +443,9 @@ include("compressible_euler_2d.jl")
 include("compressible_euler_3d.jl")
 include("compressible_euler_quasi_1d.jl")
 
-abstract type AbstractCompressibleEulerPoissonMultiIonEquations{NDIMS, NVARS, NCOMP} <:
+abstract type AbstractCompressibleEulerTwoFluidsEquations{NDIMS, NVARS, NCOMP} <:
               AbstractEquations{NDIMS, NVARS} end
-include("compressible_euler_poisson_multiion_1d.jl")
+include("compressible_euler_twofluid_1d.jl")
 
 # CompressibleEulerMulticomponentEquations
 abstract type AbstractCompressibleEulerMulticomponentEquations{NDIMS, NVARS, NCOMP} <:
