@@ -7,6 +7,7 @@
 
 struct ParametersEulerPlasma{RealT <: Real, TimestepPlasma}
     scaled_debye_length    :: RealT # aka λ_D / L
+    epsilon                :: RealT
     cfl                    :: RealT # CFL number for the electric potential solver
     resid_tol              :: RealT # Hyp.-Diff. Eq. steady state tolerance
     n_iterations_max       :: Int   # Max. number of iterations of the pseudo-time electric potential solver
@@ -14,12 +15,13 @@ struct ParametersEulerPlasma{RealT <: Real, TimestepPlasma}
 end
 
 function ParametersEulerPlasma(; scaled_debye_length = 1e-4,
+                                epsilon = 1e-4,
                                 cfl = 1.0,
                                 resid_tol = 1.0e-4,
                                 n_iterations_max = 10^4,
                                 timestep_plasma = timestep_plasma_erk52_3Sstar!)
-    scaled_debye_length, cfl, resid_tol = promote(scaled_debye_length, cfl, resid_tol)
-    ParametersEulerPlasma(scaled_debye_length, cfl, resid_tol,
+    scaled_debye_length, cfl, resid_tol = promote(scaled_debye_length, epsilon, cfl, resid_tol)
+    ParametersEulerPlasma(scaled_debye_length, epsilon, cfl, resid_tol,
                            n_iterations_max, timestep_plasma)
 end
 
@@ -28,6 +30,7 @@ function Base.show(io::IO, parameters::ParametersEulerPlasma)
 
     print(io, "ParametersEulerPlasma(")
     print(io, ", scaled_debye_length=", parameters.scaled_debye_length)
+    print(io, ", epsilon=", parameters.epsilon)
     print(io, ", cfl=", parameters.cfl)
     print(io, ", n_iterations_max=", parameters.n_iterations_max)
     print(io, ", timestep_plasma=", parameters.timestep_plasma)
@@ -206,7 +209,7 @@ end
 # corresponding to Algorithm 2 in Schlottke-Lakemper et al. (2020),
 # https://dx.doi.org/10.1016/j.jcp.2021.110467
 function rhs!(du_ode, u_ode, semi::SemidiscretizationEulerPlasma, t)
-    @unpack semi_euler, semi_plasma, cache = semi
+    @unpack semi_euler, semi_plasma, parameters, cache = semi
 
     u_euler = wrap_array(u_ode, semi_euler)
     du_euler = wrap_array(du_ode, semi_euler)
@@ -219,11 +222,15 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationEulerPlasma, t)
 
     # compute electric potential and forces
     @trixi_timeit timer() "Plasma solver" update_plasma!(semi, u_ode)
-
+    
+    #TODO: change this for 2D
     # add electric potential source source_terms to the Euler part
     if ndims(semi_euler) == 1
-        @views @. du_euler[2, .., :] -= u_euler[1, .., :] * u_plasma[2, .., :] 
-        @views @. du_euler[3, .., :] -= u_euler[2, .., :] * u_plasma[2, .., :]
+        @views @. du_euler[2, .., :] += u_euler[1, .., :] * u_plasma[2, .., :] / parameters.epsilon # electron
+        @views @. du_euler[3, .., :] += u_euler[1, .., :] * u_euler[2, .., :] * u_plasma[2, .., :]
+        @views @. du_euler[5, .., :] -= u_euler[4, .., :] * u_plasma[2, .., :] # ion
+        @views @. du_euler[6, .., :] -= u_euler[1, .., :] * u_euler[5, .., :] * u_plasma[2, .., :]
+        
     elseif ndims(semi_euler) == 2
         @views @. du_euler[2, .., :] -= u_euler[1, .., :] * u_plasma[2, .., :]
         @views @. du_euler[3, .., :] -= u_euler[1, .., :] * u_plasma[3, .., :]
