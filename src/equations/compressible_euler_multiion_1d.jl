@@ -20,7 +20,8 @@ mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real,
     electron_temperature::ElectronTemperature # Electron temperature function
 
     # Inner Constructor
-    function CompressibleEulerMultiIonEquations1D(gammas::SVector{NCOMP, RealT},
+    function CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT, ElectronPressure,
+        ElectronTemperature}(gammas::SVector{NCOMP, RealT},
                                                   charge_to_mass::SVector{NCOMP, RealT},
                                                   gas_constants::SVector{NCOMP, RealT},
                                                   molar_masses::SVector{NCOMP, RealT},
@@ -29,22 +30,14 @@ mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real,
                                                   ion_electron_collision_constants::SVector{NCOMP,
                                                                                             RealT},
                                                   electron_pressure::ElectronPressure,
-                                                  electron_temperature::ElectronTemperature) where {
-                                                                                                    NCOMP,
-                                                                                                    RealT <:
-                                                                                                    Real,
-                                                                                                    ElectronPressure,
-                                                                                                    ElectronTemperature
-                                                                                                    }
+                                                  electron_temperature::ElectronTemperature) where {NVARS, NCOMP, RealT <: Real, ElectronPressure, ElectronTemperature}
         NCOMP >= 1 ||
             throw(DimensionMismatch("`gammas` and `charge_to_mass` must contain at least one value"))
 
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
 
-        NVARS = 3 * NCOMP
-
-        return new{NVARS, NCOMP, RealT, ElectronPressure, ElectronTemperature}(gammas,
+        new{NVARS, NCOMP, RealT, ElectronPressure, ElectronTemperature}(gammas,
                                                                                inv_gammas_minus_one,
                                                                                charge_to_mass,
                                                                                gas_constants,
@@ -87,7 +80,12 @@ function CompressibleEulerMultiIonEquations1D(; gammas, charge_to_mass,
     __ion_electron_collision_constants = SVector(map(RealT,
                                                      _ion_electron_collision_constants))
 
-    return CompressibleEulerMultiIonEquations1D(__gammas,
+    NCOMP = length(_gammas)
+    NVARS = 3 * NCOMP
+
+    return CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT,
+    typeof(electron_pressure),
+    typeof(electron_temperature)}(__gammas,
                                                 __charge_to_mass,
                                                 __gas_constants,
                                                 __molar_masses,
