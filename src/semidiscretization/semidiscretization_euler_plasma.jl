@@ -309,8 +309,9 @@ function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
         # included in the `rhs!` call.
         rhs!(du_ode, u_ode, semi_plasma, tau_stage)
 
+        # TODO: Find a way to pass dimensions of semi_euler so that we can replace 4 with 3 + ndims(semi_euler)
         # density_i - density_e
-        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[3 + ndims(semi_euler), .., :]- u_euler[1, .., :])
+        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[4, .., :]- u_euler[1, .., :])
 
         a_stage = a[stage]
         b_stage_dtau = b[stage] * dtau
@@ -368,7 +369,7 @@ function timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
         rhs!(du_ode, u_ode, semi_plasma, tau_stage)
 
         # density_i - density_e
-        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[3 + ndims(semi_euler), .., :]- u_euler[1, .., :])
+        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[4, .., :]- u_euler[1, .., :])
 
         delta_stage = delta[stage]
         gamma1_stage = gamma1[stage]
