@@ -223,26 +223,13 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationEulerPlasma, t)
     # compute electric potential and forces
     @trixi_timeit timer() "Plasma solver" update_plasma!(semi, u_ode)
     
-    #TODO: change this for 2D
+    #TODO: extend to 2D and 3D -> Can this be done without if else?
     # add electric potential source source_terms to the Euler part
     if ndims(semi_euler) == 1
         @views @. du_euler[2, .., :] += u_euler[1, .., :] * u_plasma[2, .., :] / parameters.epsilon # electron
-        @views @. du_euler[3, .., :] += u_euler[1, .., :] * u_euler[2, .., :] * u_plasma[2, .., :]
+        @views @. du_euler[3, .., :] += u_euler[2, .., :] * u_euler[2, .., :] * u_plasma[2, .., :]
         @views @. du_euler[5, .., :] -= u_euler[4, .., :] * u_plasma[2, .., :] # ion
-        @views @. du_euler[6, .., :] -= u_euler[1, .., :] * u_euler[5, .., :] * u_plasma[2, .., :]
-        
-    elseif ndims(semi_euler) == 2
-        @views @. du_euler[2, .., :] -= u_euler[1, .., :] * u_plasma[2, .., :]
-        @views @. du_euler[3, .., :] -= u_euler[1, .., :] * u_plasma[3, .., :]
-        @views @. du_euler[4, .., :] -= (u_euler[2, .., :] * u_plasma[2, .., :] +
-                                         u_euler[3, .., :] * u_plasma[3, .., :])
-    elseif ndims(semi_euler) == 3
-        @views @. du_euler[2, .., :] -= u_euler[1, .., :] * u_plasma[2, .., :]
-        @views @. du_euler[3, .., :] -= u_euler[1, .., :] * u_plasma[3, .., :]
-        @views @. du_euler[4, .., :] -= u_euler[1, .., :] * u_plasma[4, .., :]
-        @views @. du_euler[5, .., :] -= (u_euler[2, .., :] * u_plasma[2, .., :] +
-                                         u_euler[3, .., :] * u_plasma[3, .., :] +
-                                         u_euler[4, .., :] * u_plasma[4, .., :])
+        @views @. du_euler[6, .., :] -= u_euler[5, .., :] *  u_plasma[2, .., :]
     else
         error("Number of dimensions $(ndims(semi_euler)) not supported.")
     end
@@ -308,9 +295,7 @@ end
 function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
                               semi_plasma,
                               a, b, c)
-    G = plasma_parameters.gravitational_constant
-    rho0 = plasma_parameters.background_density
-    grav_scale = -4.0 * pi * G
+    electric_scale = 1 / (parameters.scaled_debye_length * parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_plasma` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode = cache
@@ -324,11 +309,8 @@ function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
         # included in the `rhs!` call.
         rhs!(du_ode, u_ode, semi_plasma, tau_stage)
 
-        # Source term: Jeans instability OR coupling convergence test OR blast wave
-        # put in plasma source term proportional to Euler density
-        # OBS! subtract off the background density ρ_0 (spatial mean value)
-        # Note: Adding to `du_plasma` is essentially adding to `du_ode`!
-        @views @. du_plasma[1, .., :] += grav_scale * (u_euler[1, .., :] - rho0)
+        # density_i - density_e
+        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[3 + ndims(semi_euler), .., :]- u_euler[1, .., :])
 
         a_stage = a[stage]
         b_stage_dtau = b[stage] * dtau
@@ -370,9 +352,7 @@ end
 function timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
                                   semi_plasma,
                                   gamma1, gamma2, gamma3, beta, delta, c)
-    G = plasma_parameters.gravitational_constant
-    rho0 = plasma_parameters.background_density
-    grav_scale = -4 * G * pi
+    electric_scale = 1 / (parameters.scaled_debye_length * parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_plasma` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode, u_tmp2_ode = cache
@@ -387,11 +367,8 @@ function timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
         # included in the `rhs!` call.
         rhs!(du_ode, u_ode, semi_plasma, tau_stage)
 
-        # Source term: Jeans instability OR coupling convergence test OR blast wave
-        # put in plasma source term proportional to Euler density
-        # OBS! subtract off the background density ρ_0 around which the Jeans instability is perturbed
-        # Note: Adding to `du_plasma` is essentially adding to `du_ode`!
-        @views @. du_plasma[1, .., :] += grav_scale * (u_euler[1, .., :] - rho0)
+        # density_i - density_e
+        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[3 + ndims(semi_euler), .., :]- u_euler[1, .., :])
 
         delta_stage = delta[stage]
         gamma1_stage = gamma1[stage]
