@@ -28,7 +28,7 @@ solver_gravity = DGSEM(polydeg, flux_lax_friedrichs)
 
 semi_gravity = SemidiscretizationHyperbolic(mesh, equations_gravity, initial_condition,
                                             solver_gravity,
-                                            source_terms = source_terms_harmonic)
+                                            source_terms = source_terms_harmonic) #TODO: Add Dirichlet boundary condition -> https://trixi-framework.github.io/Trixi.jl/stable/tutorials/parabolic_terms/
 
 ###############################################################################
 # combining both semidiscretizations for Euler + self-gravity
