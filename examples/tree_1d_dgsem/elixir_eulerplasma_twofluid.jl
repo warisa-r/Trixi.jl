@@ -23,15 +23,20 @@ semi_euler = SemidiscretizationHyperbolic(mesh, equations_euler, initial_conditi
 
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
-
-#TODO: Set homogeneous Dirichlet condition -> Find out how?
 equations_plasma = HyperbolicDiffusionEquations1D()
 solver_plasma = DGSEM(polydeg, flux_lax_friedrichs)
 
-semi_gravity = SemidiscretizationHyperbolic(mesh, equations_gravity, initial_condition,
-                                            solver_gravity,
-                                            source_terms = source_terms_harmonic)
+#TODO: Recheck if these are correct
+boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0))
 
+boundary_conditions_diffusion = (;
+                                  x_neg = boundary_condition_zero_dirichlet,
+                                  x_pos = boundary_condition_zero_dirichlet)
+
+semi_plasma = SemidiscretizationHyperbolic(mesh, equations_gravity, initial_condition,
+                                            solver_gravity,
+                                            source_terms = source_terms_harmonic,
+                                            boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = ParametersEulerplasma()
