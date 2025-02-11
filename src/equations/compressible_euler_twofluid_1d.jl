@@ -124,14 +124,13 @@ end
 
 #TODO: This maximize readability but actually has a lot of redundant line -> Come back and recheck if everything is correct and/or
 # should be shortened
-@inline function initial_condition_periodic_perturbation(u, x, t,
-    equations::CompressibleEulerTwoFluidsEquations1D)
+@inline function initial_condition_perturbation_test_coupled_euler_electric(x, t, equations::CompressibleEulerTwoFluidsEquations1D)
 
-    @unpack gammas, inv_gamma_minus_one, epsilon = equations
+    @unpack gammas, inv_gammas_minus_one, epsilon = equations
     RealT = eltype(x)
     cons = zero(MVector{nvariables(equations), RealT})
 
-    delta = 1e-2
+    delta = convert(RealT, 1e-2)
     c_electron = 1
     c_ion = 1
     delta_cosine_wave = delta * cos(convert(RealT, pi) * x[1])
@@ -146,14 +145,13 @@ end
     # Pressure are assumed isoentropic
     p_electron = c_electron * rho ^ gammas[1]
     p_ion = c_ion * rho ^ gammas[2]
-    set_component!(cons, k, rho, rho_v1, rho_e, equations)
 
     # Calculate internal energy from pressure. Is this correct?
-    rho_e_electron = p_electron * inv_gamma_minus_one[1] + 0.5f0 * (rho_v1_electron * v1_electron * epsilon)
-    rho_e_ion = p_ion * inv_gamma_minus_one[2] + 0.5f0 * (rho_v1_ion * v1_ion)
+    rho_e_electron = p_electron * inv_gammas_minus_one[1] + 0.5f0 * (rho_v1_electron * v1_electron * epsilon)
+    rho_e_ion = p_ion * inv_gammas_minus_one[2] + 0.5f0 * (rho_v1_ion * v1_ion)
 
-    set_component!(u, 1, rho, rho_v1_electron, rho_e_electron, equations)
-    set_component!(u, 2, rho, rho_v1_ion, rho_e_ion, equations)
+    set_component!(cons, 1, rho, rho_v1_electron, rho_e_electron, equations)
+    set_component!(cons, 2, rho, rho_v1_ion, rho_e_ion, equations)
 
     return SVector(cons)
 end
