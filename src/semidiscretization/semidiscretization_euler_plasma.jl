@@ -6,23 +6,24 @@
 #! format: noindent
 
 struct ParametersEulerPlasma{RealT <: Real, TimestepPlasma}
-    scaled_debye_length    :: RealT # aka λ_D / L
-    epsilon                :: RealT
-    cfl                    :: RealT # CFL number for the electric potential solver
-    resid_tol              :: RealT # Hyp.-Diff. Eq. steady state tolerance
-    n_iterations_max       :: Int   # Max. number of iterations of the pseudo-time electric potential solver
+    scaled_debye_length :: RealT # aka λ_D / L
+    epsilon             :: RealT
+    cfl                 :: RealT # CFL number for the electric potential solver
+    resid_tol           :: RealT # Hyp.-Diff. Eq. steady state tolerance
+    n_iterations_max    :: Int   # Max. number of iterations of the pseudo-time electric potential solver
     timestep_plasma     :: TimestepPlasma
 end
 
 function ParametersEulerPlasma(; scaled_debye_length = 1e-4,
-                                epsilon = 1e-4,
-                                cfl = 1.0,
-                                resid_tol = 1.0e-4,
-                                n_iterations_max = 10^4,
-                                timestep_plasma = timestep_plasma_erk52_3Sstar!)
-    scaled_debye_length, cfl, resid_tol = promote(scaled_debye_length, epsilon, cfl, resid_tol)
+                               epsilon = 1e-4,
+                               cfl = 1.0,
+                               resid_tol = 1.0e-4,
+                               n_iterations_max = 10^4,
+                               timestep_plasma = timestep_plasma_erk52_3Sstar!)
+    scaled_debye_length, cfl, resid_tol = promote(scaled_debye_length, epsilon, cfl,
+                                                  resid_tol)
     ParametersEulerPlasma(scaled_debye_length, epsilon, cfl, resid_tol,
-                           n_iterations_max, timestep_plasma)
+                          n_iterations_max, timestep_plasma)
 end
 
 function Base.show(io::IO, parameters::ParametersEulerPlasma)
@@ -65,25 +66,25 @@ the hyperbolic diffusion equations.
   [arXiv: 2008.10593](https://arXiv.org/abs/2008.10593)
 """
 struct SemidiscretizationEulerPlasma{SemiEuler, SemiPlasma,
-                                      Parameters <: ParametersEulerPlasma, Cache} <:
+                                     Parameters <: ParametersEulerPlasma, Cache} <:
        AbstractSemidiscretization
     semi_euler          :: SemiEuler
-    semi_plasma        :: SemiPlasma
+    semi_plasma         :: SemiPlasma
     parameters          :: Parameters
     performance_counter :: PerformanceCounter
-    plasma_counter     :: PerformanceCounter
+    plasma_counter      :: PerformanceCounter
     cache               :: Cache
 
     function SemidiscretizationEulerPlasma{SemiEuler, SemiPlasma, Parameters, Cache}(semi_euler::SemiEuler,
-                                                                                       semi_plasma::SemiPlasma,
-                                                                                       parameters::Parameters,
-                                                                                       cache::Cache) where {
-                                                                                                            SemiEuler,
-                                                                                                            SemiPlasma,
-                                                                                                            Parameters <:
-                                                                                                            ParametersEulerPlasma,
-                                                                                                            Cache
-                                                                                                            }
+                                                                                     semi_plasma::SemiPlasma,
+                                                                                     parameters::Parameters,
+                                                                                     cache::Cache) where {
+                                                                                                          SemiEuler,
+                                                                                                          SemiPlasma,
+                                                                                                          Parameters <:
+                                                                                                          ParametersEulerPlasma,
+                                                                                                          Cache
+                                                                                                          }
         @assert ndims(semi_euler) == ndims(semi_plasma)
         @assert typeof(semi_euler.mesh) == typeof(semi_plasma.mesh)
         @assert polydeg(semi_euler.solver) == polydeg(semi_plasma.solver)
@@ -103,11 +104,12 @@ Construct a semidiscretization of the compressible Euler equations with electric
 `parameters` should be given as [`ParametersEulerPlasma`](@ref).
 """
 function SemidiscretizationEulerPlasma(semi_euler::SemiEuler,
-                                        semi_plasma::SemiPlasma,
-                                        parameters) where
+                                       semi_plasma::SemiPlasma,
+                                       parameters) where
          {Mesh,
           SemiEuler <:
-          SemidiscretizationHyperbolic{Mesh, <:AbstractCompressibleEulerTwoFluidsEquations},
+          SemidiscretizationHyperbolic{Mesh,
+                                       <:AbstractCompressibleEulerTwoFluidsEquations},
           SemiPlasma <:
           SemidiscretizationHyperbolic{Mesh, <:AbstractHyperbolicDiffusionEquations}}
     u_ode = compute_coefficients(zero(real(semi_plasma)), semi_plasma)
@@ -118,9 +120,9 @@ function SemidiscretizationEulerPlasma(semi_euler::SemiEuler,
     cache = (; u_ode, du_ode, u_tmp1_ode, u_tmp2_ode)
 
     SemidiscretizationEulerPlasma{typeof(semi_euler), typeof(semi_plasma),
-                                   typeof(parameters), typeof(cache)}(semi_euler,
-                                                                      semi_plasma,
-                                                                      parameters, cache)
+                                  typeof(parameters), typeof(cache)}(semi_euler,
+                                                                     semi_plasma,
+                                                                     parameters, cache)
 end
 
 function remake(semi::SemidiscretizationEulerPlasma;
@@ -139,9 +141,9 @@ function remake(semi::SemidiscretizationEulerPlasma;
     cache = (; u_ode, du_ode, u_tmp1_ode, u_tmp2_ode)
 
     SemidiscretizationEulerPlasma{typeof(semi_euler), typeof(semi_plasma),
-                                   typeof(parameters), typeof(cache)}(semi_euler,
-                                                                      semi_plasma,
-                                                                      parameters, cache)
+                                  typeof(parameters), typeof(cache)}(semi_euler,
+                                                                     semi_plasma,
+                                                                     parameters, cache)
 end
 
 function Base.show(io::IO, semi::SemidiscretizationEulerPlasma)
@@ -223,14 +225,16 @@ function rhs!(du_ode, u_ode, semi::SemidiscretizationEulerPlasma, t)
 
     # compute electric potential and forces
     @trixi_timeit timer() "Plasma solver" update_plasma!(semi, u_ode)
-    
+
     #TODO: extend to 2D and 3D -> Can this be done without if else?
     # add electric potential source source_terms to the Euler part
     if ndims(semi_euler) == 1
-        @views @. du_euler[2, .., :] += u_euler[1, .., :] * u_plasma[2, .., :] / parameters.epsilon # electron
-        @views @. du_euler[3, .., :] += u_euler[2, .., :] * u_euler[2, .., :] * u_plasma[2, .., :]
+        @views @. du_euler[2, .., :] += u_euler[1, .., :] * u_plasma[2, .., :] /
+                                        parameters.epsilon # electron
+        @views @. du_euler[3, .., :] += u_euler[2, .., :] * u_euler[2, .., :] *
+                                        u_plasma[2, .., :]
         @views @. du_euler[5, .., :] -= u_euler[4, .., :] * u_plasma[2, .., :] # ion
-        @views @. du_euler[6, .., :] -= u_euler[5, .., :] *  u_plasma[2, .., :]
+        @views @. du_euler[6, .., :] -= u_euler[5, .., :] * u_plasma[2, .., :]
     else
         error("Number of dimensions $(ndims(semi_euler)) not supported.")
     end
@@ -277,9 +281,9 @@ function update_plasma!(semi::SemidiscretizationEulerPlasma, u_ode)
         # check if we reached the maximum number of iterations
         if n_iterations_max > 0 && iter >= n_iterations_max
             @warn "Max iterations reached: Plasma solver failed to converge!" residual=maximum(abs,
-                                                                                                @views du_plasma[1,
-                                                                                                                  ..,
-                                                                                                                  :]) tau=tau dtau=dtau
+                                                                                               @views du_plasma[1,
+                                                                                                                ..,
+                                                                                                                :]) tau=tau dtau=dtau
             finalstep = true
         end
 
@@ -294,9 +298,10 @@ end
 
 # Integrate plasma solver for 2N-type low-storage schemes
 function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
-                              semi_plasma,
-                              a, b, c)
-    electric_scale = 1 / (parameters.scaled_debye_length * parameters.scaled_debye_length)
+                             semi_plasma,
+                             a, b, c)
+    electric_scale = 1 /
+                     (parameters.scaled_debye_length * parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_plasma` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode = cache
@@ -312,7 +317,8 @@ function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
 
         # TODO: Find a way to pass dimensions of semi_euler so that we can replace 4 with 3 + ndims(semi_euler)
         # density_i - density_e
-        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[4, .., :]- u_euler[1, .., :])
+        @views @. du_plasma[1, .., :] += electric_scale *
+                                         (u_euler[4, .., :] - u_euler[1, .., :])
 
         a_stage = a[stage]
         b_stage_dtau = b[stage] * dtau
@@ -328,7 +334,7 @@ function timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters,
 end
 
 function timestep_plasma_carpenter_kennedy_erk54_2N!(cache, u_euler, tau, dtau,
-                                                      plasma_parameters, semi_plasma)
+                                                     plasma_parameters, semi_plasma)
     # Coefficients for Carpenter's 5-stage 4th-order low-storage Runge-Kutta method
     a = SVector(0.0,
                 567301805773.0 / 1357537059087.0,
@@ -347,14 +353,15 @@ function timestep_plasma_carpenter_kennedy_erk54_2N!(cache, u_euler, tau, dtau,
                 2802321613138.0 / 2924317926251.0)
 
     timestep_plasma_2N!(cache, u_euler, tau, dtau, plasma_parameters, semi_plasma,
-                         a, b, c)
+                        a, b, c)
 end
 
 # Integrate plasma solver for 3S*-type low-storage schemes
 function timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                                  semi_plasma,
-                                  gamma1, gamma2, gamma3, beta, delta, c)
-    electric_scale = 1 / (parameters.scaled_debye_length * parameters.scaled_debye_length)
+                                 semi_plasma,
+                                 gamma1, gamma2, gamma3, beta, delta, c)
+    electric_scale = 1 /
+                     (parameters.scaled_debye_length * parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_plasma` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode, u_tmp2_ode = cache
@@ -370,7 +377,8 @@ function timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
         rhs!(du_ode, u_ode, semi_plasma, tau_stage)
 
         # density_i - density_e
-        @views @. du_plasma[1, .., :] += electric_scale * (u_euler[4, .., :]- u_euler[1, .., :])
+        @views @. du_plasma[1, .., :] += electric_scale *
+                                         (u_euler[4, .., :] - u_euler[1, .., :])
 
         delta_stage = delta[stage]
         gamma1_stage = gamma1[stage]
@@ -394,7 +402,7 @@ end
 
 # First-order, 5-stage, 3S*-storage optimized method
 function timestep_plasma_erk51_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                                        semi_plasma)
+                                       semi_plasma)
     # New 3Sstar coefficients optimized for polynomials of degree polydeg=3
     # and examples/parameters_hypdiff_lax_friedrichs.toml
     # 5 stages, order 1
@@ -417,13 +425,13 @@ function timestep_plasma_erk51_3Sstar!(cache, u_euler, tau, dtau, plasma_paramet
                 2.4241635859769023E-01, 5.0728347557552977E-01)
 
     timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                             semi_plasma,
-                             gamma1, gamma2, gamma3, beta, delta, c)
+                            semi_plasma,
+                            gamma1, gamma2, gamma3, beta, delta, c)
 end
 
 # Second-order, 5-stage, 3S*-storage optimized method
 function timestep_plasma_erk52_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                                        semi_plasma)
+                                       semi_plasma)
     # New 3Sstar coefficients optimized for polynomials of degree polydeg=3
     # and examples/parameters_hypdiff_lax_friedrichs.toml
     # 5 stages, order 2
@@ -446,13 +454,13 @@ function timestep_plasma_erk52_3Sstar!(cache, u_euler, tau, dtau, plasma_paramet
                 1.4280257701954349E+00, 7.1581334196229851E-01)
 
     timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                             semi_plasma,
-                             gamma1, gamma2, gamma3, beta, delta, c)
+                            semi_plasma,
+                            gamma1, gamma2, gamma3, beta, delta, c)
 end
 
 # Third-order, 5-stage, 3S*-storage optimized method
 function timestep_plasma_erk53_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                                        semi_plasma)
+                                       semi_plasma)
     # New 3Sstar coefficients optimized for polynomials of degree polydeg=3
     # and examples/parameters_hypdiff_lax_friedrichs.toml
     # 5 stages, order 3
@@ -475,8 +483,8 @@ function timestep_plasma_erk53_3Sstar!(cache, u_euler, tau, dtau, plasma_paramet
                 5.7093842145029405E-01, 7.2999896418559662E-01)
 
     timestep_plasma_3Sstar!(cache, u_euler, tau, dtau, plasma_parameters,
-                             semi_plasma,
-                             gamma1, gamma2, gamma3, beta, delta, c)
+                            semi_plasma,
+                            gamma1, gamma2, gamma3, beta, delta, c)
 end
 
 # TODO: Taal decide, where should specific parts like these be?
@@ -503,9 +511,9 @@ end
 
     u_plasma = wrap_array_native(semi.cache.u_ode, semi.semi_plasma)
     filename_plasma = save_solution_file(u_plasma, t, dt, iter,
-                                          mesh_equations_solver_cache(semi.semi_plasma)...,
-                                          solution_callback, element_variables,
-                                          system = system_plasma)
+                                         mesh_equations_solver_cache(semi.semi_plasma)...,
+                                         solution_callback, element_variables,
+                                         system = system_plasma)
 
     return filename_euler, filename_plasma
 end

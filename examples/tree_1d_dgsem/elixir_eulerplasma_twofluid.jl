@@ -3,7 +3,7 @@ using Trixi
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
-equations_euler = Trixi.CompressibleEulerTwoFluidsEquations1D(gammas = (5/3, 5/3),
+equations_euler = Trixi.CompressibleEulerTwoFluidsEquations1D(gammas = (5 / 3, 5 / 3),
                                                               epsilon = 1e-4)
 
 initial_condition = Trixi.initial_condition_perturbation_test_coupled_euler_electric #TODO: Check if this works
@@ -29,8 +29,8 @@ solver_plasma = DGSEM(polydeg, flux_lax_friedrichs)
 boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0))
 
 boundary_conditions_diffusion = (;
-                                  x_neg = boundary_condition_zero_dirichlet,
-                                  x_pos = boundary_condition_zero_dirichlet)
+                                 x_neg = boundary_condition_zero_dirichlet,
+                                 x_pos = boundary_condition_zero_dirichlet)
 
 semi_plasma = SemidiscretizationHyperbolic(mesh, equations_plasma, initial_condition,
                                            solver_plasma,
@@ -38,23 +38,23 @@ semi_plasma = SemidiscretizationHyperbolic(mesh, equations_plasma, initial_condi
                                            boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
-parameters = Trixi.ParametersEulerPlasma( scaled_debye_length = 1e-4,
-                                    epsilon = 1e-4,
-                                    cfl = 1.0,
-                                    resid_tol = 1.0e-4,
-                                    n_iterations_max = 10^4,
-                                    timestep_plasma = Trixi.timestep_plasma_erk52_3Sstar!)
+parameters = Trixi.ParametersEulerPlasma(scaled_debye_length = 1e-4,
+                                         epsilon = 1e-4,
+                                         cfl = 1.0,
+                                         resid_tol = 1.0e-4,
+                                         n_iterations_max = 10^4,
+                                         timestep_plasma = Trixi.timestep_plasma_erk52_3Sstar!)
 
 semi = Trixi.SemidiscretizationEulerPlasma(semi_euler, semi_plasma, parameters)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
 tspan = (0.0, 0.1)
-ode = semidiscretize(semi_euler, tspan) # Temporarily using semi_euler to check for coding mistakes
+ode = semidiscretize(semi_euler, tspan)
 
 summary_callback = SummaryCallback()
 
-analysis_interval = 1
+analysis_interval = 10
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 analysis_callback = AnalysisCallback(semi_euler, interval = analysis_interval)
@@ -68,7 +68,7 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = false,
                                      solution_variables = cons2prim)
 
-stepsize_callback = StepsizeCallback(cfl = 0.01)
+stepsize_callback = StepsizeCallback(cfl = 0.5)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
