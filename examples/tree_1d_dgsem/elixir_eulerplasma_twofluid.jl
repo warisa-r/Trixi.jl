@@ -4,9 +4,9 @@ using Trixi
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 equations_euler = Trixi.CompressibleEulerTwoFluidsEquations1D(gammas = (5/3, 5/3),
-                                                       epsilon = 1e-4)
+                                                              epsilon = 1e-4)
 
-initial_condition = initial_condition_periodic_perturbation #TODO: Check if this works
+initial_condition = Trixi.initial_condition_periodic_perturbation #TODO: Check if this works
 polydeg = 3
 
 solver = DGSEM(polydeg = polydeg, surface_flux = flux_hll,
@@ -19,7 +19,7 @@ mesh = TreeMesh(coordinates_min, coordinates_max,
                 n_cells_max = 30_000)
 
 semi_euler = SemidiscretizationHyperbolic(mesh, equations_euler, initial_condition, solver,
-                                    boundary_conditions = boundary_condition_periodic)
+                                          boundary_conditions = boundary_condition_periodic)
 
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
@@ -33,15 +33,20 @@ boundary_conditions_diffusion = (;
                                   x_neg = boundary_condition_zero_dirichlet,
                                   x_pos = boundary_condition_zero_dirichlet)
 
-semi_plasma = SemidiscretizationHyperbolic(mesh, equations_gravity, initial_condition,
-                                            solver_gravity,
-                                            source_terms = source_terms_harmonic,
-                                            boundary_conditions = boundary_conditions_diffusion)
+semi_plasma = SemidiscretizationHyperbolic(mesh, equations_plasma, #TODO: We need initial condition for this too
+                                           solver_plasma,
+                                           source_terms = source_terms_harmonic,
+                                           boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
-parameters = ParametersEulerplasma()
+parameters = Trixi.ParametersEulerPlasma( scaled_debye_length = 1e-4,
+                                    epsilon = 1e-4,
+                                    cfl = 1.0,
+                                    resid_tol = 1.0e-4,
+                                    n_iterations_max = 10^4,
+                                    timestep_plasma = Trixi.timestep_plasma_erk52_3Sstar!)
 
-semi = SemidiscretizationEulerplasma(semi_euler, semi_plasma, parameters)
+semi = Trixi.SemidiscretizationEulerPlasma(semi_euler, semi_plasma, parameters)
 
 ###############################################################################
 # ODE solvers, callbacks etc.

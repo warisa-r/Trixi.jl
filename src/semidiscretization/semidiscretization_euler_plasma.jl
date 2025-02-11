@@ -43,7 +43,8 @@ function Base.show(io::IO, ::MIME"text/plain", parameters::ParametersEulerPlasma
         show(io, parameters)
     else
         setup = [
-            "background density (λ)" => parameters.scaled_debye_length,
+            "scaled_debye_length (λ)" => parameters.scaled_debye_length,
+            "epsilon" => parameters.epsilon,
             "CFL (electric potential)" => parameters.cfl,
             "max. #iterations" => parameters.n_iterations_max,
             "time integrator" => parameters.timestep_plasma
@@ -106,7 +107,7 @@ function SemidiscretizationEulerPlasma(semi_euler::SemiEuler,
                                         parameters) where
          {Mesh,
           SemiEuler <:
-          SemidiscretizationHyperbolic{Mesh, <:AbstractCompressibleEulerEquations},
+          SemidiscretizationHyperbolic{Mesh, <:AbstractCompressibleEulerTwoFluidsEquations},
           SemiPlasma <:
           SemidiscretizationHyperbolic{Mesh, <:AbstractHyperbolicDiffusionEquations}}
     u_ode = compute_coefficients(zero(real(semi_plasma)), semi_plasma)
