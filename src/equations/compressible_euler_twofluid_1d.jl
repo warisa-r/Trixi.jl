@@ -133,7 +133,7 @@ end
     delta = convert(RealT, 1e-2)
     c_electron = 1
     c_ion = 1
-    delta_cosine_wave = delta * cos(convert(RealT, pi) * x[1])
+    delta_cosine_wave = delta * cos(2 * convert(RealT, pi) * x[1])
 
     rho = 1
     rho_v1_electron = delta_cosine_wave

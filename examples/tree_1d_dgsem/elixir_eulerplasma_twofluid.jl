@@ -55,6 +55,8 @@ ode = semidiscretize(semi_euler, tspan) # Temporarily using semi_euler to check 
 summary_callback = SummaryCallback()
 
 analysis_interval = 1
+
+alive_callback = AliveCallback(analysis_interval = analysis_interval)
 analysis_callback = AnalysisCallback(semi_euler, interval = analysis_interval)
 
 analysis_callback = AnalysisCallback(semi,
