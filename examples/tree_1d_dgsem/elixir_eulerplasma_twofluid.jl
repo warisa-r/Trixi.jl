@@ -14,11 +14,11 @@ solver = DGSEM(polydeg = polydeg, surface_flux = flux_hll,
 
 coordinates_min = 0.0
 coordinates_max = 1.0
-mesh = TreeMesh(coordinates_min, coordinates_max,
+mesh_euler = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level = 5,
                 n_cells_max = 30_000)
 
-semi_euler = SemidiscretizationHyperbolic(mesh, equations_euler, initial_condition, solver)
+semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_condition, solver)
 
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
@@ -32,7 +32,11 @@ boundary_conditions_diffusion = (;
                                  x_neg = boundary_condition_zero_dirichlet,
                                  x_pos = boundary_condition_zero_dirichlet)
 
-semi_plasma = SemidiscretizationHyperbolic(mesh, equations_plasma, initial_condition,
+mesh_plasma = TreeMesh(coordinates_min, coordinates_max,
+                        initial_refinement_level = 5,
+                         n_cells_max = 30_000, periodicity = false)
+
+semi_plasma = SemidiscretizationHyperbolic(mesh_plasma, equations_plasma, initial_condition,
                                            solver_plasma,
                                            source_terms = source_terms_harmonic,
                                            boundary_conditions = boundary_conditions_diffusion)
