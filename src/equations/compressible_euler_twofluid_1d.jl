@@ -136,10 +136,10 @@ end
     delta_cosine_wave = delta * cos(2 * convert(RealT, pi) * x[1])
 
     rho = 1
-    rho_v1_electron = delta_cosine_wave
+    rho_v1_electron = 1 + delta_cosine_wave
     v1_electron = rho_v1_electron / rho
 
-    rho_v1_ion = 1 + delta_cosine_wave
+    rho_v1_ion = delta_cosine_wave 
     v1_ion = rho_v1_ion / rho
 
     # Pressure are assumed isoentropic
