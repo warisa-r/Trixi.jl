@@ -9,8 +9,8 @@ equations_euler = Trixi.CompressibleEulerElectronIonsEquations1D(gammas = (5 / 3
 initial_condition = Trixi.initial_condition_perturbation_test_coupled_euler_electric #TODO: Check if this works
 polydeg = 4
 
-solver = DGSEM(polydeg = polydeg, surface_flux = flux_hll,
-               volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_hll))
+solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
+               volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_lax_friedrichs))
 
 coordinates_min = 0.0
 coordinates_max = 1.0
@@ -23,7 +23,7 @@ semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_c
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
 equations_electric = HyperbolicDiffusionEquations1D()
-solver_electric = DGSEM(polydeg, flux_hll)
+solver_electric = DGSEM(polydeg, flux_lax_friedrichs)
 
 #TODO: Recheck if these are correct
 boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0))
@@ -38,7 +38,6 @@ mesh_electric = TreeMesh(coordinates_min, coordinates_max,
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
                                            solver_electric,
-                                           source_terms = source_terms_harmonic,
                                            boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
@@ -53,7 +52,7 @@ semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, paramete
 
 ###############################################################################
 # ODE solvers, callbacks etc.
-tspan = (0.0, 0.1)
+tspan = (0.0, 0.05)
 ode = semidiscretize(semi_euler, tspan)
 
 summary_callback = SummaryCallback()
