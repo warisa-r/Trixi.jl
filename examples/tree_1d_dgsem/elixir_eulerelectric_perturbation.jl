@@ -37,7 +37,7 @@ mesh_electric = TreeMesh(coordinates_min, coordinates_max,
                          n_cells_max = 30_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
-                                           solver_electric,
+                                           solver_electric, source_terms = source_terms_harmonic,
                                            boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
