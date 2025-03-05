@@ -37,8 +37,7 @@ mesh_electric = TreeMesh(coordinates_min, coordinates_max,
                          n_cells_max = 30_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
-                                           solver_electric, source_terms = source_terms_harmonic,
-                                           boundary_conditions = boundary_conditions_diffusion)
+                                           solver_electric, source_terms = source_terms_harmonic)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
@@ -53,7 +52,7 @@ semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, paramete
 ###############################################################################
 # ODE solvers, callbacks etc.
 tspan = (0.0, 0.05)
-ode = semidiscretize(semi_euler, tspan)
+ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
 
