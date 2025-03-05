@@ -1,49 +1,55 @@
 using OrdinaryDiffEq
 using Trixi
+#### DRAFT!! ####
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
 equations_euler = Trixi.CompressibleEulerElectronIonsEquations1D(gammas = (5 / 3, 5 / 3),
                                                               epsilon = 1e-4)
 
-initial_condition = Trixi.initial_condition_perturbation_test_coupled_euler_electric #TODO: Check if this works
-polydeg = 4
+
+initial_condition = Trixi.initial_condition_plasma
+
+polydeg = 6
 
 solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
                volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_lax_friedrichs))
 
 coordinates_min = 0.0
 coordinates_max = 1.0
-mesh_euler = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 14,
-                n_cells_max = 300_000)
 
-semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_condition, solver)
+boundary_conditions_euler = (x_neg = Trixi.boundary_condition_injection, x_pos = nothing)
+
+mesh_euler = TreeMesh(coordinates_min, coordinates_max,
+                initial_refinement_level = 11,
+                n_cells_max = 30_000, periodicity = false)
+
+semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_condition, solver, 
+                                          boundary_conditions = boundary_conditions_euler)
 
 ###############################################################################
 # semidiscretization of the hyperbolic diffusion equations
 equations_electric = HyperbolicDiffusionEquations1D()
 solver_electric = DGSEM(polydeg, flux_lax_friedrichs)
 
-#TODO: Recheck if these are correct
-boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0, 0.0))
+boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0))
 
 boundary_conditions_diffusion = (;
                                  x_neg = boundary_condition_zero_dirichlet,
-                                 x_pos = boundary_condition_zero_dirichlet)
+                                 x_pos = BoundaryConditionDirichlet((x, t, equations) -> SVector(100.0)))
 
 mesh_electric = TreeMesh(coordinates_min, coordinates_max,
-                        initial_refinement_level = 14,
-                         n_cells_max = 300_000, periodicity = false)
+                        initial_refinement_level = 6,
+                         n_cells_max = 30_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
-                                           solver_electric, source_terms = source_terms_harmonic, 
+                                           solver_electric, source_terms = source_terms_harmonic,
                                            boundary_conditions = boundary_conditions_diffusion)
 ###############################################################################
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
                                          epsilon = 1e-4,
-                                         cfl = 0.01,
+                                         cfl = 0.0000005,
                                          resid_tol = 1.0e-7,
                                          n_iterations_max = 10^4,
                                          timestep_electric = Trixi.timestep_electric_erk52_3Sstar!)
@@ -52,7 +58,7 @@ semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, paramete
 
 ###############################################################################
 # ODE solvers, callbacks etc.
-tspan = (0.0, 0.05)
+tspan = (0.0, 0.09)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -71,7 +77,7 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = false,
                                      solution_variables = cons2prim)
 
-stepsize_callback = StepsizeCallback(cfl = 0.1)
+stepsize_callback = StepsizeCallback(cfl = 0.0000005)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,

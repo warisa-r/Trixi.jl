@@ -156,6 +156,39 @@ end
     return SVector(cons)
 end
 
+#### DRAFT!! ####
+function initial_condition_plasma(x, t, equations::CompressibleEulerElectronIonsEquations1D)
+    return SVector(0, 0, 0, 0, 0, 0) # vacuum
+end
+
+#### DRAFT!! ####
+@inline function boundary_condition_injection(u_inner, orientations, direction, x, t,
+    surface_flux, equations::CompressibleEulerElectronIonsEquations1D)
+    @unpack gammas, inv_gammas_minus_one, epsilon = equations
+    RealT = eltype(x)
+    cons = zero(MVector{nvariables(equations), RealT})
+
+    rho = 1
+    v1 = 1
+    v1_electron = v1_ion = v1
+    rho_v1_electron = rho_v1_ion = rho * v1
+    c_electron = 1
+    c_ion = 1
+
+    # Pressure are assumed isoentropic
+    p_electron = c_electron * rho^gammas[1]
+    p_ion = c_ion * rho^gammas[2]
+
+    # Calculate internal energy from pressure. Is this correct?
+    rho_e_electron = p_electron * inv_gammas_minus_one[1] +
+                     0.5f0 * (rho_v1_electron * v1_electron * epsilon)
+    rho_e_ion = p_ion * inv_gammas_minus_one[2] + 0.5f0 * (rho_v1_ion * v1_ion)
+
+    set_component!(cons, 1, rho, rho_v1_electron, rho_e_electron, equations)
+    set_component!(cons, 2, rho, rho_v1_ion, rho_e_ion, equations)
+    return SVector(cons)
+end
+
 """
     source_terms_convergence_test(u, x, t, equations::CompressibleEulerElectronIonsEquations1D)
 
