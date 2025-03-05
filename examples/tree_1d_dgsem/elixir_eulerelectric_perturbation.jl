@@ -15,8 +15,8 @@ solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
 coordinates_min = 0.0
 coordinates_max = 1.0
 mesh_euler = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 6,
-                n_cells_max = 30_000)
+                initial_refinement_level = 14,
+                n_cells_max = 300_000)
 
 semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_condition, solver)
 
@@ -33,8 +33,8 @@ boundary_conditions_diffusion = (;
                                  x_pos = boundary_condition_zero_dirichlet)
 
 mesh_electric = TreeMesh(coordinates_min, coordinates_max,
-                        initial_refinement_level = 6,
-                         n_cells_max = 30_000, periodicity = false)
+                        initial_refinement_level = 14,
+                         n_cells_max = 300_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
                                            solver_electric, source_terms = source_terms_harmonic, 
@@ -43,7 +43,7 @@ semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, 
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
                                          epsilon = 1e-4,
-                                         cfl = 0.0001,
+                                         cfl = 0.001,
                                          resid_tol = 1.0e-7,
                                          n_iterations_max = 10^4,
                                          timestep_electric = Trixi.timestep_electric_erk52_3Sstar!)
@@ -71,7 +71,7 @@ save_solution = SaveSolutionCallback(interval = 100,
                                      save_final_solution = false,
                                      solution_variables = cons2prim)
 
-stepsize_callback = StepsizeCallback(cfl = 0.0005)
+stepsize_callback = StepsizeCallback(cfl = 0.01)
 
 callbacks = CallbackSet(summary_callback,
                         analysis_callback, alive_callback,
