@@ -301,7 +301,7 @@ function timestep_electric_2N!(cache, u_euler, tau, dtau, electric_parameters,
                              semi_electric,
                              a, b, c)
     electric_scale = 1 /
-                     (parameters.scaled_debye_length * parameters.scaled_debye_length)
+                     (electric_parameters.scaled_debye_length * electric_parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_electric` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode = cache
@@ -360,7 +360,7 @@ function timestep_electric_3Sstar!(cache, u_euler, tau, dtau, electric_parameter
                                  semi_electric,
                                  gamma1, gamma2, gamma3, beta, delta, c)
     electric_scale = 1 /
-                     (parameters.scaled_debye_length * parameters.scaled_debye_length)
+                     (electric_parameters.scaled_debye_length * electric_parameters.scaled_debye_length)
 
     # Note that `u_ode` is `u_electric` in `rhs!` above
     @unpack u_ode, du_ode, u_tmp1_ode, u_tmp2_ode = cache
@@ -374,7 +374,7 @@ function timestep_electric_3Sstar!(cache, u_euler, tau, dtau, electric_parameter
         # We don't need a `@trixi_timeit timer() "rhs!"` here since that's already
         # included in the `rhs!` call.
         rhs!(du_ode, u_ode, semi_electric, tau_stage)
-
+        
         # density_i - density_e
         @views @. du_electric[1, .., :] += electric_scale *
                                          (u_euler[4, .., :] - u_euler[1, .., :])
