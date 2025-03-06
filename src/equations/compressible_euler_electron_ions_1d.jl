@@ -161,9 +161,10 @@ function initial_condition_plasma(x, t, equations::CompressibleEulerElectronIons
     return SVector(0, 0, 0, 0, 0, 0) # vacuum
 end
 
+#### DRAFT!! ####
 @inline function boundary_condition_dummy(u_inner, orientations, direction, x, t,
     surface_flux, equations::CompressibleEulerElectronIonsEquations1D)
-    return u_inner
+    return u_inner # Do nothing here. Since no BC is prescribed.
 end
 
 #### DRAFT!! ####
