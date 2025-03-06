@@ -7,7 +7,7 @@ equations_euler = Trixi.CompressibleEulerElectronIonsEquations1D(gammas = (5 / 3
                                                               epsilon = 1e-4)
 
 initial_condition = Trixi.initial_condition_perturbation_test_coupled_euler_electric #TODO: Check if this works
-polydeg = 4
+polydeg = 6
 
 solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
                volume_integral = VolumeIntegralPureLGLFiniteVolume(flux_lax_friedrichs))
@@ -15,7 +15,7 @@ solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
 coordinates_min = 0.0
 coordinates_max = 1.0
 mesh_euler = TreeMesh(coordinates_min, coordinates_max,
-                initial_refinement_level = 14,
+                initial_refinement_level = 12,
                 n_cells_max = 300_000)
 
 semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_condition, solver)
@@ -33,7 +33,7 @@ boundary_conditions_diffusion = (;
                                  x_pos = boundary_condition_zero_dirichlet)
 
 mesh_electric = TreeMesh(coordinates_min, coordinates_max,
-                        initial_refinement_level = 14,
+                        initial_refinement_level = 12,
                          n_cells_max = 300_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
@@ -44,8 +44,8 @@ semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, 
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
                                          epsilon = 1e-4,
                                          cfl = 0.01,
-                                         resid_tol = 1.0e-7,
-                                         n_iterations_max = 10^4,
+                                         resid_tol = 1.0e-4,
+                                         n_iterations_max = 10^5,
                                          timestep_electric = Trixi.timestep_electric_erk52_3Sstar!)
 
 semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, parameters)
