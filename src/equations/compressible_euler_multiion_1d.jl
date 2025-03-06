@@ -48,15 +48,13 @@ mutable struct CompressibleEulerMultiIonEquations1D{NVARS, NCOMP, RealT <: Real,
         # Precompute inverse gamma - 1
         inv_gammas_minus_one = SVector{NCOMP, RealT}(inv.(gammas .- 1))
 
-        new{NVARS, NCOMP, RealT, ElectronPressure, ElectronTemperature}(gammas,
-                                                                        inv_gammas_minus_one,
-                                                                        charge_to_mass,
-                                                                        gas_constants,
-                                                                        molar_masses,
-                                                                        ion_ion_collision_constants,
-                                                                        ion_electron_collision_constants,
-                                                                        electron_pressure,
-                                                                        electron_temperature)
+        new(gammas, inv_gammas_minus_one, charge_to_mass,
+            gas_constants,
+            molar_masses,
+            ion_ion_collision_constants,
+            ion_electron_collision_constants,
+            electron_pressure,
+            electron_temperature)
     end
 end
 
@@ -133,96 +131,6 @@ function varnames(::typeof(cons2prim), equations::CompressibleEulerMultiIonEquat
                 tuple("rho_" * string(i), "v1_" * string(i), "p_" * string(i))...)
     end
     return prim
-end
-
-"""
-    initial_condition_constant(x, t, equations::CompressibleEulerMultiIonEquations1D)
-
-A constant initial condition to test free-stream preservation.
-"""
-function initial_condition_constant(x, t,
-                                    equations::CompressibleEulerMultiIonEquations1D)
-    cons = zero(MVector{nvariables(equations), eltype(x)})
-
-    rho = 0.1
-    rho_v1 = 1
-    rho_e = 10
-
-    for k in eachcomponent(equations)
-        set_component!(cons, k, rho, rho_v1, rho_e, equations)
-    end
-
-    return SVector(cons)
-end
-
-"""
-    initial_condition_convergence_test(x, t, equations::CompressibleEulerMultiIonEquations1D)
-
-A smooth initial condition used for convergence tests in combination with
-[`source_terms_convergence_test`](@ref)
-(and [`BoundaryConditionDirichlet(initial_condition_convergence_test)`](@ref) in non-periodic domains).
-"""
-function initial_condition_convergence_test(x, t,
-                                            equations::CompressibleEulerMultiIonEquations1D)
-    RealT = eltype(x)
-    cons = zero(MVector{nvariables(equations), RealT})
-
-    c = 2
-    A = convert(RealT, 0.1)
-    L = 2
-    f = 1.0f0 / L
-    ω = 2 * convert(RealT, pi) * f
-    ini = c + A * sin(ω * (x[1] - t))
-
-    rho = ini
-    rho_v1 = ini
-    rho_e = ini^2
-
-    for k in eachcomponent(equations)
-        set_component!(cons, k, rho, rho_v1, rho_e, equations)
-    end
-
-    return SVector(cons)
-end
-
-"""
-    source_terms_convergence_test(u, x, t, equations::CompressibleEulerMultiIonEquations1D)
-
-Source terms used for convergence tests in combination with
-[`initial_condition_convergence_test`](@ref)
-(and [`BoundaryConditionDirichlet(initial_condition_convergence_test)`](@ref) in non-periodic domains).
-"""
-@inline function source_terms_convergence_test(u, x, t,
-                                               equations::CompressibleEulerMultiIonEquations1D)
-    # Same settings as in `initial_condition`
-    RealT = eltype(u)
-    cons = zero(MVector{nvariables(equations), RealT})
-
-    c = 2
-    A = convert(RealT, 0.1)
-    L = 2
-    f = 1.0f0 / L
-    ω = 2 * convert(RealT, pi) * f
-
-    x1, = x
-
-    si, co = sincos(ω * (x1 - t))
-
-    for k in eachcomponent(equations)
-        gamma = equations.gammas[k]
-        rho = c + A * si
-        rho_x = ω * A * co
-
-        # Note that d/dt rho = -d/dx rho.
-        # This yields du2 = du3 = d/dx p (derivative of pressure).
-        # Other terms vanish because of v = 1.
-        du1 = 0
-        du2 = rho_x * (2 * rho - 0.5f0) * (gamma - 1)
-        du3 = du2
-        set_component!(cons, k, du1, du2, du3, equations)
-    end
-
-    return SVector(cons)
 end
 
 @doc raw"""
