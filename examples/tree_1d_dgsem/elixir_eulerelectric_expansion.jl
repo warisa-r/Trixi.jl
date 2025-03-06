@@ -18,7 +18,10 @@ solver = DGSEM(polydeg = polydeg, surface_flux = flux_lax_friedrichs,
 coordinates_min = 0.0
 coordinates_max = 1.0
 
-boundary_conditions_euler = (x_neg = Trixi.boundary_condition_injection, x_pos = nothing)
+
+
+boundary_conditions_euler = (;x_neg = Trixi.boundary_condition_injection,
+                              x_pos = Trixi.boundary_condition_dummy)
 
 mesh_euler = TreeMesh(coordinates_min, coordinates_max,
                 initial_refinement_level = 11,
@@ -32,14 +35,14 @@ semi_euler = SemidiscretizationHyperbolic(mesh_euler, equations_euler, initial_c
 equations_electric = HyperbolicDiffusionEquations1D()
 solver_electric = DGSEM(polydeg, flux_lax_friedrichs)
 
-boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0))
+boundary_condition_zero_dirichlet = BoundaryConditionDirichlet((x, t, equations) -> SVector(0.0, 0.0))
 
 boundary_conditions_diffusion = (;
                                  x_neg = boundary_condition_zero_dirichlet,
-                                 x_pos = BoundaryConditionDirichlet((x, t, equations) -> SVector(100.0)))
+                                 x_pos = BoundaryConditionDirichlet((x, t, equations) -> SVector(100.0, 0.0)))
 
 mesh_electric = TreeMesh(coordinates_min, coordinates_max,
-                        initial_refinement_level = 6,
+                        initial_refinement_level = 11,
                          n_cells_max = 30_000, periodicity = false)
 
 semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, initial_condition,
