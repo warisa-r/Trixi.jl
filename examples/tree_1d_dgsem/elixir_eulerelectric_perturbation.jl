@@ -1,4 +1,4 @@
-using OrdinaryDiffEq
+using OrdinaryDiffEqSSPRK, OrdinaryDiffEqLowStorageRK
 using Trixi
 
 ###############################################################################
@@ -43,7 +43,7 @@ semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, 
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
                                          epsilon = 1e-4,
-                                         cfl = 0.01,
+                                         cfl = 750.0,
                                          resid_tol = 1.0e-4,
                                          n_iterations_max = 10^5,
                                          timestep_electric = Trixi.timestep_electric_erk52_3Sstar!)
@@ -52,7 +52,7 @@ semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, paramete
 
 ###############################################################################
 # ODE solvers, callbacks etc.
-tspan = (0.0, 0.05)
+tspan = (0.0, 0.1)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -85,3 +85,7 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false),
             dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
             save_everystep = false, callback = callbacks);
 summary_callback() # print the timer summary
+
+using Plots
+plot(sol)  # Generate the plot
+savefig("solution_plot_perturbation.png")  # Save the plot to an image file
