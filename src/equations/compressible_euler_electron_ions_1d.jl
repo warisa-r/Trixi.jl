@@ -145,7 +145,7 @@ end
     p_electron = c_electron * rho^gammas[1]
     p_ion = c_ion * rho^gammas[2]
 
-    # Calculate internal energy from pressure. Is this correct?
+    # TODO: simply called prim2cons
     rho_e_electron = p_electron * inv_gammas_minus_one[1] +
                      0.5f0 * (rho_v1_electron * v1_electron * epsilon)
     rho_e_ion = p_ion * inv_gammas_minus_one[2] + 0.5f0 * (rho_v1_ion * v1_ion)

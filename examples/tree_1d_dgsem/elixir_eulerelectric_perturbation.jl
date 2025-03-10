@@ -43,9 +43,9 @@ semi_electric = SemidiscretizationHyperbolic(mesh_electric, equations_electric, 
 # combining both semidiscretizations for Euler + Poisson equation for electric potential
 parameters = Trixi.ParametersEulerElectric(scaled_debye_length = 1e-4,
                                          epsilon = 1e-4,
-                                         cfl = 750.0,
+                                         cfl = 150.0,
                                          resid_tol = 1.0e-4,
-                                         n_iterations_max = 10^5,
+                                         n_iterations_max = 10^6,
                                          timestep_electric = Trixi.timestep_electric_erk52_3Sstar!)
 
 semi = Trixi.SemidiscretizationEulerElectric(semi_euler, semi_electric, parameters)
@@ -88,4 +88,3 @@ summary_callback() # print the timer summary
 
 using Plots
 plot(sol)  # Generate the plot
-savefig("solution_plot_perturbation.png")  # Save the plot to an image file
