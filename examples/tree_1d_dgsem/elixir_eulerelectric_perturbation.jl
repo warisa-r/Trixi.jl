@@ -63,10 +63,10 @@ alive_callback = AliveCallback(analysis_interval = analysis_interval)
 analysis_callback = AnalysisCallback(semi_euler, interval = analysis_interval)
 
 analysis_callback = AnalysisCallback(semi,
-                                     save_analysis = true,
+                                     save_analysis = false,
                                      interval = analysis_interval)
 
-save_solution = SaveSolutionCallback(interval = 100,
+save_solution = SaveSolutionCallback(interval = 1000,
                                      save_initial_solution = false,
                                      save_final_solution = false,
                                      solution_variables = cons2prim)
@@ -86,5 +86,7 @@ sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false),
             save_everystep = false, callback = callbacks);
 summary_callback() # print the timer summary
 
+import Pkg; Pkg.add("Plots")
 using Plots
 plot(sol)  # Generate the plot
+savefig("solution_perturbation.png")
